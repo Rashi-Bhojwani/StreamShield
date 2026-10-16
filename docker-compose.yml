@@ -1,0 +1,60 @@
+x-common: &common
+  image: streamshield-development
+  build:
+    context: .
+    dockerfile: infrastructure/docker/development.Dockerfile
+  init: true
+  restart: unless-stopped
+  env_file: .env
+  stop_grace_period: ${DOCKER_STOP_GRACE_PERIOD:-15s}
+
+services:
+  api:
+    <<: *common
+    command: ["npm", "run", "dev", "-w", "@streamshield/api"]
+    environment:
+      API_HOST: 0.0.0.0
+    ports:
+      - "${BIND_ADDRESS:?Copy .env.example to .env}:${API_PORT:?API_PORT is required}:${API_PORT}"
+    volumes:
+      - ./services/api/src:/app/services/api/src:ro
+      - ./packages/shared/src:/app/packages/shared/src:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:'+process.env.API_PORT+'/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: ${HEALTHCHECK_INTERVAL:?required}
+      timeout: ${HEALTHCHECK_TIMEOUT:?required}
+      retries: ${HEALTHCHECK_RETRIES:?required}
+      start_period: ${HEALTHCHECK_START_PERIOD:?required}
+  web:
+    <<: *common
+    command: ["npm", "run", "dev", "-w", "@streamshield/web"]
+    environment:
+      WEB_HOST: 0.0.0.0
+      API_PROXY_TARGET: http://api:${API_PORT}
+    ports:
+      - "${BIND_ADDRESS}:${WEB_PORT:?WEB_PORT is required}:${WEB_PORT}"
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./apps/web/src:/app/apps/web/src:ro
+      - ./apps/web/index.html:/app/apps/web/index.html:ro
+      - ./packages/shared/src:/app/packages/shared/src:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "Promise.all([fetch('http://127.0.0.1:'+process.env.WEB_PORT),fetch('http://127.0.0.1:'+process.env.WEB_PORT+'/api/v1/health/ready')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: ${HEALTHCHECK_INTERVAL}
+      timeout: ${HEALTHCHECK_TIMEOUT}
+      retries: ${HEALTHCHECK_RETRIES}
+      start_period: ${HEALTHCHECK_START_PERIOD}

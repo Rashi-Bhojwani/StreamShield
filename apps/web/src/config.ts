@@ -1,0 +1,26 @@
+import { z } from "zod";
+
+export const webConfigSchema = z.object({
+  VITE_API_BASE_URL: z
+    .string()
+    .min(1)
+    .refine((v) => {
+      if (v.startsWith("/") && !v.startsWith("//"))
+        return !v.includes("?") && !v.includes("#");
+      try {
+        const url = new URL(v);
+        return (
+          ["http:", "https:"].includes(url.protocol) &&
+          !url.username &&
+          !url.password &&
+          !url.search &&
+          !url.hash
+        );
+      } catch {
+        return false;
+      }
+    }, "Use a relative path or HTTP(S) API URL without credentials, query or fragment"),
+  VITE_API_TIMEOUT_MS: z.coerce.number().int().min(100).max(120000),
+  VITE_STATUS_POLL_MS: z.coerce.number().int().min(1000).max(300000),
+});
+export const config = webConfigSchema.parse(import.meta.env);
