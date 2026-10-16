@@ -3,12 +3,13 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
+import { offlineList } from "./streaming/test-fixtures";
 import { App } from "./App";
 import { webConfigSchema } from "./config";
 const metadata = {
   name: "StreamShield",
   version: "0.1.0",
-  phase: 1,
+  phase: 2,
   capabilities: ["API health probes"],
 };
 function mount(path = "/") {
@@ -32,9 +33,11 @@ describe("application shell", () => {
         async (url: string) =>
           new Response(
             JSON.stringify(
-              url.endsWith("/system/info")
-                ? metadata
-                : { status: "ready", service: "streamshield-api" },
+              url.endsWith("/streams")
+                ? offlineList
+                : url.endsWith("/system/info")
+                  ? metadata
+                  : { status: "ready", service: "streamshield-api" },
             ),
           ),
       ),
@@ -46,7 +49,7 @@ describe("application shell", () => {
     expect(
       await screen.findByRole("heading", { name: "API connected" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/No streams yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/No streams yet/)).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(
       "/api/v1/health/ready",
       expect.any(Object),
@@ -63,9 +66,11 @@ describe("application shell", () => {
       async (url: string) =>
         new Response(
           JSON.stringify(
-            url.endsWith("/system/info")
-              ? metadata
-              : { status: "ready", service: "streamshield-api" },
+            url.endsWith("/streams")
+              ? offlineList
+              : url.endsWith("/system/info")
+                ? metadata
+                : { status: "ready", service: "streamshield-api" },
           ),
         ),
     );

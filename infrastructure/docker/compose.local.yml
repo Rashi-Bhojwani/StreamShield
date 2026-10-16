@@ -1,0 +1,6 @@
+# Use from repository root with -f docker-compose.yml -f infrastructure/docker/compose.local.yml.
+# This opt-in publishes the authenticated control API to loopback for host npm development.
+services:
+  mediamtx:
+    ports:
+      - "127.0.0.1:${MEDIA_API_PORT}:${MEDIA_API_PORT}"

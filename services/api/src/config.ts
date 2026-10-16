@@ -15,6 +15,53 @@ const origin = z
     return ["http:", "https:"].includes(url.protocol) && url.origin === value;
   }, "Must be an HTTP(S) origin without path or trailing slash");
 const schema = z.object({
+  MEDIA_STREAM_PATH: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/),
+  MEDIA_STREAM_TITLE: z.string().min(1).max(120),
+  MEDIA_API_BASE_URL: z.url().refine((v) => {
+    const u = new URL(v);
+    return (
+      ["http:", "https:"].includes(u.protocol) &&
+      !u.username &&
+      !u.password &&
+      !u.search &&
+      !u.hash
+    );
+  }),
+  MEDIA_HLS_BASE_URL: z.url().refine((v) => {
+    const u = new URL(v);
+    return (
+      ["http:", "https:"].includes(u.protocol) &&
+      !u.username &&
+      !u.password &&
+      !u.search &&
+      !u.hash
+    );
+  }),
+  MEDIA_PUBLIC_HLS_BASE_URL: z
+    .string()
+    .min(1)
+    .refine((v) => {
+      if (v.startsWith("/") && !v.startsWith("//")) return !/[?#\\]/.test(v);
+      try {
+        const u = new URL(v);
+        return (
+          ["http:", "https:"].includes(u.protocol) &&
+          !u.username &&
+          !u.password &&
+          !u.search &&
+          !u.hash
+        );
+      } catch {
+        return false;
+      }
+    }),
+  MEDIA_API_USER: z
+    .string()
+    .min(1)
+    .refine((v) => v !== "any"),
+  MEDIA_API_PASSWORD: z.string().min(24),
+  MEDIA_PROBE_TIMEOUT_MS: duration,
+  MEDIA_STATUS_CACHE_MS: z.coerce.number().int().min(0).max(10000),
   NODE_ENV: z.enum(["development", "test", "production"]),
   API_HOST: z
     .string()

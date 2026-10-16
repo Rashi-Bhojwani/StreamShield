@@ -1,6 +1,6 @@
 {
   "name": "streamshield",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -14,12 +14,15 @@
   "scripts": {
     "dev": "concurrently -k -n api,web \"npm run dev -w @streamshield/api\" \"npm run dev -w @streamshield/web\"",
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "setup:media": "node scripts/setup-media.mjs",
+    "broadcast:test": "node scripts/test-publisher.mjs",
+    "test:media": "node scripts/media-integration.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -49,6 +52,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.2",
     "vite": "^8.3.4",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
   }
 }

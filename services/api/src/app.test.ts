@@ -3,15 +3,7 @@ import request from "supertest";
 import { createApp } from "./app";
 import { parseConfig } from "./config";
 import { healthSchema, systemInfoSchema } from "@streamshield/shared";
-const env = {
-  NODE_ENV: "test",
-  API_HOST: "127.0.0.1",
-  API_PORT: "4000",
-  CORS_ORIGINS: "http://localhost:5173",
-  REQUEST_TIMEOUT_MS: "10000",
-  SHUTDOWN_TIMEOUT_MS: "10000",
-  LOG_LEVEL: "silent",
-};
+import { testEnv as env } from "./test-config";
 const config = parseConfig(env);
 describe("API foundation", () => {
   it("distinguishes liveness from readiness across lifecycle transitions", async () => {
@@ -39,7 +31,7 @@ describe("API foundation", () => {
       .get("/api/v1/system/info")
       .set("X-Request-ID", "untrusted")
       .expect(200);
-    expect(systemInfoSchema.parse(response.body).phase).toBe(1);
+    expect(systemInfoSchema.parse(response.body).phase).toBe(2);
     expect(response.headers["x-request-id"]).toMatch(/^[0-9a-f-]{36}$/);
     expect(response.headers["x-content-type-options"]).toBe("nosniff");
     expect(response.headers["x-powered-by"]).toBeUndefined();
