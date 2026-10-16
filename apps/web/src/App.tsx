@@ -1,8 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchFoundation } from "./api";
 import { config } from "./config";
+import { Discovery } from "./streaming/Discovery";
+const Watch = lazy(() => import("./streaming/Watch"));
 
 function Shield({ small = false }: { small?: boolean }) {
   return (
@@ -111,7 +113,7 @@ function Home() {
       <div className="page-heading">
         <span className="eyebrow">THE STREAMSHIELD PLATFORM</span>
         <span className="phase-note">
-          <span /> PHASE 01 / FOUNDATION
+          <span /> PHASE 02 / LIVE VIDEO
         </span>
       </div>
       <section className="hero">
@@ -154,13 +156,13 @@ function Home() {
             <small>THE FOUNDATION</small>
           </div>
           <div className="art-node node-one">
-            <span>◇</span> SOURCE <small>PLANNED</small>
+            <span>◇</span> SOURCE <small>RTMP INGEST</small>
           </div>
           <div className="art-node node-two">
-            <span>⌁</span> DELIVERY <small>PLANNED</small>
+            <span>⌁</span> DELIVERY <small>HLS</small>
           </div>
           <div className="art-node node-three">
-            <span>◎</span> AUDIENCE <small>PLANNED</small>
+            <span>◎</span> AUDIENCE <small>BROWSER</small>
           </div>
           <span className="art-caption">
             ARCHITECTURE CONCEPT · NOT LIVE TELEMETRY
@@ -177,22 +179,7 @@ function Home() {
         </span>
       </div>
       <div className="overview-grid">
-        <Panel className="empty-streams">
-          <div className="empty-icon" aria-hidden="true">
-            ▷
-          </div>
-          <div>
-            <span className="eyebrow">LIVE DISCOVERY</span>
-            <h3>Your next live experience starts here.</h3>
-            <p>
-              No streams yet. Real broadcasting and video playback arrive in
-              Phase 2.
-            </p>
-            <span className="subtle-label">
-              COMING IN PHASE 02 <span aria-hidden="true">↗</span>
-            </span>
-          </div>
-        </Panel>
+        <Discovery />
         <StatusCard />
       </div>
       <section id="roadmap" className="roadmap">
@@ -204,16 +191,16 @@ function Home() {
           <span className="tag">THE ROAD AHEAD</span>
         </div>
         <div className="milestones">
-          <Milestone
-            number="01"
-            title="The foundation"
-            label="CURRENT PHASE"
-            active
-          >
+          <Milestone number="01" title="The foundation" label="COMPLETED">
             Application shell, typed API contracts and verifiable service
             readiness.
           </Milestone>
-          <Milestone number="02" title="Go genuinely live" label="PLANNED">
+          <Milestone
+            number="02"
+            title="Go genuinely live"
+            label="CURRENT PHASE"
+            active
+          >
             OBS broadcasting, real video ingestion and HLS playback.
           </Milestone>
           <Milestone number="03–04" title="Connect & scale" label="PLANNED">
@@ -360,6 +347,16 @@ export function App() {
           <Route path="/" element={<Home />} />
           <Route path="/foundation" element={<Foundation />} />
           <Route
+            path="/watch/:id"
+            element={
+              <Suspense
+                fallback={<p role="status">Loading the live player…</p>}
+              >
+                <Watch />
+              </Suspense>
+            }
+          />
+          <Route
             path="*"
             element={
               <div className="intro">
@@ -382,7 +379,7 @@ export function App() {
           <span>StreamShield</span>
         </Link>
         <span>Built for connection. Designed for continuity.</span>
-        <span className="footer-phase">FOUNDATION RELEASE · 0.1.0</span>
+        <span className="footer-phase">LIVE STREAMING RELEASE · 0.2.0</span>
       </footer>
     </>
   );

@@ -5,21 +5,60 @@ x-common: &common
     dockerfile: infrastructure/docker/development.Dockerfile
   init: true
   restart: unless-stopped
-  env_file: .env
   stop_grace_period: ${DOCKER_STOP_GRACE_PERIOD:-15s}
 
+x-health: &health
+  interval: ${HEALTHCHECK_INTERVAL:?Run npm run setup:media}
+  timeout: ${HEALTHCHECK_TIMEOUT:?required}
+  retries: ${HEALTHCHECK_RETRIES:?required}
+  start_period: ${HEALTHCHECK_START_PERIOD:?required}
+
 services:
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.2-ffmpeg
+    init: true
+    restart: unless-stopped
+    command: ["/config/mediamtx.yml"]
+    volumes:
+      - ./.local/mediamtx.yml:/config/mediamtx.yml:ro
+    ports:
+      - "${BIND_ADDRESS:?required}:${MEDIA_RTMP_PORT:?required}:${MEDIA_RTMP_PORT}"
+      - "${BIND_ADDRESS}:${MEDIA_HLS_PORT:?required}:${MEDIA_HLS_PORT}"
+    # API port is NEVER published on the host. Only the private network can reach it.
+    healthcheck:
+      <<: *health
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://127.0.0.1:${MEDIA_API_PORT:?required}/v3/paths/list",
+        ]
   api:
     <<: *common
     command: ["npm", "run", "dev", "-w", "@streamshield/api"]
     environment:
+      NODE_ENV: ${NODE_ENV:?required}
       API_HOST: 0.0.0.0
+      API_PORT: ${API_PORT:?required}
+      CORS_ORIGINS: ${CORS_ORIGINS:?required}
+      REQUEST_TIMEOUT_MS: ${REQUEST_TIMEOUT_MS:?required}
+      SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:?required}
+      LOG_LEVEL: ${LOG_LEVEL:?required}
+      MEDIA_STREAM_PATH: ${MEDIA_STREAM_PATH:?required}
+      MEDIA_STREAM_TITLE: ${MEDIA_STREAM_TITLE:?required}
+      MEDIA_API_BASE_URL: http://${MEDIA_CONTAINER_HOST:?required}:${MEDIA_API_PORT}
+      MEDIA_HLS_BASE_URL: http://${MEDIA_CONTAINER_HOST}:${MEDIA_HLS_PORT}
+      MEDIA_PUBLIC_HLS_BASE_URL: ${MEDIA_PUBLIC_HLS_BASE_URL:?required}
+      MEDIA_API_USER: ${MEDIA_API_USER:?required}
+      MEDIA_API_PASSWORD: ${MEDIA_API_PASSWORD:?Run npm run setup:media}
+      MEDIA_PROBE_TIMEOUT_MS: ${MEDIA_PROBE_TIMEOUT_MS:?required}
+      MEDIA_STATUS_CACHE_MS: ${MEDIA_STATUS_CACHE_MS:?required}
     ports:
-      - "${BIND_ADDRESS:?Copy .env.example to .env}:${API_PORT:?API_PORT is required}:${API_PORT}"
+      - "${BIND_ADDRESS}:${API_PORT}:${API_PORT}"
     volumes:
       - ./services/api/src:/app/services/api/src:ro
       - ./packages/shared/src:/app/packages/shared/src:ro
     healthcheck:
+      <<: *health
       test:
         [
           "CMD",
@@ -27,26 +66,36 @@ services:
           "-e",
           "fetch('http://127.0.0.1:'+process.env.API_PORT+'/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
-      interval: ${HEALTHCHECK_INTERVAL:?required}
-      timeout: ${HEALTHCHECK_TIMEOUT:?required}
-      retries: ${HEALTHCHECK_RETRIES:?required}
-      start_period: ${HEALTHCHECK_START_PERIOD:?required}
   web:
     <<: *common
     command: ["npm", "run", "dev", "-w", "@streamshield/web"]
     environment:
       WEB_HOST: 0.0.0.0
+      WEB_PORT: ${WEB_PORT:?required}
       API_PROXY_TARGET: http://api:${API_PORT}
+      MEDIA_HLS_PROXY_TARGET: http://${MEDIA_CONTAINER_HOST}:${MEDIA_HLS_PORT}
+      MEDIA_PUBLIC_HLS_BASE_URL: ${MEDIA_PUBLIC_HLS_BASE_URL}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:?required}
+      VITE_API_TIMEOUT_MS: ${VITE_API_TIMEOUT_MS:?required}
+      VITE_STATUS_POLL_MS: ${VITE_STATUS_POLL_MS:?required}
+      VITE_STREAM_POLL_MS: ${VITE_STREAM_POLL_MS:?required}
+      VITE_PLAYER_LOAD_TIMEOUT_MS: ${VITE_PLAYER_LOAD_TIMEOUT_MS:?required}
+      VITE_PLAYER_STALL_TIMEOUT_MS: ${VITE_PLAYER_STALL_TIMEOUT_MS:?required}
+      VITE_PLAYER_RETRY_LIMIT: ${VITE_PLAYER_RETRY_LIMIT:?required}
+      VITE_PLAYER_RETRY_BASE_MS: ${VITE_PLAYER_RETRY_BASE_MS:?required}
+      VITE_PLAYER_RETRY_MAX_MS: ${VITE_PLAYER_RETRY_MAX_MS:?required}
     ports:
-      - "${BIND_ADDRESS}:${WEB_PORT:?WEB_PORT is required}:${WEB_PORT}"
+      - "${BIND_ADDRESS}:${WEB_PORT}:${WEB_PORT}"
     depends_on:
       api:
         condition: service_healthy
     volumes:
       - ./apps/web/src:/app/apps/web/src:ro
       - ./apps/web/index.html:/app/apps/web/index.html:ro
+      - ./apps/web/vite.config.ts:/app/apps/web/vite.config.ts:ro
       - ./packages/shared/src:/app/packages/shared/src:ro
     healthcheck:
+      <<: *health
       test:
         [
           "CMD",
@@ -54,7 +103,3 @@ services:
           "-e",
           "Promise.all([fetch('http://127.0.0.1:'+process.env.WEB_PORT),fetch('http://127.0.0.1:'+process.env.WEB_PORT+'/api/v1/health/ready')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))",
         ]
-      interval: ${HEALTHCHECK_INTERVAL}
-      timeout: ${HEALTHCHECK_TIMEOUT}
-      retries: ${HEALTHCHECK_RETRIES}
-      start_period: ${HEALTHCHECK_START_PERIOD}

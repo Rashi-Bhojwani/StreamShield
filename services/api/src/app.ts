@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import pino, { type Logger } from "pino";
 import type { Health, SystemInfo, ApiError } from "@streamshield/shared";
+import { createMediaService, type MediaService } from "./media.js";
 import type { Config } from "./config.js";
 
 export interface Lifecycle {
@@ -13,6 +14,7 @@ export function createApp(
   config: Config,
   lifecycle: Lifecycle,
   logger: Logger = pino({ level: config.LOG_LEVEL }),
+  media: MediaService = createMediaService(config),
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -56,10 +58,34 @@ export function createApp(
     res.setHeader("Cache-Control", "no-store");
     res.json({
       name: "StreamShield",
-      version: "0.1.0",
-      phase: 1,
-      capabilities: ["API health probes", "System metadata"],
+      version: "0.2.0",
+      phase: 2,
+      capabilities: [
+        "API health probes",
+        "System metadata",
+        "RTMP ingest",
+        "HLS playback",
+        "Media availability observations",
+      ],
     } satisfies SystemInfo);
+  });
+  app.get("/api/v1/streams", async (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ streams: [await media.getStream()] });
+  });
+  app.get("/api/v1/streams/:id", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    if (req.params.id !== config.MEDIA_STREAM_PATH) {
+      res.status(404).json({
+        error: {
+          code: "STREAM_NOT_FOUND",
+          message: "Stream not configured",
+          requestId: res.locals.requestId as string,
+        },
+      } satisfies ApiError);
+      return;
+    }
+    res.json(await media.getStream());
   });
   app.use((_req, res) =>
     res.status(404).json({

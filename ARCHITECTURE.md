@@ -1,23 +1,49 @@
 # StreamShield architecture
 
-## Phase 1: implemented boundary
+## Implemented: foundation and real live video
 
-An npm workspace contains a React browser application (`apps/web`), an Express API (`services/api`), and small Zod response contracts (`packages/shared`). The browser polls real metadata and readiness using TanStack Query. React Router separates the introduction from the foundation status screen. Vite proxies relative `/api` requests; deployment-specific endpoints are validated configuration. There is no database or external dependency in readiness yet: readiness means this API instance is accepting requests, not that future video delivery works.
+An npm workspace contains React/Vite (`apps/web`), Express (`services/api`) and small Zod contracts (`packages/shared`). The foundation remains intact: strict configuration, request IDs, structured logging, bounded JSON input, CORS, liveness/readiness and graceful API draining. React Router adds a watch route; TanStack Query polls actual observations. There are no user accounts, database or administrative application routes yet.
 
-The API owns input validation, request IDs, structured logs, HTTP errors and lifecycle state. Liveness tests process responsiveness; readiness returns 503 during startup/draining. No authentication or administrative routes exist in Phase 1. CORS is an exact origin allowlist; it is not authorization. Helmet and bounded bodies protect the foundation, not a complete production security perimeter.
+```mermaid
+flowchart LR
+    P[OBS / bounded FFmpeg publisher] -->|Authenticated RTMP| M[MediaMTX 1.21.2]
+    M -->|HLS playlists and segments| V[Vite media proxy in development]
+    V --> B[React hls.js / native player]
+    B -->|Metadata only| A[Express API]
+    A -->|Private authenticated Control API + bounded HLS probe| M
+```
 
-## Future data and media planes (not implemented)
+Express does not transport video to viewers. `/media` is a configured development proxy from Vite directly to MediaMTX; the production equivalent belongs in a dedicated edge/reverse proxy. Its request rewrite and `Location` response rewrite preserve HLS session negotiation in a subfolder. Public HLS base URLs can alternatively identify a directly reachable origin with appropriate CORS.
 
-Phase 2 adds OBS → RTMP → MediaMTX → HLS → hls.js. Phase 3 introduces PostgreSQL for durable accounts/streams and Redis for ephemeral presence, chat and bounded rate limits. Stream publishing credentials must be scoped, rotated and kept out of browser logs. Authentication and broadcaster/viewer/admin authorization precede protected management endpoints.
+## Media origin and publishing authority
 
-Phase 4 adds Nginx API load balancing and video delivery edges. Standby media requires explicit replication or independent publishing; a second container alone cannot preserve a live source. HLS caching, playlist freshness, origin load, segment bandwidth and player reconnect behavior need separate measurements.
+The pinned official `bluenviron/mediamtx:1.21.2-ffmpeg` image includes HTTP probe utilities and the upstream FFmpeg variant. Only RTMP, HLS and the private control API are enabled. Paths, ports, origins, deadlines and HLS sizing come from validated configuration. One configured development path accepts one authenticated publisher; `overridePublisher: false` prevents silent source takeover. Viewers may read that one public development channel. No arbitrary/all-other paths are configured.
 
-## Future control plane (not implemented)
+`npm run setup:media` preserves existing nonempty environment settings, adds missing defaults, creates high-entropy local credentials and renders the checked-in fail-closed template into ignored `.local/mediamtx.yml`. Runtime YAML stores password hashes; plain local credentials remain in ignored `.env`. Publishing and control credentials are distinct and never returned by the API or bundled as `VITE_` values. Standard Compose publishes only RTMP/HLS and application ports on loopback. The control API is private; the opt-in local npm override publishes it only on host loopback and still requires authentication from the application.
 
-An independent controller observes probes, playback evidence and metrics, opens incidents and selects bounded, predefined recovery playbooks. Each action has a trigger, evidence, timeout, cooldown, retry budget and verification probe. Restart success never substitutes for user-facing recovery. Recovery permissions must be narrowly scoped; Docker control sockets must never be public. Toxiproxy and authenticated chaos controls introduce isolated faults with expiry and audit records. Prometheus/Grafana complement the product dashboard.
+This development path uses unencrypted RTMP/HTTP. Non-development setup is rejected. A deployment must separately design TLS/RTMPS, rotation/secret injection, publisher authorization and viewer access. MediaMTX API permissions are broad within that private control plane; the backend exposes only a fixed read observation, never an arbitrary control proxy. Docker sockets are not mounted.
 
-## Configuration and risks
+## Observation and playback semantics
 
-Root `.env` supplies API configuration and Vite configuration; only `VITE_` values enter the browser. Zod rejects invalid hosts, ports, origins, URLs and timing settings. Compose overrides container bind addresses and internal proxy routing; published host ports stay configurable. Local development and Docker use Node 24, strict TypeScript and the same lockfile.
+| Stream state | Evidence                                                                         | Meaning                                                          |
+| ------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| offline      | Origin responds but configured publisher is absent/not online                    | No active source; not an origin outage                           |
+| starting     | Publisher online, but source availability or HLS manifest cannot yet be verified | Do not claim playable video                                      |
+| live         | Source online/available and a bounded HLS manifest probe succeeds                | Source/manifest available; not proof of every browser's decoding |
+| unavailable  | API unreachable, unauthorized, invalid or otherwise unverifiable                 | Publisher state unknown, not fabricated offline                  |
 
-This single API/Vite development topology is not production deployment infrastructure. It has no durable storage, media playback, failover, healing or capacity evidence. The 50,000–60,000 viewer objective is an untested architectural target. API RPS, virtual users, segment consumers and real playing viewers require different tests. Future decisions include authentication/session design, media replication, CDN strategy, controller authority, incident schema and distributed load generation. No unused infrastructure is installed now.
+Probe reads are not real viewer sessions and must not be counted as audience statistics. Each result includes `publisher`, `hls`, `reason`, `checkedAt`, safe playback URL and observed codec names. Control requests have a shared deadline with the HLS probe. Requests coalesce and use a short configurable cache; timestamps identify the observation age. A failed refresh does not show cached data as current healthy state. API readiness means this application is accepting requests; it deliberately remains separate from origin availability so the UI can explain a media outage.
+
+Hls.js is loaded on the watch route when supported, with native HLS fallback. The browser reports loading, playing, paused, buffering, autoplay-blocked, reconnecting, error and unsupported states from actual media behavior. A no-progress watchdog and fatal errors trigger a bounded per-session retry budget with exponential delay/cap. Manual retry creates a fresh budget. A newly verified publisher session can reattach playback. Muted startup respects autoplay restrictions, and all HLS instances/listeners/timers are released on unmount. A player reconnect is not infrastructure healing.
+
+MediaMTX remuxes rather than transcodes. H.264/yuv420p with AAC and regular keyframes is the verified FFmpeg path. HLS buffering delays source interruption visibility; process, publisher, playlist and decoded playback health must remain separate signals. Tests verify segment bytes and actual decoded browser frames/time progression, not just an open port or a manifest request.
+
+## Future phases (not implemented)
+
+Phase 3 adds PostgreSQL for durable accounts/streams and Redis for ephemeral presence, chat and bounded rate limits. Authentication, role-based permissions, session management and scoped/rotatable publishing authorization precede protected management APIs. The configured development channel can evolve into durable stream records without replacing the player or observed contracts.
+
+Phase 4 adds Nginx API balancing and video edges. Standby media needs explicit replication or independent publishing; a second container alone cannot preserve a source. HLS caching, playlist freshness, origin/edge bandwidth and player reconnect behavior require separate measurements.
+
+Phases 5–7 add an independent control plane: probes/metrics, durable incidents, bounded predefined playbooks, verification, narrowly scoped authority, audited chaos experiments and expiry. Each recovery action needs a trigger, observable evidence, timeout, cooldown and retry budget. Restart success never substitutes for user-facing recovery. No public Docker control or unauthenticated chaos endpoints are permitted.
+
+Phases 8–10 validate load/resilience and production deployment. The 50,000–60,000 viewer goal is an untested architectural target. API RPS, virtual users, HLS consumers and genuinely playing browsers are different workloads. This single origin and development Vite server provide no redundancy, capacity or availability guarantee. Future decisions include identity/session design, media replication, CDN policy, controller privileges and distributed test budgets.

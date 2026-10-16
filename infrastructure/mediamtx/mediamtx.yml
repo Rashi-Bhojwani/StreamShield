@@ -1,0 +1,26 @@
+# MediaMTX v1.21.2 template. npm run setup:media writes ignored .local/mediamtx.yml.
+# Empty permissions/paths fail closed if the template is used directly.
+logLevel: warn
+logStructured: true
+logDestinations: [stdout]
+authMethod: internal
+authInternalUsers: []
+api: true
+apiAllowOrigins: []
+rtmp: true
+rtmpEncryption: "no"
+hls: true
+hlsVariant: fmp4
+hlsAlwaysRemux: true
+hlsDirectory: ""
+rtsp: false
+webrtc: false
+srt: false
+moq: false
+metrics: false
+pprof: false
+playback: false
+pathDefaults:
+  source: publisher
+  overridePublisher: false
+paths: {}

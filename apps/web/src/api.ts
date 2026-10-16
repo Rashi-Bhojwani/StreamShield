@@ -1,8 +1,13 @@
-import { healthSchema, systemInfoSchema } from "@streamshield/shared";
+import {
+  healthSchema,
+  systemInfoSchema,
+  streamListSchema,
+  streamSchema,
+} from "@streamshield/shared";
 import { config } from "./config";
 import type { z } from "zod";
 
-async function request<T>(
+export async function request<T>(
   path: string,
   schema: z.ZodType<T>,
   signal?: AbortSignal,
@@ -25,4 +30,11 @@ export async function fetchFoundation(signal?: AbortSignal) {
   ]);
   if (health.status !== "ready") throw new Error("API is not ready");
   return { health, info };
+}
+
+export async function fetchStreams(signal?: AbortSignal) {
+  return request("/streams", streamListSchema, signal);
+}
+export async function fetchStream(id: string, signal?: AbortSignal) {
+  return request("/streams/" + encodeURIComponent(id), streamSchema, signal);
 }
