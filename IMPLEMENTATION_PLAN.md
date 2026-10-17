@@ -25,4 +25,8 @@ Future phases must read the architecture and prior handoff, preserve working mod
 
 See [the implementation plan](docs/PHASE_2_PLAN.md), [official references](docs/PHASE_2_REFERENCES.md) and [actual verification/handoff](docs/PHASE_2.md). The current work adds real authenticated RTMP ingest, fMP4 HLS, browser playback, availability observations and bounded reconnect. It does not introduce Phase 3 identity/storage/chat or later redundancy/healing/chaos services.
 
-Phase 1 is preserved in initial baseline commit `387cc57`. Remote `main` now contains that baseline after connected repository write access was restored. Phase 2 is isolated on `feature/phase-2-live-streaming`; its pull request is left open for review, never merged automatically.
+Phase 1 is preserved in initial baseline commit `387cc57`. Remote `main` preserves that baseline and the completed Phase 2 implementation. Phase 2 was delivered on `feature/phase-2-live-streaming` through PR #1, subsequently merged by the user.
+
+## UI/product correction after Phase 2
+
+Phase 2 PR #1 was merged into main before this work. The dedicated `feature/streamshield-platform-ui-redesign` branch replaces the technical landing page with full-width consumer discovery and Watch, separates the future Control product, centralizes visual primitives, and retains the real media pipeline. Verification includes responsive screenshots, search/navigation, API recovery and real decoded RTMP/HLS playback. No Phase 3 backend capabilities are introduced. See [UI redesign](docs/UI_REDESIGN.md).

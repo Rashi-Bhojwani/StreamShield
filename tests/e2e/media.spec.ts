@@ -134,7 +134,7 @@ test("real encoded RTMP → HLS → browser, source interruption and origin outa
       path: "test-results/live-stream-desktop.png",
       fullPage: true,
     });
-    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setViewportSize({ width: 375, height: 844 });
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -143,6 +143,42 @@ test("real encoded RTMP → HLS → browser, source interruption and origin outa
     await page.screenshot({
       path: "test-results/live-stream-mobile.png",
       fullPage: true,
+    });
+    for (const width of [375, 768, 1280, 1440, 1680, 1920]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const box = await video.boundingBox();
+      expect(box).not.toBeNull();
+      expect(Math.abs(box!.width / box!.height - 16 / 9)).toBeLessThan(0.02);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: `test-results/live-watch-${width}.png`,
+        fullPage: true,
+      });
+    }
+    await page.goto("/");
+    await expect(page.getByTestId("playback-state")).toHaveText("playing", {
+      timeout,
+    });
+    await expect
+      .poll(
+        () =>
+          page
+            .getByLabel("Live stream video")
+            .evaluate((node) => (node as HTMLVideoElement).currentTime),
+        { timeout },
+      )
+      .toBeGreaterThan(1);
+    await page.screenshot({
+      path: "test-results/live-home-1920.png",
+      fullPage: true,
+    });
+    await page.goto(`/watch/${encodeURIComponent(settings.MEDIA_STREAM_PATH)}`);
+    await expect(page.getByTestId("playback-state")).toHaveText("playing", {
+      timeout,
     });
     await stop(publisher);
     publisher = undefined;
