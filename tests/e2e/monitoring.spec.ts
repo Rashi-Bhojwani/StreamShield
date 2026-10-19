@@ -189,7 +189,8 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
         { timeout: 60000, intervals: [1000] },
       )
       .toBe(true);
-    await page.reload();
+    await page.goto("/");
+    await page.getByRole("link", { name: /Control Center/ }).click();
     await expect(
       page.getByRole("heading", { name: "Every signal. One clear picture." }),
     ).toBeVisible();
@@ -472,7 +473,14 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
     await expect.poll(() => socket!.connected, { timeout: 10000 }).toBe(true);
     expect((await subscribe()).ok).toBe(true);
     await page.getByRole("link", { name: /Infrastructure/ }).click();
-    await page.getByRole("link", { name: /Primary origin/ }).click();
+    await expect(page).toHaveURL(/\/control\/topology$/);
+    await expect(
+      page.getByRole("heading", { name: "Service health", exact: true }),
+    ).toHaveCount(0);
+    await page
+      .locator(".cc-topology")
+      .getByRole("link", { name: /Primary origin/ })
+      .click();
     await expect(
       page.getByRole("heading", { name: "Primary origin", exact: true }),
     ).toBeVisible();
@@ -484,6 +492,9 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
       page.getByRole("heading", { name: "Incident history" }),
     ).toBeVisible();
     await page.getByLabel("Component", { exact: true }).selectOption("api-1");
+    await expect(page.locator(".cc-incident-row").first()).toContainText(
+      "api-1",
+    );
     await page.locator(".cc-incident-row").first().click();
     await expect(
       page.getByRole("heading", { name: "api-1 availability incident" }),

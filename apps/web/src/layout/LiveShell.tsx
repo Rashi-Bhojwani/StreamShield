@@ -1,3 +1,4 @@
+import { useAuth } from "../platform/auth-context";
 import { AccountMenu } from "../platform/Auth";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -17,6 +18,7 @@ const navigation: { to: string; label: string; icon: IconName }[] = [
   { to: "/explore", label: "Explore Categories", icon: "grid" },
 ];
 export function LiveShell() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
@@ -157,11 +159,27 @@ export function LiveShell() {
         <div className="sidebar-divider" />
         <div className="sidebar-group">
           <p className="sidebar-label">Your space</p>
-          <button className="sidebar-future" disabled>
-            <Icon name="heart" />
-            <span>Following</span>
-            <small>Soon</small>
-          </button>
+          {user?.role === "administrator" ? (
+            <Link
+              className="sidebar-future"
+              to="/control"
+              onClick={() => setOpen(false)}
+            >
+              <Icon name="shield" />
+              <span>Control Center</span>
+              <small>Admin</small>
+            </Link>
+          ) : (
+            <button
+              className="sidebar-future"
+              disabled
+              title="Administrator access required"
+            >
+              <Icon name="lock" />
+              <span>Control Center</span>
+              <small>Admin only</small>
+            </button>
+          )}
           <Link
             className="sidebar-future studio-link"
             to="/studio"
@@ -224,7 +242,7 @@ export function LiveShell() {
             <Icon name="shield" />
             <div>
               <span>StreamShield Control</span>
-              <small>Operations, in a future update</small>
+              <small>Administrator operations</small>
             </div>
           </div>
           <button className="sidebar-future" disabled>
