@@ -70,6 +70,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
     report: Record<string, unknown>[] = [];
   let socket: Socket | undefined, publisher: ChildProcess | undefined;
   const context = await browser.newContext();
+  const reader = await browser.newContext();
   const page = await context.newPage();
   const requestErrors: string[] = [];
   let snapshotReadErrors = 0;
@@ -126,14 +127,36 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
     expect((await subscribe()).ok).toBe(true);
     let eventCount = 0;
     socket.on("monitoring:v1", () => eventCount++);
+    // The operator UI and synthetic inspector are independent administrator clients.
+    // Preserve the real per-account production limiter instead of exempting tests.
+    const probeName = "e2e_p" + randomUUID().replaceAll("-", "").slice(0, 12);
+    const probeAccount = await account(
+      reader.request,
+      probeName,
+      randomUUID() + randomUUID(),
+    );
+    ids.push(probeAccount.user.id);
+    compose(
+      "exec",
+      "-T",
+      "api-2",
+      "node",
+      "scripts/set-role.mjs",
+      probeName,
+      "administrator",
+    );
+    let nextReadAt = 0;
+    const readMonitoring = async (path: string) => {
+      const delay = Math.max(0, nextReadAt - performance.now());
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      nextReadAt = performance.now() + 750;
+      return await reader.request.get(path, { timeout: 5000 });
+    };
     const snap = async () => {
       const deadline = performance.now() + 15000;
       while (performance.now() < deadline) {
         try {
-          const response = await context.request.get(
-            "/api/v1/monitoring/snapshot",
-            { timeout: 5000 },
-          );
+          const response = await readMonitoring("/api/v1/monitoring/snapshot");
           if (response.ok())
             return (await response.json()) as MonitoringSnapshot;
           if (response.status() < 500)
@@ -163,7 +186,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
             s.components.every((c) => c.state === "HEALTHY")
           );
         },
-        { timeout: 60000 },
+        { timeout: 60000, intervals: [1000] },
       )
       .toBe(true);
     await page.reload();
@@ -177,7 +200,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
           privateRequest("/api/v1/targets").data.activeTargets.filter(
             (t: { health: string }) => t.health !== "up",
           ).length,
-        { timeout: 60000 },
+        { timeout: 60000, intervals: [1000] },
       )
       .toBe(0);
     console.log(
@@ -250,7 +273,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
                 frames: v.getVideoPlaybackQuality().totalVideoFrames,
               };
             }),
-          { timeout: 30000 },
+          { timeout: 30000, intervals: [1000] },
         )
         .toEqual(
           expect.objectContaining({
@@ -268,7 +291,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
                 v.getVideoPlaybackQuality().totalVideoFrames > before.frames + 5
               );
             }, before),
-          { timeout: 30000 },
+          { timeout: 30000, intervals: [1000] },
         )
         .toBe(true);
     };
@@ -288,13 +311,13 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
             )
           );
         },
-        { timeout: 60000 },
+        { timeout: 60000, intervals: [1000] },
       )
       .toBe(true);
     const incidents = async (id: string, status = "active") =>
       (
         await (
-          await context.request.get(
+          await readMonitoring(
             "/api/v1/monitoring/incidents?component=" +
               id +
               "&status=" +
@@ -316,7 +339,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
         .poll(
           async () =>
             (await snap()).components.find((c) => c.id === component)?.state,
-          { timeout: 30000 },
+          { timeout: 30000, intervals: [1000] },
         )
         .toBe("UNHEALTHY");
       const detectionMs = performance.now() - start;
@@ -358,7 +381,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
                   "UNHEALTHY" && !s.stale
               );
             },
-            { timeout: 30000 },
+            { timeout: 30000, intervals: [1000] },
           )
           .toBe(true);
         expect((await incidents(component))[0]!.id).toBe(incident.id);
@@ -436,7 +459,10 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
     compose("up", "-d", "--no-deps", "observer");
     stopped.delete("observer");
     await expect
-      .poll(async () => !(await snap()).stale, { timeout: 30000 })
+      .poll(async () => !(await snap()).stale, {
+        timeout: 30000,
+        intervals: [1000],
+      })
       .toBe(true);
     console.log(
       "Verified observer downtime and restart; checking dashboard navigation.",
@@ -499,7 +525,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
               await context.request.get("/api/v1/monitoring/metrics")
             ).json()
           ).available,
-        { timeout: 30000 },
+        { timeout: 30000, intervals: [1000] },
       )
       .toBe(false);
     expect((await snap()).components.find((c) => c.id === "api-2")!.state).toBe(
@@ -549,7 +575,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
               ),
             ).components.find((c: { id: string }) => c.id === dependency)
               ?.state,
-          { timeout: 25000 },
+          { timeout: 25000, intervals: [1000] },
         )
         .toBe("UNHEALTHY");
       if (dependency === "redis") {
@@ -572,7 +598,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
               return "unavailable";
             }
           },
-          { timeout: 40000 },
+          { timeout: 40000, intervals: [1000] },
         )
         .toBe("HEALTHY");
     }
@@ -583,7 +609,10 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
     compose("kill", "-s", "SIGKILL", "edge-1");
     stopped.add("edge-1");
     await expect
-      .poll(async () => (await incidents("edge-1")).length, { timeout: 25000 })
+      .poll(async () => (await incidents("edge-1")).length, {
+        timeout: 25000,
+        intervals: [1000],
+      })
       .toBe(1);
     expect(
       db(
@@ -593,7 +622,10 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
     compose("up", "-d", "--no-deps", "edge-1");
     stopped.delete("edge-1");
     await expect
-      .poll(async () => (await incidents("edge-1")).length, { timeout: 30000 })
+      .poll(async () => (await incidents("edge-1")).length, {
+        timeout: 30000,
+        intervals: [1000],
+      })
       .toBe(0);
     expect(requestErrors).toEqual([]);
     const pgIncident = (
@@ -658,6 +690,7 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
         .toBe(true);
     for (const service of stopped) compose("up", "-d", "--no-deps", service);
     await context.close();
+    await reader.close();
     if (ids.length)
       execFileSync(
         "docker",
