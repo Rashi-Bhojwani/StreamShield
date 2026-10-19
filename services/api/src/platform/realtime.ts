@@ -178,6 +178,9 @@ export function createRealtime(
       }
     };
     const leavePresence = async () => {
+      if (r.redis.isReady)
+        for (const source of ["primary", "standby", "single"])
+          await r.redis.zRem("monitoring:playback:" + source, socket.id);
       if (streamId && r.redis.isReady)
         await r.redis.zRem(
           presenceKey(streamId),
@@ -312,7 +315,11 @@ export function createRealtime(
       async (raw: unknown, ack: (reply: RealtimeReply) => void) => {
         try {
           const parsed = z
-            .object({ streamId: z.uuid(), playing: z.boolean() })
+            .object({
+              streamId: z.uuid(),
+              playing: z.boolean(),
+              source: z.enum(["primary", "standby", "single"]).optional(),
+            })
             .strict()
             .safeParse(raw);
           if (!parsed.success)
@@ -352,6 +359,19 @@ export function createRealtime(
               "Heartbeat too frequent.",
             );
           lastHeartbeat = Date.now();
+          for (const source of ["primary", "standby", "single"]) {
+            const key = "monitoring:playback:" + source;
+            await r.redis.zRemRangeByScore(key, "-inf", Date.now());
+            await r.redis.zRem(key, socket.id);
+          }
+          const playbackKey =
+            "monitoring:playback:" + (body.source || "single");
+          await r.redis.zAdd(playbackKey, {
+            score: Date.now() + c.PRESENCE_TTL_SECONDS * 1000,
+            value: socket.id,
+          });
+          await r.redis.expire(playbackKey, c.PRESENCE_TTL_SECONDS * 2);
+
           if (
             socket.data.sessionHash &&
             !(await session(r, socket.handshake.headers.cookie))

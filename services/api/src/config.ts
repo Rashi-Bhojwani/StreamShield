@@ -25,6 +25,21 @@ const privateUrl = z.url().refine((v) => {
   );
 });
 const schema = z.object({
+  OBS_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    privateUrl.optional(),
+  ),
+  OBS_SECRET: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z
+      .string()
+      .regex(/^[\w-]{43}$/)
+      .optional(),
+  ),
+  PROMETHEUS_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    privateUrl.optional(),
+  ),
   API_INSTANCE_ID: z
     .string()
     .regex(/^[a-zA-Z0-9_-]{1,40}$/)
@@ -114,6 +129,11 @@ export function parseConfig(input: Record<string, unknown>) {
     );
   }
   const c = result.data;
+  if (
+    [c.OBS_URL, c.PROMETHEUS_URL].some(Boolean) &&
+    ![c.OBS_URL, c.OBS_SECRET, c.PROMETHEUS_URL].every(Boolean)
+  )
+    throw new Error("Complete monitoring service configuration required");
   const group = [
     c.MEDIA_DELIVERY_API_BASE_URL,
     c.MEDIA_STANDBY_API_BASE_URL,

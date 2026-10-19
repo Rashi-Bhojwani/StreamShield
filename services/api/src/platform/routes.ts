@@ -1,3 +1,4 @@
+import { monitoringRouter } from "../monitoring/routes.js";
 import { randomUUID } from "node:crypto";
 import express, {
   type Router,
@@ -463,6 +464,7 @@ export async function createPlatform(
       label: "Approximate active players",
     });
   });
+  router.use("/monitoring", monitoringRouter(r));
   const errors = (
     error: unknown,
     _req: Request,

@@ -6,18 +6,18 @@ Use npm workspaces (`apps/web`, `services/api`, `packages/shared`), strict TypeS
 
 ## Roadmap and acceptance
 
-| Phase            | Dependencies                          | Acceptance                                                                                                   | State                                             |
-| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| 1 Foundation     | Node 24, npm, optional Docker runtime | Responsive shell, real API connectivity, validated config, lifecycle probes, tests/build, reproducible setup | Complete (local and Docker verified)              |
-| 2 Live streaming | Phase 1, OBS/FFmpeg/MediaMTX          | Real RTMP ingest and HLS browser playback with source interruption handling                                  | Complete (real RTMP/HLS/browser verified)         |
-| 3 Platform       | Phase 2, PostgreSQL/Redis             | Auth/RBAC, scoped publishing credentials, streams, chat, viewer sessions                                     | Complete (two independent live streams verified)  |
-| 4 Redundancy     | Phase 3, Nginx, replication design    | Multiple APIs/edges and verified health-aware failover                                                       | Complete (measured real API/edge/origin failures) |
-| 5 Monitoring     | Phase 4, metrics/incident schema      | Actual service/video measurements and incident dashboard                                                     | Planned                                           |
-| 6 Self-healing   | Phase 5, restricted controller        | Bounded playbooks detect, act, verify and audit without manual healing                                       | Planned                                           |
-| 7 Chaos          | Phase 6, authenticated isolation      | Expiring audited experiments and real recovery evidence                                                      | Planned                                           |
-| 8 Load           | Phase 7, k6/distributed generators    | Bounded representative API/HLS tests with measured limits                                                    | Planned                                           |
-| 9 Resilience     | Phase 8                               | Automated before/after recovery and viewer interruption measurements                                         | Planned                                           |
-| 10 Deployment    | Phase 9                               | Reproducible secure deployment, report and demonstration                                                     | Planned                                           |
+| Phase            | Dependencies                          | Acceptance                                                                                                   | State                                                  |
+| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| 1 Foundation     | Node 24, npm, optional Docker runtime | Responsive shell, real API connectivity, validated config, lifecycle probes, tests/build, reproducible setup | Complete (local and Docker verified)                   |
+| 2 Live streaming | Phase 1, OBS/FFmpeg/MediaMTX          | Real RTMP ingest and HLS browser playback with source interruption handling                                  | Complete (real RTMP/HLS/browser verified)              |
+| 3 Platform       | Phase 2, PostgreSQL/Redis             | Auth/RBAC, scoped publishing credentials, streams, chat, viewer sessions                                     | Complete (two independent live streams verified)       |
+| 4 Redundancy     | Phase 3, Nginx, replication design    | Multiple APIs/edges and verified health-aware failover                                                       | Complete (measured real API/edge/origin failures)      |
+| 5 Monitoring     | Phase 4, metrics/incident schema      | Actual service/video measurements and incident dashboard                                                     | Complete (durable incidents and real outages verified) |
+| 6 Self-healing   | Phase 5, restricted controller        | Bounded playbooks detect, act, verify and audit without manual healing                                       | Planned                                                |
+| 7 Chaos          | Phase 6, authenticated isolation      | Expiring audited experiments and real recovery evidence                                                      | Planned                                                |
+| 8 Load           | Phase 7, k6/distributed generators    | Bounded representative API/HLS tests with measured limits                                                    | Planned                                                |
+| 9 Resilience     | Phase 8                               | Automated before/after recovery and viewer interruption measurements                                         | Planned                                                |
+| 10 Deployment    | Phase 9                               | Reproducible secure deployment, report and demonstration                                                     | Planned                                                |
 
 Future phases must read the architecture and prior handoff, preserve working modules, add regression coverage, and update evidence. Key unresolved decisions: media replication, CDN/cache policy, controller privileges and distributed test budget. Phase 3 establishes durable identity/session storage and scoped publishing authorization. Do not implement future services as placeholders.
 
@@ -48,3 +48,11 @@ Phase 4 should add deployment redundancy, Nginx media edges and standby origins 
 Phase 4 is stacked on the verified open Phase 3 branch. It adds an optional validated/generated resilience topology, redundant APIs with Nginx passive routing and shared session/chat state, two real HLS edges, authenticated dynamic relay-to-primary/standby media supply, bounded explicit-origin player failover and safe local CLI failure experiments. Phase 1–3 contracts and lightweight deployment remain available. No new schema, destructive reset, monitoring dashboard, Healer or Chaos Panel is added.
 
 See [Phase 4 plan](docs/PHASE_4_PLAN.md), [architecture and verification](docs/PHASE_4.md), the Windows README workflow and actual PR checks for completion evidence. Remaining gateway/relay/storage/host failure domains are explicit. Phase 5 should add durable observability using the instance logs, gateway routing outcomes, typed playback/source events and sanitized experiment artifacts.
+
+## Phase 5 observability and administrator Control
+
+Implemented on feature/phase-5-observability-control-center from verified Phase 4 acc4675; PR #5 remains open, so this phase targets feature/phase-4-redundancy-failover. Both Phase 4 CI runs were verified successful before implementation. Independent bounded component/media probes, private Prometheus collectors/exporters, provisioned Grafana, durable transactional incidents and administrator-only REST/Socket.IO are operational. Control provides full-width overview/charts, actual dependency topology, service details and filterable incident history/evidence.
+
+Actual API, edge and origin outages produced deduplicated persisted incidents and verified restoration. Observer restart, stale telemetry, reconnect, Redis/PostgreSQL failures, delayed persistence and recurrence were exercised. Real encoded media continued/failed over separately from component verification. The retained 22-check platform, ten-browser, original media, two-owner media and full redundant API/chat/media suites passed. See [Phase 5 plan](docs/PHASE_5_PLAN.md), [operation and limits](docs/PHASE_5.md), [actual measurement artifact](docs/PHASE_5_MEASUREMENTS.json) and [screenshots](docs/images/phase-5/). These historical test artifacts are not live telemetry.
+
+Phase 6 remains planned: consume versioned observation/incident contracts with separately audited, bounded, narrowly authorized recovery actions and user-facing verification. No autonomous recovery or interactive chaos controls are implemented in Phase 5.

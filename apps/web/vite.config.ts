@@ -65,6 +65,8 @@ export default defineConfig(({ mode }) => {
       host: config.WEB_HOST,
       port: config.WEB_PORT,
       strictPort: true,
+      // Canonical private Compose frontend name, used by the independent observer.
+      allowedHosts: ["web"],
       proxy: {
         "/socket.io": {
           target: config.API_PROXY_TARGET,
