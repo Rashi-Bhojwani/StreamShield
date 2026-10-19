@@ -91,7 +91,11 @@ function StreamEditor({ stream }: { stream: Stream }) {
         )}
       </div>
       {preview && stream.status === "live" && (
-        <LivePlayer source={stream.playbackUrl} sourceId={stream.id} />
+        <LivePlayer
+          source={stream.playbackUrl}
+          alternateSources={stream.playbackSources}
+          sourceId={stream.id}
+        />
       )}
       {publishing && (
         <div className="publishing-panel">

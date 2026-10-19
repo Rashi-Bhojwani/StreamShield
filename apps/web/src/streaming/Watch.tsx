@@ -44,6 +44,7 @@ export default function Watch() {
             <LivePlayer
               key={stream.playbackUrl}
               source={stream.playbackUrl}
+              alternateSources={stream.playbackSources}
               sourceId={stream.id}
               onObservation={setObservation}
             />

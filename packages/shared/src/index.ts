@@ -7,7 +7,7 @@ export const healthSchema = z.object({
 export const systemInfoSchema = z.object({
   name: z.literal("StreamShield"),
   version: z.string(),
-  phase: z.union([z.literal(2), z.literal(3)]),
+  phase: z.union([z.literal(2), z.literal(3), z.literal(4)]),
   capabilities: z.array(z.string()),
 });
 export type Health = z.infer<typeof healthSchema>;
@@ -32,6 +32,10 @@ export const streamSchema = z.object({
   ]),
   checkedAt: z.iso.datetime(),
   playbackUrl: z.string(),
+  playbackSources: z
+    .array(z.object({ id: z.enum(["primary", "standby"]), url: z.string() }))
+    .max(2)
+    .optional(),
   tracks: z.array(z.string()),
   description: z.string().optional(),
   channelId: z.string().optional(),
@@ -64,7 +68,12 @@ export type PlaybackEventKind =
   | "fatal_player_error"
   | "autoplay_blocked"
   | "retry_scheduled"
-  | "source_released";
+  | "source_released"
+  | "source_selected"
+  | "source_failure_detected"
+  | "alternate_source_selected"
+  | "playback_reinitialized"
+  | "recovery_failed";
 export interface PlaybackFailure {
   code: string;
   message: string;
@@ -76,6 +85,7 @@ export interface PlaybackEvent {
   at: string;
   elapsedMs: number;
   error?: PlaybackFailure;
+  deliverySource?: "primary" | "standby";
 }
 export interface PlaybackMetrics {
   sourceId: string;

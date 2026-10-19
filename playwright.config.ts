@@ -4,19 +4,23 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/e2e",
   outputDir:
-    process.env.PLATFORM_MEDIA_E2E === "1"
-      ? "test-results/platform-media-artifacts"
-      : process.env.STREAMING_E2E === "1"
-        ? "test-results/media-artifacts"
-        : "test-results/browser-artifacts",
+    process.env.RESILIENCE_E2E === "1"
+      ? "test-results/resilience-artifacts"
+      : process.env.PLATFORM_MEDIA_E2E === "1"
+        ? "test-results/platform-media-artifacts"
+        : process.env.STREAMING_E2E === "1"
+          ? "test-results/media-artifacts"
+          : "test-results/browser-artifacts",
   fullyParallel: false,
   workers: 1,
   testMatch:
-    process.env.STREAMING_E2E === "1"
-      ? "**/media.spec.ts"
-      : process.env.PLATFORM_MEDIA_E2E === "1"
-        ? "**/platform-media.spec.ts"
-        : ["**/foundation.spec.ts", "**/platform.spec.ts"],
+    process.env.RESILIENCE_E2E === "1"
+      ? "**/resilience.spec.ts"
+      : process.env.STREAMING_E2E === "1"
+        ? "**/media.spec.ts"
+        : process.env.PLATFORM_MEDIA_E2E === "1"
+          ? "**/platform-media.spec.ts"
+          : ["**/foundation.spec.ts", "**/platform.spec.ts"],
   reporter: "list",
   use: {
     baseURL: process.env.E2E_BASE_URL,

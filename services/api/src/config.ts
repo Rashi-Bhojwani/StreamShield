@@ -14,7 +14,29 @@ const origin = z
     }
     return ["http:", "https:"].includes(url.protocol) && url.origin === value;
   }, "Must be an HTTP(S) origin without path or trailing slash");
+const privateUrl = z.url().refine((v) => {
+  const u = new URL(v);
+  return (
+    ["http:", "https:"].includes(u.protocol) &&
+    !u.username &&
+    !u.password &&
+    !u.search &&
+    !u.hash
+  );
+});
 const schema = z.object({
+  API_INSTANCE_ID: z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]{1,40}$/)
+    .optional(),
+  TRUST_GATEWAY_IDS: z.enum(["true", "false"]).optional(),
+  MEDIA_DELIVERY_API_BASE_URL: privateUrl.optional(),
+  MEDIA_STANDBY_API_BASE_URL: privateUrl.optional(),
+  MEDIA_STANDBY_HLS_BASE_URL: privateUrl.optional(),
+  MEDIA_STANDBY_PUBLIC_HLS_BASE_URL: z
+    .string()
+    .regex(/^\/[a-zA-Z0-9/_-]+$/)
+    .optional(),
   MEDIA_STREAM_PATH: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/),
   MEDIA_STREAM_TITLE: z.string().min(1).max(120),
   MEDIA_API_BASE_URL: z.url().refine((v) => {
@@ -91,6 +113,17 @@ export function parseConfig(input: Record<string, unknown>) {
       `Invalid API configuration: ${result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
     );
   }
-  return result.data;
+  const c = result.data;
+  const group = [
+    c.MEDIA_DELIVERY_API_BASE_URL,
+    c.MEDIA_STANDBY_API_BASE_URL,
+    c.MEDIA_STANDBY_HLS_BASE_URL,
+    c.MEDIA_STANDBY_PUBLIC_HLS_BASE_URL,
+  ];
+  if (group.some(Boolean) && !group.every(Boolean))
+    throw new Error(
+      "Complete primary/standby delivery configuration is required",
+    );
+  return c;
 }
 export type Config = ReturnType<typeof parseConfig>;

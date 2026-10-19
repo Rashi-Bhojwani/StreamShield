@@ -9,7 +9,10 @@ import { createRealtime } from "./platform/realtime.js";
 async function main() {
   const config = parseConfig(process.env),
     c = parsePlatformConfig(process.env);
-  const logger = pino({ level: config.LOG_LEVEL });
+  const logger = pino({
+    level: config.LOG_LEVEL,
+    base: { instanceId: config.API_INSTANCE_ID || "api" },
+  });
   const r = createResources(c, logger);
   try {
     await r.start();
@@ -24,12 +27,22 @@ async function main() {
     lifecycle.ready = true;
     logger.info({ port: config.API_PORT }, "Platform API listening");
   });
-  const auth = createMediaAuth(r, c, config, {
-    user: process.env.MEDIA_PUBLISH_USER || "",
-    password: process.env.MEDIA_PUBLISH_PASSWORD || "",
-  });
-  const internal = auth.listen(c.API_INTERNAL_PORT, c.API_INTERNAL_HOST);
   const io = createRealtime(server, r, c, config, platform);
+  const auth = createMediaAuth(
+    r,
+    c,
+    config,
+    {
+      user: process.env.MEDIA_PUBLISH_USER || "",
+      password: process.env.MEDIA_PUBLISH_PASSWORD || "",
+    },
+    async () => ({
+      instanceId: config.API_INSTANCE_ID || "api",
+      ready: lifecycle.ready && (await platform.ready()),
+      socketIds: [...io.sockets.sockets.keys()],
+    }),
+  );
+  const internal = auth.listen(c.API_INTERNAL_PORT, c.API_INTERNAL_HOST);
   for (const current of [server, internal]) {
     current.requestTimeout = config.REQUEST_TIMEOUT_MS;
     current.headersTimeout = config.REQUEST_TIMEOUT_MS;

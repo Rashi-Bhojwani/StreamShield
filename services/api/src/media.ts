@@ -9,9 +9,10 @@ const pathSchema = z.object({
   available: z.boolean(),
   tracks: z.array(z.string()),
 });
-export function createMediaService(
+function createSingleMediaService(
   config: Config,
   fetcher: typeof fetch = fetch,
+  controlOnly = false,
 ) {
   let cached: Stream | undefined;
   let expires = 0;
@@ -81,7 +82,7 @@ export function createMediaService(
         status: "starting",
         reason: "hls_pending",
       });
-      if (!path.available) return result;
+      if (!path.available || controlOnly) return result;
       try {
         let hls = await fetcher(
           `${config.MEDIA_HLS_BASE_URL.replace(/\/$/, "")}/${config.MEDIA_STREAM_PATH}/index.m3u8`,
@@ -162,6 +163,74 @@ export function createMediaService(
           inflight = undefined;
         });
       return inflight;
+    },
+  };
+}
+export function createMediaService(
+  config: Config,
+  fetcher: typeof fetch = fetch,
+) {
+  if (!config.MEDIA_STANDBY_API_BASE_URL)
+    return createSingleMediaService(config, fetcher);
+  const ingest = createSingleMediaService(config, fetcher, true);
+  const primary = createSingleMediaService(
+    { ...config, MEDIA_API_BASE_URL: config.MEDIA_DELIVERY_API_BASE_URL! },
+    fetcher,
+  );
+  const standby = createSingleMediaService(
+    {
+      ...config,
+      MEDIA_API_BASE_URL: config.MEDIA_STANDBY_API_BASE_URL,
+      MEDIA_HLS_BASE_URL: config.MEDIA_STANDBY_HLS_BASE_URL!,
+      MEDIA_PUBLIC_HLS_BASE_URL: config.MEDIA_STANDBY_PUBLIC_HLS_BASE_URL!,
+    },
+    fetcher,
+  );
+  return {
+    async getStream(): Promise<Stream> {
+      const input = await ingest.getStream();
+      const sources = [
+        {
+          id: "primary" as const,
+          url:
+            config.MEDIA_PUBLIC_HLS_BASE_URL.replace(/\/$/, "") +
+            "/" +
+            config.MEDIA_STREAM_PATH +
+            "/index.m3u8",
+        },
+        {
+          id: "standby" as const,
+          url:
+            config.MEDIA_STANDBY_PUBLIC_HLS_BASE_URL!.replace(/\/$/, "") +
+            "/" +
+            config.MEDIA_STREAM_PATH +
+            "/index.m3u8",
+        },
+      ];
+      if (input.publisher === "offline")
+        return { ...input, playbackSources: sources };
+      const [a, b] = await Promise.all([
+        primary.getStream(),
+        standby.getStream(),
+      ]);
+      const chosen =
+        a.status === "live"
+          ? a
+          : b.status === "live"
+            ? b
+            : a.status === "starting"
+              ? a
+              : b.status === "starting"
+                ? b
+                : a;
+      return {
+        ...chosen,
+        playbackUrl: a.playbackUrl,
+        playbackSources: [
+          { id: "primary", url: a.playbackUrl },
+          { id: "standby", url: b.playbackUrl },
+        ],
+      };
     },
   };
 }

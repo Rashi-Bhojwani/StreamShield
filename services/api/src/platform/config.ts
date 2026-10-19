@@ -3,6 +3,10 @@ const int = (min: number, max: number) =>
   z.coerce.number().int().min(min).max(max);
 const bool = z.enum(["true", "false"]).transform((v) => v === "true");
 const schema = z.object({
+  MEDIA_REPLICATION_SECRET: z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]{43}$/)
+    .optional(),
   POSTGRES_HOST: z.string().min(1),
   POSTGRES_PORT: int(1, 65535),
   POSTGRES_DB: z.string().regex(/^[a-zA-Z0-9_]+$/),
