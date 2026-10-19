@@ -69,6 +69,8 @@ jobs:
       - run: npm run setup:monitoring
       - run: node infrastructure/monitoring/compose.mjs config --quiet
       - run: npm run monitoring:up
+      - run: npm run monitoring:probe
+      - run: node infrastructure/monitoring/compose.mjs exec -T --user 1001:1001 observer node -e "JSON.parse(require('node:fs').readFileSync('/config/targets.json','utf8'))"
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps chromium
       - run: npm run test:monitoring

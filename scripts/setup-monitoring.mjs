@@ -224,7 +224,10 @@ services.observer = {
     "metrics-db-setup": { condition: "service_completed_successfully" },
   },
   mem_limit: "256m",
-  volumes: [...base.services.api.volumes, "./.local/monitoring:/config:ro"],
+  volumes: [
+    ...base.services.api.volumes,
+    "./.local/monitoring/targets.json:/config/targets.json:ro",
+  ],
   healthcheck: {
     interval: "10s",
     timeout: "3s",
