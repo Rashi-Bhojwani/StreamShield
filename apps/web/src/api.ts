@@ -32,8 +32,16 @@ export async function fetchFoundation(signal?: AbortSignal) {
   return { health, info };
 }
 
-export async function fetchStreams(signal?: AbortSignal) {
-  return request("/streams", streamListSchema, signal);
+export async function fetchStreams(
+  signal?: AbortSignal,
+  search = "",
+  offset = 0,
+) {
+  return request(
+    "/streams?q=" + encodeURIComponent(search) + "&offset=" + offset,
+    streamListSchema,
+    signal,
+  );
 }
 export async function fetchStream(id: string, signal?: AbortSignal) {
   return request("/streams/" + encodeURIComponent(id), streamSchema, signal);

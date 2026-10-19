@@ -61,3 +61,31 @@ Shared `PlaybackEvent`, `PlaybackMetrics` and `PlaybackObservation` interfaces c
 Startup is measured to first advancing unpaused media time, not manifest delivery. Waiting/stalled events after startup and no-progress retries identify interruptions; duplicate notifications form one stall until progress or user pause. Measured duration excludes user pauses. Reopening a source resets its media-time baseline so recovery is observable even when the new timeline begins at zero. Metrics are snapshots at event timestamps, not continuous wall-clock counters. Native HLS cannot expose network-level manifest/segment events through the video element. Source 404/410 errors are delivery observations, not proof that a broadcaster disconnected. Backend availability remains separately authoritative for publisher observations.
 
 Future monitoring can consume this callback and correlate independently verified source/edge health; this phase adds no telemetry ingestion, persistence, failover, chaos or healing controller. `/about` preserves developer foundation/roadmap information outside consumer discovery.
+
+## Phase 3 application and data plane
+
+```mermaid
+flowchart LR
+  Browser["StreamShield Live browser"] -->|"REST + cookie / CSRF"| API["Express API"]
+  Browser <-->|"Socket.IO / WebSocket"| Chat["Chat transport"]
+  API --> PG[("PostgreSQL")]
+  API --> Redis[("Redis")]
+  Chat --> PG
+  Chat <--> Redis
+  Broadcaster["OBS / FFmpeg"] -->|"owned RTMP key"| Media["MediaMTX"]
+  Media -->|"private service-authenticated callback"| Auth["Private media auth listener"]
+  Auth --> PG
+  Browser -->|"HLS via /media proxy"| Media
+```
+
+PostgreSQL owns users, canonical unique accounts, channels/ownership, streams/unique media paths, hashed revocable sessions, hashed independent publish credentials and ordered chat. node-pg-migrate applies explicit transactional forward migrations through a one-shot Compose service; named-volume data is never reset automatically. pg is the single query/pooling layer.
+
+Authentication uses Argon2id, random HttpOnly SameSite cookies, database expiry/revocation, exact Origin checks and nonce-bound HMAC CSRF tokens. Privileged operations validate current server-side roles and resource ownership; registration cannot select roles. Account/channel/profile/chat DTOs omit private hashes. The private media callback requires its service Basic credential on a separate unexposed listener, not forwarded headers or a public admin proxy.
+
+Each owned stream has an independent random media path and credential digest. Publishing authorization checks path/key/state/owner role; rotation/end revoke and kick matching active RTMP connections through the private Control API. Actual media evidence remains independent of DB draft/ready/ended metadata. Public HLS reads bypass per-segment DB authentication, and application cookies are stripped by the HLS proxy while MediaMTX cookies are preserved.
+
+The supported Socket.IO Redis adapter uses separate pub/sub clients and namespaced channels. PostgreSQL is durable message history; Redis is ephemeral distribution, shared atomic rate limits and TTL presence. Messages are session-validated and stream-room scoped. Browser display is plain React text with bounded history and scrollback-aware autoscroll. Redis transport failures are explicit, with bounded reconnect and durable-history catch-up; Pub/Sub delivery durability is not claimed.
+
+Presence counts distinct browser login/anonymous identities per stream with socket leases, based on actual advancing visible video time. Tabs sharing a session are deduplicated; pause, visibility, disconnect and expiry remove leases. Counts are approximate active players, not unique humans or complete HLS audience measurements.
+
+DB/Redis readiness is independent of already-ingested HLS. Failed metadata refresh retains the active player and labels status unknown. Independent-instance integration verifies shared session/chat/rate/presence boundaries without introducing Phase 4 replica deployment. See [Phase 3 handoff](docs/PHASE_3.md) for schema, endpoints, limitations, migration/testing and future edge/origin extension points.

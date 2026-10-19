@@ -7,7 +7,7 @@ export const healthSchema = z.object({
 export const systemInfoSchema = z.object({
   name: z.literal("StreamShield"),
   version: z.string(),
-  phase: z.literal(2),
+  phase: z.union([z.literal(2), z.literal(3)]),
   capabilities: z.array(z.string()),
 });
 export type Health = z.infer<typeof healthSchema>;
@@ -33,8 +33,19 @@ export const streamSchema = z.object({
   checkedAt: z.iso.datetime(),
   playbackUrl: z.string(),
   tracks: z.array(z.string()),
+  description: z.string().optional(),
+  channelId: z.string().optional(),
+  channelSlug: z.string().optional(),
+  channelName: z.string().optional(),
+  ownerUsername: z.string().optional(),
+  lifecycle: z.enum(["draft", "ready", "ended"]).optional(),
+  startedAt: z.string().nullable().optional(),
+  endedAt: z.string().nullable().optional(),
 });
-export const streamListSchema = z.object({ streams: z.array(streamSchema) });
+export const streamListSchema = z.object({
+  streams: z.array(streamSchema),
+  nextOffset: z.number().nullable().optional(),
+});
 export type Stream = z.infer<typeof streamSchema>;
 
 /** Browser observations, distinct from backend publisher/HLS availability. */
@@ -80,3 +91,5 @@ export interface PlaybackObservation {
   event: PlaybackEvent;
   metrics: PlaybackMetrics;
 }
+
+export * from "./platform";

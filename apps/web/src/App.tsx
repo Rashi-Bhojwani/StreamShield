@@ -1,3 +1,6 @@
+import { AuthProvider, AuthPage, Profile, Protected } from "./platform/Auth";
+
+import { ChannelPage, Channels } from "./platform/Channels";
 import { lazy, Suspense } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { LiveShell } from "./layout/LiveShell";
@@ -5,6 +8,9 @@ import { Discovery, Explore } from "./streaming/Discovery";
 import { ConnectionStatus } from "./ui/ConnectionStatus";
 import { Brand } from "./ui/Brand";
 import { Icon } from "./ui/Icon";
+const Studio = lazy(() =>
+  import("./platform/Studio").then((module) => ({ default: module.Studio })),
+);
 const Watch = lazy(() => import("./streaming/Watch"));
 function Diagnostics() {
   return (
@@ -47,7 +53,9 @@ function About() {
         <p>
           Phase 1 established validated contracts, API health, structured
           logging, Docker and automated checks. Phase 2 adds authenticated RTMP
-          ingestion, MediaMTX HLS delivery and real browser playback.
+          ingestion, MediaMTX HLS delivery and real browser playback. Phase 3
+          adds owned channels, broadcaster Studio, authenticated sessions,
+          durable chat and approximate active-player estimates.
         </p>
         <p>
           Media travels directly through the media delivery path. Express
@@ -61,9 +69,9 @@ function About() {
       <section className="panel diagnostics-panel">
         <h2>Planned, not operational</h2>
         <p>
-          Accounts, broadcaster tools and chat come in later phases. Redundant
-          origins, edges, incident timelines, failover and automated recovery
-          require additional implementation and verification.
+          Following, categories and uploaded profile assets come in later
+          phases. Redundant origins, edges, incident timelines, failover and
+          automated recovery require additional implementation and verification.
         </p>
         <p>
           StreamShield Control will be a separate authorized operations product.
@@ -110,50 +118,69 @@ function Control() {
 }
 export function App() {
   return (
-    <Routes>
-      <Route path="/control" element={<Control />} />
-      <Route element={<LiveShell />}>
-        <Route path="/" element={<Discovery />} />
-        <Route path="/live" element={<Discovery view="live" />} />
-        <Route path="/search" element={<Discovery view="search" />} />
-        <Route path="/explore" element={<Explore />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/diagnostics" element={<Diagnostics />} />
-        <Route
-          path="/foundation"
-          element={<Navigate to="/diagnostics" replace />}
-        />
-        <Route
-          path="/watch/:id"
-          element={
-            <Suspense
-              fallback={
-                <p className="loading-surface" role="status">
-                  Loading the live player…
-                </p>
-              }
-            >
-              <Watch />
-            </Suspense>
-          }
-        />
-        <Route
-          path="*"
-          element={
-            <div className="not-found">
-              <span className="state-symbol">
-                <Icon name="search" />
-              </span>
-              <h1>This page is off the air.</h1>
-              <p>The page you’re looking for doesn’t exist.</p>
-              <Link className="button primary" to="/">
-                Back to Home
-                <Icon name="arrow" />
-              </Link>
-            </div>
-          }
-        />
-      </Route>
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route path="/control" element={<Control />} />
+        <Route element={<LiveShell />}>
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/signup" element={<AuthPage signup />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route
+            path="/studio"
+            element={
+              <Protected>
+                <Suspense
+                  fallback={<p className="loading-surface">Loading Studio…</p>}
+                >
+                  <Studio />
+                </Suspense>
+              </Protected>
+            }
+          />
+          <Route path="/channels" element={<Channels />} />
+          <Route path="/channels/:slug" element={<ChannelPage />} />
+          <Route path="/" element={<Discovery />} />
+          <Route path="/live" element={<Discovery view="live" />} />
+          <Route path="/search" element={<Discovery view="search" />} />
+          <Route path="/explore" element={<Explore />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/diagnostics" element={<Diagnostics />} />
+          <Route
+            path="/foundation"
+            element={<Navigate to="/diagnostics" replace />}
+          />
+          <Route
+            path="/watch/:id"
+            element={
+              <Suspense
+                fallback={
+                  <p className="loading-surface" role="status">
+                    Loading the live player…
+                  </p>
+                }
+              >
+                <Watch />
+              </Suspense>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <div className="not-found">
+                <span className="state-symbol">
+                  <Icon name="search" />
+                </span>
+                <h1>This page is off the air.</h1>
+                <p>The page you’re looking for doesn’t exist.</p>
+                <Link className="button primary" to="/">
+                  Back to Home
+                  <Icon name="arrow" />
+                </Link>
+              </div>
+            }
+          />
+        </Route>
+      </Routes>
+    </AuthProvider>
   );
 }
