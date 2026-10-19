@@ -27,3 +27,11 @@ Preserve foundation tests; add configuration, MediaMTX response/probe, API route
 ## Limits and future healing
 
 No failover, replica, controller, durable catalog, chat, auth accounts, viewer metrics, transcoding ladder or latency/capacity guarantee. HLS buffers delay interruption visibility; publish state and playing state are distinct. Native HLS/Safari and physical OBS require manual checks if unavailable here. Future phases can reuse timestamped observations and playback states, but must add independent probes, incident storage and verified bounded recovery without mistaking reconnect for infrastructure healing.
+
+## Combined engine + platform delivery (19 October 2026)
+
+Inspection found the engine merged through PR #1 and the complete consumer redesign still open in PR #2. The worktree was clean. Fast-forward the requested `feature/phase-2-live-streaming` branch through the current main and existing UI commit, preserving both histories and leaving PR #2 unchanged. Deliver a new combined PR against main with the requested title.
+
+Retain the pinned MediaMTX deployment, authenticated RTMP, private Control API, HLS proxy, verified source API, bounded FFmpeg helper and full-width Live shell. Add the missing typed, local player-observation boundary: actual lifecycle/load/error events, first-progress startup time, deduplicated post-start stalls, measured stall duration, last error and a non-secret source ID. Native HLS must disclose that manifest/segment details are unavailable. Consumers can subscribe without restarting playback; source changes/manual retries start fresh sessions. Keep metrics in collapsed Watch diagnostics, with no analytics endpoint, persistence, fabricated telemetry or recovery controller.
+
+Preserve developer/foundation context on a separate route. Extend meaningful tests for metrics, errors, callback/source changes, cleanup and two simultaneous real viewers. Re-run types, lint, formatting, unit tests, build, Compose validation, API recovery, all requested viewports, and genuine decoded FFmpeg playback including interruption/return. Capture and inspect current screenshots. Update Phase 2 and Windows documentation and publish the combined feature branch without force-pushing or merging any PR.

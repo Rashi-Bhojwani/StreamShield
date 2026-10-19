@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
+import type { PlaybackObservation } from "@streamshield/shared";
+import { createPlaybackObserver } from "./observability";
 import { config } from "../config";
 
 export type PlaybackState =
@@ -18,7 +20,19 @@ function retryDelay(attempt: number) {
   );
 }
 
-export function LivePlayer({ source }: { source: string }) {
+export function LivePlayer({
+  source,
+  sourceId = "unidentified-source",
+  onObservation,
+}: {
+  source: string;
+  sourceId?: string;
+  onObservation?: (observation: PlaybackObservation) => void;
+}) {
+  const subscriber = useRef(onObservation);
+  useEffect(() => {
+    subscriber.current = onObservation;
+  }, [onObservation]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [session, setSession] = useState(0);
   const [state, setState] = useState<PlaybackState>("loading");
@@ -26,6 +40,10 @@ export function LivePlayer({ source }: { source: string }) {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    const observer = createPlaybackObserver(sourceId, (observation) =>
+      subscriber.current?.(observation),
+    );
+    observer.record("player_initialized");
     let disposed = false;
     let hls: Hls | undefined;
     let attempts = 0;
@@ -52,13 +70,20 @@ export function LivePlayer({ source }: { source: string }) {
     const retry = (reason: string) => {
       if (disposed || recovering) return;
       recovering = true;
+      observer.stall();
       clearStall();
       detach();
       if (attempts >= config.VITE_PLAYER_RETRY_LIMIT) {
+        observer.record("fatal_player_error", {
+          code: "retry_budget_exhausted",
+          message: reason,
+          fatal: true,
+        });
         update("error", `${reason} Automatic retry budget exhausted.`);
         return;
       }
       attempts += 1;
+      observer.record("retry_scheduled");
       update(
         "reconnecting",
         `${reason} Retry ${attempts} of ${config.VITE_PLAYER_RETRY_LIMIT}.`,
@@ -87,6 +112,11 @@ export function LivePlayer({ source }: { source: string }) {
         if (errorName === "AbortError") return;
         if (errorName === "NotAllowedError") {
           clearStall();
+          observer.record("autoplay_blocked", {
+            code: "autoplay_blocked",
+            message: "Browser requires user interaction.",
+            fatal: false,
+          });
           update(
             "blocked",
             "Playback requires your interaction. Use the video play control.",
@@ -106,6 +136,7 @@ export function LivePlayer({ source }: { source: string }) {
     };
     const progress = () => {
       if (!recovering && !video.paused && video.currentTime > lastTime) {
+        observer.progress(video.currentTime, video.paused);
         lastTime = video.currentTime;
         clearStall();
         watchStall();
@@ -113,6 +144,7 @@ export function LivePlayer({ source }: { source: string }) {
     };
     const buffering = () => {
       if (!recovering) {
+        if (!video.paused) observer.stall();
         update("buffering", "Waiting for additional media data.");
         watchStall();
       }
@@ -120,17 +152,33 @@ export function LivePlayer({ source }: { source: string }) {
     const paused = () => {
       if (!recovering) {
         clearStall();
+        observer.pause();
         update(
           "paused",
           "Playback paused. Use the video play control to resume.",
         );
       }
     };
-    const mediaError = () => retry("The browser reported a media error.");
-    const ended = () => retry("The live media source ended.");
+    const mediaError = () => {
+      observer.record("fatal_player_error", {
+        code: "browser_media_error",
+        message: "The browser reported a media error.",
+        fatal: true,
+      });
+      retry("The browser reported a media error.");
+    };
+    const ended = () => {
+      observer.end();
+      retry("The live media source ended.");
+    };
+    const nativeReady = () => {
+      observer.record("native_media_ready");
+      play();
+    };
     const attach = () => {
       if (disposed) return;
       lastTime = -1;
+      observer.reopen();
       if (Hls.isSupported()) {
         const policy = {
           default: {
@@ -147,8 +195,38 @@ export function LivePlayer({ source }: { source: string }) {
           playlistLoadPolicy: policy,
           fragLoadPolicy: policy,
         });
+        hls.on(Hls.Events.MANIFEST_LOADED, () =>
+          observer.record("manifest_loaded"),
+        );
         hls.on(Hls.Events.MANIFEST_PARSED, play);
         hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (disposed || recovering) return;
+          const failure = {
+            code: data.details,
+            message: "HLS media delivery reported an error.",
+            fatal: data.fatal,
+          };
+          if (
+            [
+              Hls.ErrorDetails.MANIFEST_LOAD_ERROR,
+              Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT,
+              Hls.ErrorDetails.MANIFEST_PARSING_ERROR,
+              Hls.ErrorDetails.LEVEL_LOAD_ERROR,
+              Hls.ErrorDetails.LEVEL_LOAD_TIMEOUT,
+            ].includes(data.details)
+          )
+            observer.record("manifest_failure", failure);
+          if (
+            [
+              Hls.ErrorDetails.FRAG_LOAD_ERROR,
+              Hls.ErrorDetails.FRAG_LOAD_TIMEOUT,
+              Hls.ErrorDetails.FRAG_PARSING_ERROR,
+            ].includes(data.details)
+          )
+            observer.record("segment_failure", failure);
+          if (data.response?.code === 404 || data.response?.code === 410)
+            observer.record("source_unavailable", failure);
+          if (data.fatal) observer.record("fatal_player_error", failure);
           if (data.fatal)
             retry(
               data.type === Hls.ErrorTypes.MEDIA_ERROR
@@ -161,9 +239,14 @@ export function LivePlayer({ source }: { source: string }) {
         watchStall();
       } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
         video.src = source;
-        video.addEventListener("loadedmetadata", play);
+        video.addEventListener("loadedmetadata", nativeReady);
         watchStall();
       } else {
+        observer.record("fatal_player_error", {
+          code: "unsupported_browser",
+          message: "No supported HLS playback capability.",
+          fatal: true,
+        });
         update(
           "unsupported",
           "This browser supports neither MediaSource HLS nor native HLS. Try a current supported browser.",
@@ -180,6 +263,7 @@ export function LivePlayer({ source }: { source: string }) {
     attach();
     return () => {
       disposed = true;
+      observer.release();
       clearStall();
       if (retryTimer) clearTimeout(retryTimer);
       video.removeEventListener("playing", playing);
@@ -189,10 +273,10 @@ export function LivePlayer({ source }: { source: string }) {
       video.removeEventListener("pause", paused);
       video.removeEventListener("error", mediaError);
       video.removeEventListener("ended", ended);
-      video.removeEventListener("loadedmetadata", play);
+      video.removeEventListener("loadedmetadata", nativeReady);
       detach();
     };
-  }, [source, session]);
+  }, [source, sourceId, session]);
   return (
     <div className="player">
       <video

@@ -42,6 +42,16 @@ test("real encoded RTMP → HLS → browser, source interruption and origin outa
   request,
 }) => {
   test.setTimeout(timeout * 5);
+  const capture = async (options: { path: string; fullPage: boolean }) => {
+    await page.evaluate(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      window.scrollTo(0, 0);
+    });
+    await expect
+      .poll(async () => (await page.locator(".topbar").boundingBox())?.y)
+      .toBe(0);
+    await page.screenshot(options);
+  };
   const endpoint = "/api/v1/streams/" + settings.MEDIA_STREAM_PATH;
   const observation = async () =>
     streamSchema.parse(await (await request.get(endpoint)).json());
@@ -130,7 +140,54 @@ test("real encoded RTMP → HLS → browser, source interruption and origin outa
     expect(
       await video.evaluate((node) => (node as HTMLVideoElement).muted),
     ).toBe(true);
-    await page.screenshot({
+    const secondViewer = await page.context().newPage();
+    try {
+      await secondViewer.goto("/watch/" + settings.MEDIA_STREAM_PATH);
+      await expect(secondViewer.getByTestId("playback-state")).toHaveText(
+        "playing",
+        { timeout },
+      );
+      await expect
+        .poll(
+          () =>
+            secondViewer
+              .getByLabel("Live stream video")
+              .evaluate(
+                (node) =>
+                  (node as HTMLVideoElement).getVideoPlaybackQuality()
+                    .totalVideoFrames,
+              ),
+          { timeout },
+        )
+        .toBeGreaterThan(0);
+      await expect
+        .poll(
+          () =>
+            secondViewer
+              .getByLabel("Live stream video")
+              .evaluate((node) => (node as HTMLVideoElement).currentTime),
+          { timeout },
+        )
+        .toBeGreaterThan(1);
+      await expect(page.getByTestId("playback-state")).toHaveText("playing");
+    } finally {
+      await secondViewer.close();
+    }
+    await page
+      .getByText("Advanced stream diagnostics", { exact: true })
+      .click();
+    await expect(page.getByTestId("startup-metric")).toHaveText(/^\d+ ms$/);
+    await expect(
+      page.getByRole("region", { name: "Measured browser playback" }),
+    ).toContainText(settings.MEDIA_STREAM_PATH);
+    await capture({
+      path: "test-results/live-diagnostics.png",
+      fullPage: true,
+    });
+    await page
+      .getByText("Advanced stream diagnostics", { exact: true })
+      .click();
+    await capture({
       path: "test-results/live-stream-desktop.png",
       fullPage: true,
     });
@@ -140,7 +197,7 @@ test("real encoded RTMP → HLS → browser, source interruption and origin outa
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
-    await page.screenshot({
+    await capture({
       path: "test-results/live-stream-mobile.png",
       fullPage: true,
     });
@@ -154,7 +211,7 @@ test("real encoded RTMP → HLS → browser, source interruption and origin outa
           () => document.documentElement.scrollWidth <= innerWidth,
         ),
       ).toBe(true);
-      await page.screenshot({
+      await capture({
         path: `test-results/live-watch-${width}.png`,
         fullPage: true,
       });
@@ -172,7 +229,7 @@ test("real encoded RTMP → HLS → browser, source interruption and origin outa
         { timeout },
       )
       .toBeGreaterThan(1);
-    await page.screenshot({
+    await capture({
       path: "test-results/live-home-1920.png",
       fullPage: true,
     });
@@ -219,7 +276,7 @@ test("real encoded RTMP → HLS → browser, source interruption and origin outa
       .toBe("offline");
     expect(errors).toEqual([]);
     console.log(
-      `Verified H264/AAC publication, HLS segment bytes, ${frames} decoded browser frames, source stop/return and origin-unavailable reporting.`,
+      `Verified H264/AAC publication, HLS segment bytes, ${frames} decoded browser frames, two concurrent viewers, measured startup, source stop/return and origin-unavailable reporting.`,
     );
   } finally {
     await stop(publisher);

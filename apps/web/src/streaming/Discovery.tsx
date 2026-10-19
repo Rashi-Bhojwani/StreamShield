@@ -125,7 +125,7 @@ export function Discovery({
           <div className="featured-media">
             {featured?.status === "live" ? (
               <Suspense fallback={<p role="status">Loading live preview…</p>}>
-                <Preview source={featured.playbackUrl} />
+                <Preview source={featured.playbackUrl} sourceId={featured.id} />
               </Suspense>
             ) : (
               <div className="featured-offline">
