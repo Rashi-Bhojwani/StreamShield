@@ -162,7 +162,13 @@ try {
       (await a.r.db.query("SELECT count(*) FROM schema_migrations")).rows[0]
         .count,
     ),
-    1,
+    2,
+  );
+  assert.deepEqual(
+    (
+      await a.r.db.query("SELECT name FROM schema_migrations ORDER BY name")
+    ).rows.map((row) => row.name),
+    ["1761000000000_platform", "1761100000000_observability"],
   );
   check("migrations apply and repeat without destructive resets");
   const alice = browser(a.origin),

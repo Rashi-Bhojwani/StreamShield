@@ -14,6 +14,9 @@ const composeArgs = [
   "docker-compose.yml",
   "-f",
   ".local/resilience/compose.yml",
+  ...(process.env.STREAMSHIELD_COMPOSE_MODE === "monitoring"
+    ? ["-f", ".local/monitoring/compose.yml"]
+    : []),
 ];
 function compose(...args: string[]) {
   return execFileSync("docker", [...composeArgs, ...args], {

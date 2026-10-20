@@ -56,3 +56,30 @@ jobs:
           if-no-files-found: ignore
       - if: always()
         run: if [ -f .local/resilience/compose.yml ]; then npm run resilience:down; fi
+
+  monitoring:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:monitoring
+      - run: node infrastructure/monitoring/compose.mjs config --quiet
+      - run: npm run monitoring:up
+      - run: npm run monitoring:probe
+      - run: node infrastructure/monitoring/compose.mjs exec -T --user 1001:1001 observer node -e "JSON.parse(require('node:fs').readFileSync('/config/targets.json','utf8'))"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:monitoring
+      - run: npm run test:resilience:monitoring
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monitoring-results
+          path: test-results/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/monitoring/compose.yml ]; then npm run monitoring:down; fi

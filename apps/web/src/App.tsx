@@ -6,8 +6,9 @@ import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { LiveShell } from "./layout/LiveShell";
 import { Discovery, Explore } from "./streaming/Discovery";
 import { ConnectionStatus } from "./ui/ConnectionStatus";
-import { Brand } from "./ui/Brand";
+
 import { Icon } from "./ui/Icon";
+const Control = lazy(() => import("./control/Control"));
 const Studio = lazy(() =>
   import("./platform/Studio").then((module) => ({ default: module.Studio })),
 );
@@ -55,7 +56,9 @@ function About() {
           logging, Docker and automated checks. Phase 2 adds authenticated RTMP
           ingestion, MediaMTX HLS delivery and real browser playback. Phase 3
           adds owned channels, broadcaster Studio, authenticated sessions,
-          durable chat and approximate active-player estimates.
+          durable chat and approximate active-player estimates. Phase 4 adds
+          redundant APIs, media origins and edges. Phase 5 adds
+          administrator-only observability and durable incidents.
         </p>
         <p>
           Media travels directly through the media delivery path. Express
@@ -70,49 +73,14 @@ function About() {
         <h2>Planned, not operational</h2>
         <p>
           Following, categories and uploaded profile assets come in later
-          phases. Redundant origins, edges, incident timelines, failover and
-          automated recovery require additional implementation and verification.
+          phases. Autonomous recovery and interactive chaos controls remain
+          future work.
         </p>
         <p>
-          StreamShield Control will be a separate authorized operations product.
-          No capacity or infrastructure-healing guarantee is made by this build.
+          StreamShield Control is a separate authorized operations product. No
+          capacity or infrastructure-healing guarantee is made by this build.
         </p>
       </section>
-    </div>
-  );
-}
-function Control() {
-  return (
-    <div className="control-app">
-      <header>
-        <Brand product="Control" />
-        <Link className="button secondary" to="/">
-          Back to Live
-          <Icon name="arrow" />
-        </Link>
-      </header>
-      <main id="main">
-        <div className="control-intro">
-          <span className="state-symbol">
-            <Icon name="shield" />
-          </span>
-          <span className="soon-badge">Coming in a future update</span>
-          <h1>A separate space for stream reliability.</h1>
-          <p>
-            StreamShield Control will be the authorized operations experience
-            for monitoring, incidents and recovery. It is not available yet.
-          </p>
-          <p>
-            No monitoring dashboard, administrative access or chaos controls are
-            enabled here. Authorization must be implemented before those tools
-            become available.
-          </p>
-          <Link className="button primary" to="/">
-            Return to StreamShield Live
-            <Icon name="arrow" />
-          </Link>
-        </div>
-      </main>
     </div>
   );
 }
@@ -120,7 +88,16 @@ export function App() {
   return (
     <AuthProvider>
       <Routes>
-        <Route path="/control" element={<Control />} />
+        <Route
+          path="/control/*"
+          element={
+            <Suspense
+              fallback={<p className="loading-surface">Loading Control…</p>}
+            >
+              <Control />
+            </Suspense>
+          }
+        />
         <Route element={<LiveShell />}>
           <Route path="/login" element={<AuthPage />} />
           <Route path="/signup" element={<AuthPage signup />} />

@@ -7,7 +7,7 @@ export const healthSchema = z.object({
 export const systemInfoSchema = z.object({
   name: z.literal("StreamShield"),
   version: z.string(),
-  phase: z.union([z.literal(2), z.literal(3), z.literal(4)]),
+  phase: z.union([z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   capabilities: z.array(z.string()),
 });
 export type Health = z.infer<typeof healthSchema>;
@@ -103,3 +103,5 @@ export interface PlaybackObservation {
 }
 
 export * from "./platform";
+
+export * from "./monitoring";

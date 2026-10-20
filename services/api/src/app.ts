@@ -1,3 +1,4 @@
+import type { ApiMetrics } from "./monitoring/metrics.js";
 import type { Platform } from "./platform/routes.js";
 import { randomUUID } from "node:crypto";
 import express, { type ErrorRequestHandler } from "express";
@@ -17,9 +18,11 @@ export function createApp(
   logger: Logger = pino({ level: config.LOG_LEVEL }),
   media: MediaService = createMediaService(config),
   platform?: Platform,
+  metrics?: ApiMetrics,
 ) {
   const app = express();
   app.disable("x-powered-by");
+  if (metrics) app.use(metrics.middleware);
   app.use((req, res, next) => {
     // Default to our own ID; opt-in local gateway mode accepts only its fixed hex format.
     const incoming = req.headers["x-request-id"];
@@ -71,12 +74,20 @@ export function createApp(
     res.setHeader("Cache-Control", "no-store");
     res.json({
       name: "StreamShield",
-      version: config.MEDIA_STANDBY_API_BASE_URL
-        ? "0.4.0"
-        : platform
-          ? "0.3.0"
-          : "0.2.0",
-      phase: config.MEDIA_STANDBY_API_BASE_URL ? 4 : platform ? 3 : 2,
+      version: config.OBS_URL
+        ? "0.5.0"
+        : config.MEDIA_STANDBY_API_BASE_URL
+          ? "0.4.0"
+          : platform
+            ? "0.3.0"
+            : "0.2.0",
+      phase: config.OBS_URL
+        ? 5
+        : config.MEDIA_STANDBY_API_BASE_URL
+          ? 4
+          : platform
+            ? 3
+            : 2,
       capabilities: [
         "API health probes",
         "System metadata",

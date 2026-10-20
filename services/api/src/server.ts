@@ -1,3 +1,5 @@
+import { attachMonitoring } from "./monitoring/realtime.js";
+import { createMetrics } from "./monitoring/metrics.js";
 import pino from "pino";
 import { parseConfig } from "./config.js";
 import { createApp } from "./app.js";
@@ -22,12 +24,25 @@ async function main() {
   }
   const platform = await createPlatform(r, c, config, logger);
   const lifecycle = { ready: false };
-  const app = createApp(config, lifecycle, logger, undefined, platform);
+  const metrics = createMetrics();
+  const app = createApp(
+    config,
+    lifecycle,
+    logger,
+    undefined,
+    platform,
+    metrics,
+  );
   const server = app.listen(config.API_PORT, config.API_HOST, () => {
     lifecycle.ready = true;
     logger.info({ port: config.API_PORT }, "Platform API listening");
   });
   const io = createRealtime(server, r, c, config, platform);
+  if (process.env.OBS_URL) attachMonitoring(io, r);
+  io.on("connection", (socket) => {
+    metrics.sockets.inc();
+    socket.once("disconnect", () => metrics.sockets.dec());
+  });
   const auth = createMediaAuth(
     r,
     c,
@@ -41,6 +56,7 @@ async function main() {
       ready: lifecycle.ready && (await platform.ready()),
       socketIds: [...io.sockets.sockets.keys()],
     }),
+    metrics,
   );
   const internal = auth.listen(c.API_INTERNAL_PORT, c.API_INTERNAL_HOST);
   for (const current of [server, internal]) {

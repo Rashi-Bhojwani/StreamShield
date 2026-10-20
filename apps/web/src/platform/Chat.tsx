@@ -135,30 +135,34 @@ export function Chat({
         time > lastTime &&
         document.visibilityState === "visible";
       lastTime = time;
-      client
-        .timeout(config.VITE_API_TIMEOUT_MS)
-        .emit(
-          "heartbeat",
-          { streamId, playing },
-          (
-            err: Error | null,
-            reply: RealtimeReply<{ chatAvailable: boolean }>,
-          ) => {
-            if (disposed) return;
-            if (err || !reply?.ok || !reply.data?.chatAvailable) {
-              heartbeatFailed = true;
-              setError(
-                reply?.error?.message ||
-                  "Chat or viewer heartbeat is temporarily unavailable.",
-              );
-              setStatus("Degraded");
-            } else if (heartbeatFailed) {
-              heartbeatFailed = false;
-              setError("");
-              setStatus("Connected");
-            }
-          },
-        );
+      client.timeout(config.VITE_API_TIMEOUT_MS).emit(
+        "heartbeat",
+        {
+          streamId,
+          playing,
+          source:
+            video?.closest(".player")?.getAttribute("data-delivery-source") ||
+            "single",
+        },
+        (
+          err: Error | null,
+          reply: RealtimeReply<{ chatAvailable: boolean }>,
+        ) => {
+          if (disposed) return;
+          if (err || !reply?.ok || !reply.data?.chatAvailable) {
+            heartbeatFailed = true;
+            setError(
+              reply?.error?.message ||
+                "Chat or viewer heartbeat is temporarily unavailable.",
+            );
+            setStatus("Degraded");
+          } else if (heartbeatFailed) {
+            heartbeatFailed = false;
+            setError("");
+            setStatus("Connected");
+          }
+        },
+      );
     };
     const interval = setInterval(
       beat,

@@ -1,3 +1,4 @@
+import type { ApiMetrics } from "../monitoring/metrics.js";
 import express from "express";
 import { z } from "zod";
 import type { Resources } from "./resources.js";
@@ -18,9 +19,26 @@ export function createMediaAuth(
   media: Config,
   legacy: { user: string; password: string },
   diagnostics?: () => Promise<unknown>,
+  metrics?: ApiMetrics,
 ) {
   const app = express();
   app.disable("x-powered-by");
+  app.get("/metrics", async (req, res) => {
+    if (
+      !metrics ||
+      !process.env.OBS_SECRET ||
+      !equal(
+        req.headers.authorization || "",
+        "Bearer " + process.env.OBS_SECRET,
+      )
+    ) {
+      res.sendStatus(401);
+      return;
+    }
+    res
+      .type(metrics.registry.contentType)
+      .send(await metrics.registry.metrics());
+  });
   // This listener is not mounted in the public API and is never proxied/published.
   app.use((req, res, next) => {
     const expected =
@@ -51,7 +69,7 @@ export function createMediaAuth(
       return;
     }
     const a = parsed.data;
-    if (a.action === "api") {
+    if (a.action === "api" || a.action === "metrics") {
       const healthLocal =
         ["127.0.0.1", "::1"].includes(a.ip) && !a.user && !a.password;
       res.sendStatus(

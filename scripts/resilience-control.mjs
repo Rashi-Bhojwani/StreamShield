@@ -18,7 +18,7 @@ if (
 const args =
   action === "crash"
     ? ["kill", "-s", "SIGKILL", service]
-    : ["up", "-d", "--no-deps", service];
+    : ["up", "-d", "--no-deps", "--wait", service];
 execFileSync(
   "docker",
   [
@@ -27,6 +27,9 @@ execFileSync(
     "docker-compose.yml",
     "-f",
     ".local/resilience/compose.yml",
+    ...(process.env.STREAMSHIELD_COMPOSE_MODE === "monitoring"
+      ? ["-f", ".local/monitoring/compose.yml"]
+      : []),
     ...args,
   ],
   { stdio: "inherit", timeout: Number(process.env.RESILIENCE_TEST_TIMEOUT_MS) },

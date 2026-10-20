@@ -1,4 +1,37 @@
-# StreamShield Live
+# StreamShield Live + Control
+
+Phase 5 adds the administrator-only **StreamShield Control Center**, an independent health observer, durable incidents, private Prometheus scrapes and provisioned Grafana dashboards. See the [Phase 5 setup, policies and security](docs/PHASE_5.md) and [implementation plan](docs/PHASE_5_PLAN.md). This branch is stacked on open Phase 4 PR #5; existing prerequisite PRs are not automatically merged.
+
+## Phase 5 quick start in Windows VS Code
+
+Start Docker Desktop with Linux containers. With Node.js 24 installed, use PowerShell:
+
+```powershell
+git clone https://github.com/Rashi-Bhojwani/StreamShield.git
+cd StreamShield
+git fetch origin
+git switch --track origin/feature/phase-5-observability-control-center
+code .
+npm.cmd ci
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+npm.cmd run setup:monitoring
+node infrastructure/monitoring/compose.mjs config --quiet
+npm.cmd run monitoring:up
+npm.cmd run monitoring:status
+npm.cmd run monitoring:probe
+```
+
+Open http://localhost:5173, register your intended account, then grant that account access through the trusted terminal:
+
+```powershell
+node infrastructure/monitoring/compose.mjs exec -T api-2 node scripts/set-role.mjs YOUR_USERNAME administrator
+```
+
+Reload and open **http://localhost:5173/control**. Grafana is **http://localhost:3000**, username operator, with the generated OBS_GRAFANA_PASSWORD in your private .env. Prometheus remains private. Studio provides owned OBS server/key credentials; npm.cmd run broadcast:test supplies a bounded FFmpeg development stream at /watch/live.
+
+A local measured incident demonstration uses npm.cmd run monitoring:control -- crash api followed by npm.cmd run monitoring:control -- restore api. These retain the monitoring overlay and reuse the Phase 4 CLI whitelist. The observer records evidence independently; it does not perform recovery actions. For automated checks run npm.cmd run test:monitoring and npm.cmd run test:resilience:monitoring after npx.cmd playwright install chromium. See the [full Windows/test/troubleshooting handoff](docs/PHASE_5.md) for baseline regression commands and limitations.
+
+Stop your broadcaster, then npm.cmd run monitoring:down **without -v**. Account/chat/incident/PostgreSQL and Grafana/Prometheus volumes are preserved. The lightweight Phase 3 and Phase 4-only workflows below remain available; stop one topology before starting another.
 
 Phase 4 adds an optional redundant development topology: two APIs, Nginx API routing, two HLS edges and independently packaged primary/standby media supplied by an authenticated relay. See [Phase 4 results and limitations](docs/PHASE_4.md) and [implementation plan](docs/PHASE_4_PLAN.md). Phase 4 is stacked on open Phase 3 PR #4; no dependency PR is automatically merged.
 
