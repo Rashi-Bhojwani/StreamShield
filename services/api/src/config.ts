@@ -25,6 +25,17 @@ const privateUrl = z.url().refine((v) => {
   );
 });
 const schema = z.object({
+  HEALER_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    privateUrl.optional(),
+  ),
+  HEALER_SECRET: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z
+      .string()
+      .regex(/^[\w-]{43}$/)
+      .optional(),
+  ),
   OBS_URL: z.preprocess(
     (v) => (v === "" ? undefined : v),
     privateUrl.optional(),
@@ -134,6 +145,8 @@ export function parseConfig(input: Record<string, unknown>) {
     ![c.OBS_URL, c.OBS_SECRET, c.PROMETHEUS_URL].every(Boolean)
   )
     throw new Error("Complete monitoring service configuration required");
+  if (Boolean(c.HEALER_URL) !== Boolean(c.HEALER_SECRET))
+    throw new Error("Complete healing read service configuration required");
   const group = [
     c.MEDIA_DELIVERY_API_BASE_URL,
     c.MEDIA_STANDBY_API_BASE_URL,

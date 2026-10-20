@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { RecoveryStore } from "../services/api/src/healing/store.ts";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { runner } from "node-pg-migrate";
@@ -162,15 +163,95 @@ try {
       (await a.r.db.query("SELECT count(*) FROM schema_migrations")).rows[0]
         .count,
     ),
-    2,
+    3,
   );
   assert.deepEqual(
     (
       await a.r.db.query("SELECT name FROM schema_migrations ORDER BY name")
     ).rows.map((row) => row.name),
-    ["1761000000000_platform", "1761100000000_observability"],
+    [
+      "1761000000000_platform",
+      "1761100000000_observability",
+      "1761190000000_healing",
+    ],
   );
   check("migrations apply and repeat without destructive resets");
+  // Explicit synthetic fixtures live only in this isolated, disposable integration database.
+  const incidentId = randomUUID(),
+    attemptId = randomUUID(),
+    observed = "2026-01-01T00:00:00Z",
+    recurrence = "2026-01-01T00:00:10Z";
+  await a.r.db.query(
+    "INSERT INTO monitoring_incidents(id,component,severity,state,first_observed_at,detected_at,evidence,correlation_id) VALUES($1,'api-1','critical','DIAGNOSED',$2,$2,$3,$1)",
+    [incidentId, observed, { syntheticTest: true }],
+  );
+  const audit = new RecoveryStore();
+  await audit.db.end();
+  audit.db = a.r.db;
+  const attempt = {
+    id: attemptId,
+    incidentId: null,
+    component: "api-1",
+    episode: "synthetic-api-1-recurrence",
+    playbook: "api-start",
+    version: 1,
+    actor: "streamshield-healer",
+    diagnosis: "isolated synthetic fixture",
+    action: "start_stopped_service",
+    state: "VERIFYING",
+    number: 1,
+    epoch: 1,
+    createdAt: recurrence,
+    detectedAt: recurrence,
+    actionStartedAt: null,
+    actionFinishedAt: null,
+    verificationStartedAt: recurrence,
+    finishedAt: null,
+    nextAt: 0,
+    deadline: 0,
+    reason: "test",
+    evidence: { syntheticTest: true },
+    events: [
+      { state: "SCHEDULED", at: recurrence, reason: "isolated test" },
+      { state: "VERIFYING", at: recurrence, reason: "isolated test" },
+    ],
+  };
+  assert.equal(await audit.sync(attempt), true);
+  assert.equal(attempt.incidentId, incidentId);
+  assert.equal(await audit.sync(attempt), true);
+  assert.equal(
+    (
+      await a.r.db.query(
+        "SELECT count(*)::int AS n FROM healing_events WHERE attempt_id=$1",
+        [attemptId],
+      )
+    ).rows[0].n,
+    2,
+  );
+  assert.equal(
+    (
+      await a.r.db.query(
+        "SELECT first_observed_at FROM monitoring_incidents WHERE id=$1",
+        [incidentId],
+      )
+    ).rows[0].first_observed_at.toISOString(),
+    new Date(observed).toISOString(),
+  );
+  assert.equal(
+    await audit.sync({ ...attempt, epoch: 0, state: "ESCALATED" }),
+    false,
+  );
+  assert.equal(
+    (
+      await a.r.db.query("SELECT state FROM healing_attempts WHERE id=$1", [
+        attemptId,
+      ])
+    ).rows[0].state,
+    "VERIFYING",
+  );
+  check(
+    "isolated recovery audit correlates recurrence, deduplicates events and fences stale writers",
+  );
   const alice = browser(a.origin),
     bob = browser(b.origin),
     guest = browser(a.origin);

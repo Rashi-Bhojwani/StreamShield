@@ -111,6 +111,7 @@ let media: MediaObservation[] = [],
   lastCompleted = 0,
   lastMedia = 0;
 const failureClocks = new Map<string, number>();
+let recoveryRevision = "";
 const pendingEvidence = new Map<string, ComponentObservation>();
 const mediaSeen = new Map<
   string,
@@ -341,7 +342,7 @@ app.get("/metrics", async (_req, res) =>
   res.type(metrics.registry.contentType).send(await metrics.registry.metrics()),
 );
 app.get("/observations", (_req, res) =>
-  res.json({ components, persistence, lastCompleted, mediaAvailable }),
+  res.json({ components, persistence, lastCompleted, mediaAvailable, media }),
 );
 app.get("/snapshot", async (_req, res) => {
   try {
@@ -427,6 +428,20 @@ async function start() {
       );
       persistence = true;
       pendingEvidence.clear();
+      let kind = "snapshot_changed";
+      try {
+        const revision =
+          (
+            await db.query(
+              "SELECT max(updated_at)::text AS revision FROM healing_attempts",
+            )
+          ).rows[0]?.revision || "";
+        if (revision && revision !== recoveryRevision)
+          kind = "recovery_changed";
+        recoveryRevision = revision;
+      } catch {
+        /* Older deployments still reconcile ordinary snapshots. */
+      }
       if (redis.isReady)
         await redis
           .publish(
@@ -435,7 +450,7 @@ async function start() {
               version: 1,
               sequence,
               at: new Date().toISOString(),
-              kind: "snapshot_changed",
+              kind,
             }),
           )
           .catch(() =>
