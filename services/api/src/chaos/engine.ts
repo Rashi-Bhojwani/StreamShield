@@ -256,6 +256,7 @@ export class ChaosEngine {
     state: "COMPLETED" | "FAILED" | "TIMED_OUT" | "CANCELLED",
     reason: string,
   ) {
+    this.stable.delete(e.id);
     if (["CREATED", "VALIDATING"].includes(e.state) && !e.injectedAt) {
       e.cleanup = "NOT_REQUIRED";
       this.transition(e, state, reason);
