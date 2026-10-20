@@ -1,3 +1,4 @@
+import type { Platform } from "./platform/routes.js";
 import { randomUUID } from "node:crypto";
 import express, { type ErrorRequestHandler } from "express";
 import helmet from "helmet";
@@ -15,6 +16,7 @@ export function createApp(
   lifecycle: Lifecycle,
   logger: Logger = pino({ level: config.LOG_LEVEL }),
   media: MediaService = createMediaService(config),
+  platform?: Platform,
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -40,17 +42,22 @@ export function createApp(
   });
   app.use(helmet());
   app.use(
-    cors({ origin: config.CORS_ORIGINS, methods: ["GET"], credentials: false }),
+    cors({
+      origin: config.CORS_ORIGINS,
+      methods: ["GET", "POST", "PATCH"],
+      credentials: true,
+    }),
   );
   app.use(express.json({ limit: "16kb" }));
   app.get("/api/v1/health/live", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.json({ status: "alive", service: "streamshield-api" } satisfies Health);
   });
-  app.get("/api/v1/health/ready", (_req, res) => {
+  app.get("/api/v1/health/ready", async (_req, res) => {
+    const ready = lifecycle.ready && (!platform || (await platform.ready()));
     res.setHeader("Cache-Control", "no-store");
-    res.status(lifecycle.ready ? 200 : 503).json({
-      status: lifecycle.ready ? "ready" : "not_ready",
+    res.status(ready ? 200 : 503).json({
+      status: ready ? "ready" : "not_ready",
       service: "streamshield-api",
     } satisfies Health);
   });
@@ -58,8 +65,8 @@ export function createApp(
     res.setHeader("Cache-Control", "no-store");
     res.json({
       name: "StreamShield",
-      version: "0.2.0",
-      phase: 2,
+      version: platform ? "0.3.0" : "0.2.0",
+      phase: platform ? 3 : 2,
       capabilities: [
         "API health probes",
         "System metadata",
@@ -69,6 +76,10 @@ export function createApp(
       ],
     } satisfies SystemInfo);
   });
+  if (platform) {
+    app.use("/api/v1", platform.router);
+    app.use(platform.errors);
+  }
   app.get("/api/v1/streams", async (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.json({ streams: [await media.getStream()] });

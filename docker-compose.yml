@@ -14,6 +14,57 @@ x-health: &health
   start_period: ${HEALTHCHECK_START_PERIOD:?required}
 
 services:
+  postgres:
+    image: postgres:17.9-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Run npm run setup:platform}
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      PGPORT: ${POSTGRES_PORT}
+    command: ["postgres", "-p", "${POSTGRES_PORT}"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+  redis:
+    image: redis:8.6.2-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?required}
+      REDIS_PORT: ${REDIS_PORT}
+    command:
+      [
+        "sh",
+        "-c",
+        'exec redis-server --port $$REDIS_PORT --requirepass "$$REDIS_PASSWORD" --save '''' --appendonly no',
+      ]
+    healthcheck:
+      <<: *health
+      test:
+        [
+          "CMD-SHELL",
+          'REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli -p $$REDIS_PORT ping | test "$$(cat)" = PONG',
+        ]
+  migrate:
+    <<: *common
+    restart: "no"
+    command: ["npm", "run", "db:migrate"]
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./migrations:/app/migrations:ro
+      - ./package.json:/app/package.json:ro
+    environment: &database-env
+      DEPENDENCY_TIMEOUT_MS: ${DEPENDENCY_TIMEOUT_MS:?required}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${POSTGRES_PORT:?required}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
   mediamtx:
     image: bluenviron/mediamtx:1.21.2-ffmpeg
     init: true
@@ -36,7 +87,36 @@ services:
     <<: *common
     command: ["npm", "run", "dev", "-w", "@streamshield/api"]
     environment:
+      <<: *database-env
       NODE_ENV: ${NODE_ENV:?required}
+      API_INTERNAL_HOST: 0.0.0.0
+      API_INTERNAL_PORT: ${API_INTERNAL_PORT:?required}
+      DB_POOL_MAX: ${DB_POOL_MAX:?required}
+      DEPENDENCY_TIMEOUT_MS: ${DEPENDENCY_TIMEOUT_MS:?required}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT:?required}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_RECONNECT_LIMIT: ${REDIS_RECONNECT_LIMIT:?required}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:?required}
+      COOKIE_SECURE: ${COOKIE_SECURE:?required}
+      CSRF_SECRET: ${CSRF_SECRET:?required}
+      AUTH_RATE_WINDOW_MS: ${AUTH_RATE_WINDOW_MS:?required}
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:?required}
+      WRITE_RATE_LIMIT: ${WRITE_RATE_LIMIT:?required}
+      CHAT_RATE_WINDOW_MS: ${CHAT_RATE_WINDOW_MS:?required}
+      CHAT_RATE_LIMIT: ${CHAT_RATE_LIMIT:?required}
+      CHAT_HISTORY_LIMIT: ${CHAT_HISTORY_LIMIT:?required}
+      PRESENCE_TTL_SECONDS: ${PRESENCE_TTL_SECONDS:?required}
+      PRESENCE_HEARTBEAT_MS: ${PRESENCE_HEARTBEAT_MS:?required}
+      SOCKET_CONNECT_LIMIT: ${SOCKET_CONNECT_LIMIT:?required}
+      MEDIA_AUTH_SECRET: ${MEDIA_AUTH_SECRET:?required}
+      MEDIA_AUTH_BASE_URL: ${MEDIA_AUTH_BASE_URL:?required}
+      MEDIA_RTMP_PUBLIC_URL: ${MEDIA_RTMP_PUBLIC_URL:?required}
+      ENABLE_LEGACY_STREAM: ${ENABLE_LEGACY_STREAM:?required}
+      MEDIA_OBSERVER_LIMIT: ${MEDIA_OBSERVER_LIMIT:?required}
+      MEDIA_PUBLISH_USER: ${MEDIA_PUBLISH_USER}
+      MEDIA_PUBLISH_PASSWORD: ${MEDIA_PUBLISH_PASSWORD}
       API_HOST: 0.0.0.0
       API_PORT: ${API_PORT:?required}
       CORS_ORIGINS: ${CORS_ORIGINS:?required}
@@ -52,9 +132,18 @@ services:
       MEDIA_API_PASSWORD: ${MEDIA_API_PASSWORD:?Run npm run setup:media}
       MEDIA_PROBE_TIMEOUT_MS: ${MEDIA_PROBE_TIMEOUT_MS:?required}
       MEDIA_STATUS_CACHE_MS: ${MEDIA_STATUS_CACHE_MS:?required}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     ports:
       - "${BIND_ADDRESS}:${API_PORT}:${API_PORT}"
     volumes:
+      - ./scripts:/app/scripts:ro
+      - ./migrations:/app/migrations:ro
+      - ./package.json:/app/package.json:ro
+      - ./tests:/app/tests:ro
       - ./services/api/src:/app/services/api/src:ro
       - ./packages/shared/src:/app/packages/shared/src:ro
     healthcheck:
@@ -103,3 +192,6 @@ services:
           "-e",
           "Promise.all([fetch('http://127.0.0.1:'+process.env.WEB_PORT),fetch('http://127.0.0.1:'+process.env.WEB_PORT+'/api/v1/health/ready')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))",
         ]
+
+volumes:
+  postgres-data:

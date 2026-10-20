@@ -1,3 +1,4 @@
+import { AccountMenu } from "../platform/Auth";
 import { useEffect, useRef, useState } from "react";
 import {
   Link,
@@ -106,17 +107,7 @@ export function LiveShell() {
             <Icon name="arrow" />
           </button>
         </form>
-        <button
-          className="account-button"
-          disabled
-          aria-label="Accounts — coming soon"
-          title="Accounts are coming soon"
-        >
-          <Icon name="user" />
-          <span>
-            Accounts <small>Coming soon</small>
-          </span>
-        </button>
+        <AccountMenu />
       </header>
       {open && (
         <button
@@ -171,11 +162,22 @@ export function LiveShell() {
             <span>Following</span>
             <small>Soon</small>
           </button>
-          <button className="sidebar-future" disabled>
+          <Link
+            className="sidebar-future studio-link"
+            to="/studio"
+            onClick={() => setOpen(false)}
+          >
             <Icon name="studio" />
             <span>Broadcaster Studio</span>
-            <small>Soon</small>
-          </button>
+          </Link>
+          <Link
+            className="sidebar-future studio-link"
+            to="/channels"
+            onClick={() => setOpen(false)}
+          >
+            <Icon name="grid" />
+            <span>Browse channels</span>
+          </Link>
         </div>
         <div className="sidebar-divider" />
         <section className="sidebar-group channels">

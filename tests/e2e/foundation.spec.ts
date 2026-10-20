@@ -38,7 +38,9 @@ for (const width of [375, 768, 1280, 1440, 1680, 1920]) {
     await expect(
       page.getByRole("heading", { name: "A good place to tune in." }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: /Accounts/ })).toBeDisabled();
+    await expect(
+      page.getByRole("link", { name: "Sign in", exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Visit channel", exact: true }),
     ).toBeVisible();

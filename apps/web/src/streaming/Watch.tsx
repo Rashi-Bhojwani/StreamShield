@@ -1,5 +1,6 @@
 import type { PlaybackObservation } from "@streamshield/shared";
-import { useState } from "react";
+import { Chat } from "../platform/Chat";
+import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchStream } from "../api";
@@ -10,6 +11,7 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { ConnectionStatus } from "../ui/ConnectionStatus";
 
 export default function Watch() {
+  const playerContainer = useRef<HTMLElement>(null);
   const { id = "" } = useParams();
   const [diagnostics, setDiagnostics] = useState(false);
   const [observation, setObservation] = useState<PlaybackObservation | null>(
@@ -33,7 +35,11 @@ export default function Watch() {
         <span>{stream?.title || "Channel"}</span>
       </div>
       <div className="watch-layout">
-        <section className="watch-main" aria-label="Video playback">
+        <section
+          ref={playerContainer}
+          className="watch-main"
+          aria-label="Video playback"
+        >
           {stream?.status === "live" ? (
             <LivePlayer
               key={stream.playbackUrl}
@@ -99,7 +105,18 @@ export default function Watch() {
               </span>
               <div>
                 <h1>{stream?.title || "Live channel"}</h1>
-                <p>StreamShield Live channel</p>
+                <p>
+                  {stream?.channelSlug ? (
+                    <Link
+                      className="inline-link"
+                      to={"/channels/" + stream.channelSlug}
+                    >
+                      {stream.channelName} · @{stream.ownerUsername}
+                    </Link>
+                  ) : (
+                    "Development compatibility channel"
+                  )}
+                </p>
               </div>
             </div>
             <div className="watch-info-actions">
@@ -142,9 +159,10 @@ export default function Watch() {
           <div className="stream-about">
             <h2>About this stream</h2>
             <p>
-              {stream?.status === "live"
-                ? "A live broadcast on StreamShield. Use the player controls for sound, pause and fullscreen."
-                : "The next live moment starts when the broadcaster goes on air."}
+              {stream?.description ||
+                (stream?.status === "live"
+                  ? "A live broadcast on StreamShield. Use the player controls for sound, pause and fullscreen."
+                  : "The next live moment starts when the broadcaster goes on air.")}
             </p>
           </div>
           <details
@@ -247,29 +265,37 @@ export default function Watch() {
             )}
           </details>
         </section>
-        <aside className="chat-panel" aria-label="Live chat">
-          <div className="chat-heading">
-            <h2>
-              <Icon name="chat" />
-              Live chat
-            </h2>
-            <span className="soon-badge">Coming soon</span>
-          </div>
-          <div className="chat-empty">
-            <span className="chat-illustration">
-              <Icon name="chat" />
-            </span>
-            <h3>A place for the conversation.</h3>
-            <p>
-              Live chat isn’t available yet. For now, settle in and enjoy the
-              stream.
-            </p>
-          </div>
-          <div className="chat-unavailable">
-            <Icon name="lock" />
-            <span>Messaging is not available</span>
-          </div>
-        </aside>
+        {stream?.channelId ? (
+          <Chat
+            key={stream.id}
+            streamId={stream.id}
+            playerContainer={playerContainer}
+          />
+        ) : (
+          <aside className="chat-panel" aria-label="Live chat">
+            <div className="chat-heading">
+              <h2>
+                <Icon name="chat" />
+                Live chat
+              </h2>
+              <span className="soon-badge">Coming soon</span>
+            </div>
+            <div className="chat-empty">
+              <span className="chat-illustration">
+                <Icon name="chat" />
+              </span>
+              <h3>A place for the conversation.</h3>
+              <p>
+                Live chat isn’t available yet. For now, settle in and enjoy the
+                stream.
+              </p>
+            </div>
+            <div className="chat-unavailable">
+              <Icon name="lock" />
+              <span>Messaging is not available</span>
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

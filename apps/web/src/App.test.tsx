@@ -33,7 +33,7 @@ describe("application shell", () => {
         async (url: string) =>
           new Response(
             JSON.stringify(
-              url.endsWith("/streams")
+              url.includes("/streams")
                 ? offlineList
                 : url.endsWith("/system/info")
                   ? metadata
@@ -66,7 +66,7 @@ describe("application shell", () => {
       async (url: string) =>
         new Response(
           JSON.stringify(
-            url.endsWith("/streams")
+            url.includes("/streams")
               ? offlineList
               : url.endsWith("/system/info")
                 ? metadata
