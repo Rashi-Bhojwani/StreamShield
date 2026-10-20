@@ -807,3 +807,44 @@
     flex-direction: column;
   }
 }
+
+/* Keep the live signal beside the actual execution record on desktop. */
+@media (min-width: 901px) {
+  .chaos-demo-video {
+    position: sticky;
+    top: 24px;
+  }
+}
+.chaos-demo-console .chaos-experiment {
+  margin: 24px 0;
+  padding: 22px 0 0;
+  border: 0;
+  border-top: 1px solid #2c4055;
+  border-radius: 0;
+  background: transparent;
+}
+.chaos-demo-console .chaos-measurements {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.chaos-demo-console .chaos-experiment > header {
+  flex-wrap: wrap;
+}
+.chaos-demo-console .chaos-timeline {
+  max-height: 230px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.chaos-demo-console .chaos-timeline li {
+  grid-template-columns: 7px minmax(0, 1fr);
+  gap: 10px;
+}
+.chaos-demo-console .chaos-timeline time {
+  grid-column: 2;
+}
+.chaos-demo-console .chaos-timeline p {
+  overflow-wrap: anywhere;
+}
+.chaos-demo-console .chaos-experiment > footer {
+  flex-wrap: wrap;
+}

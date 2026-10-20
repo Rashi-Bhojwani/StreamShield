@@ -661,6 +661,14 @@ export function ChaosDemo({
             Configure selected failure
           </button>
           {policy?.reason && <p className="chaos-denial">{policy.reason}</p>}
+          {experiment ? (
+            <Experiment e={experiment} compact />
+          ) : (
+            <div className="chaos-demo-empty">
+              The execution timeline appears after a real experiment is
+              admitted.
+            </div>
+          )}
           <div
             className="chaos-live-services"
             aria-label="Current service health"
@@ -691,13 +699,6 @@ export function ChaosDemo({
           </p>
         </aside>
       </div>
-      {experiment ? (
-        <Experiment e={experiment} compact />
-      ) : (
-        <div className="chaos-demo-empty">
-          The execution timeline appears after a real experiment is admitted.
-        </div>
-      )}
       {topology}
       {selection && q.data && (
         <Confirmation
