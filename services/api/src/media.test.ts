@@ -163,3 +163,60 @@ describe("media configuration", () => {
     ),
   );
 });
+
+describe("redundant source evidence", () => {
+  it("keeps explicit origin timelines and uses verified standby evidence when primary is unavailable", async () => {
+    const c = parseConfig({
+      ...testEnv,
+      MEDIA_DELIVERY_API_BASE_URL: "http://primary.test:9997",
+      MEDIA_STANDBY_API_BASE_URL: "http://standby.test:9997",
+      MEDIA_STANDBY_HLS_BASE_URL: "http://standby.test:8888",
+      MEDIA_STANDBY_PUBLIC_HLS_BASE_URL: "/media/standby",
+      MEDIA_PUBLIC_HLS_BASE_URL: "/media/primary",
+    });
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.startsWith("http://primary.test")) throw new Error("origin down");
+      return url.includes("/v3/")
+        ? json(path)
+        : new Response("#EXTM3U\n#EXTINF:2\nseg.mp4");
+    });
+    const stream = await createMediaService(c, fetcher).getStream();
+    expect(stream.status).toBe("live");
+    expect(stream.playbackUrl).toBe("/media/primary/live/index.m3u8");
+    expect(stream.playbackSources?.map((s) => s.url)).toEqual([
+      "/media/primary/live/index.m3u8",
+      "/media/standby/live/index.m3u8",
+    ]);
+    expect(JSON.stringify(stream)).not.toContain("standby.test");
+    expect(JSON.stringify(stream)).not.toContain(c.MEDIA_API_PASSWORD);
+  });
+  it("does not confuse a configured pull path with a live ingest publisher", async () => {
+    const c = parseConfig({
+      ...testEnv,
+      MEDIA_DELIVERY_API_BASE_URL: "http://primary.test:9997",
+      MEDIA_STANDBY_API_BASE_URL: "http://standby.test:9997",
+      MEDIA_STANDBY_HLS_BASE_URL: "http://standby.test:8888",
+      MEDIA_STANDBY_PUBLIC_HLS_BASE_URL: "/media/standby",
+    });
+    const fetcher = vi.fn<typeof fetch>(async () => json({}, 404));
+    const result = await createMediaService(c, fetcher).getStream();
+    expect(result.status).toBe("offline");
+    expect(result.publisher).toBe("offline");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("rejects partial or credential-bearing redundancy configuration", () => {
+    expect(() =>
+      parseConfig({
+        ...testEnv,
+        MEDIA_STANDBY_API_BASE_URL: "http://standby.test",
+      }),
+    ).toThrow();
+    expect(() =>
+      parseConfig({
+        ...testEnv,
+        MEDIA_DELIVERY_API_BASE_URL: "http://user:secret@primary.test",
+      }),
+    ).toThrow();
+  });
+});

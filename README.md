@@ -1,10 +1,12 @@
 # StreamShield Live
 
+Phase 4 adds an optional redundant development topology: two APIs, Nginx API routing, two HLS edges and independently packaged primary/standby media supplied by an authenticated relay. See [Phase 4 results and limitations](docs/PHASE_4.md) and [implementation plan](docs/PHASE_4_PLAN.md). Phase 4 is stacked on open Phase 3 PR #4; no dependency PR is automatically merged.
+
 A multi-user livestreaming platform with real RTMP ingestion, HLS browser playback, owned channels, a broadcaster Studio and durable live chat. PostgreSQL stores accounts, sessions, streams and chat history; Redis distributes Socket.IO events and tracks expiring approximate active-player leases. Media remains on MediaMTX/HLS, separate from Express.
 
 Phase 3 builds on [Phase 2 PR #3](https://github.com/Rashi-Bhojwani/StreamShield/pull/3). While that PR remains open, the Phase 3 branch and PR are stacked on feature/phase-2-live-streaming. No PR is automatically merged. See [Phase 3 implementation](docs/PHASE_3.md), [plan](docs/PHASE_3_PLAN.md), [architecture](ARCHITECTURE.md) and [roadmap](IMPLEMENTATION_PLAN.md).
 
-This is development infrastructure. It does not provide redundancy, automated healing, chaos controls, a CDN or evidence for 50,000–60,000 viewers.
+This is development infrastructure. The optional Phase 4 topology provides service-level redundancy on one Docker host. Host-level redundancy, automated healing, chaos controls, a production CDN and evidence for 50,000–60,000 viewers remain future work.
 
 ## Prerequisites
 
@@ -12,6 +14,97 @@ This is development infrastructure. It does not provide redundancy, automated he
 - Docker Engine or Docker Desktop with Linux containers and Compose v2.
 - Chrome/current Chromium. Native Safari HLS requires separate platform validation.
 - FFmpeg with libx264, AAC and lavfi for actual media tests; OBS Studio for a camera/screen.
+
+## Phase 4: redundant topology in Windows VS Code
+
+Use Node 24, Docker Desktop Linux containers/Compose **2.24.4+**, FFmpeg, OBS and Chrome. Allocate approximately 4 CPUs and 6–8GB RAM to Docker for this optional twelve-service topology. The lightweight default below remains available for ordinary UI/account development. Containers share one Docker host; this is not host-level high availability.
+
+Start Docker Desktop, then in PowerShell:
+
+```powershell
+git clone https://github.com/Rashi-Bhojwani/StreamShield.git
+cd StreamShield
+git fetch origin
+git switch --track origin/feature/phase-4-redundancy-failover
+code .
+npm.cmd ci
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+npm.cmd run setup:resilience
+node infrastructure/resilience/compose.mjs config --quiet
+npm.cmd run resilience:up
+npm.cmd run resilience:status
+npm.cmd run resilience:probe
+```
+
+The setup command preserves existing Phase 3 secrets and the PostgreSQL volume, adds missing settings, and generates private ignored configs under .local/resilience/. API-1 and API-2 share the same schema; the one-shot migrate service applies forward migrations before startup. No new Phase 4 schema reset/migration is required. To repeat migrations explicitly, use docker compose run --rm migrate.
+
+Open **http://localhost:5173**. Register normally, create a channel and livestream in Studio, then create its publishing key. OBS uses Custom and the exact server/key supplied by Studio: the default stable RTMP server is rtmp://127.0.0.1:1935. Use H.264/yuv420p, AAC and two-second keyframes. Both origins receive that authorized dynamic path through private RTSP/TCP pulls. Viewers use the generated Watch URL; they never need internal service addresses. Open another Chrome profile, sign in, watch and chat. Each additional broadcaster gets independent owned paths and credentials.
+
+For a bounded synthetic development broadcast:
+
+```powershell
+npm.cmd run broadcast:test
+```
+
+Open /watch/live through the website. This is the legacy development channel; create owned streams through Studio for real accounts/chat. Stop FFmpeg/OBS before automated tests. MediaMTX remuxes rather than transcodes, and no service can recreate video after the broadcaster or ingest relay fails.
+
+### Controlled failures and recovery
+
+With a broadcast running, the following commands affect only the explicitly selected service in this repository's local resilience Compose project. They are CLI tools, not application/admin HTTP endpoints:
+
+```powershell
+npm.cmd run resilience:control -- crash api
+npm.cmd run resilience:probe
+npm.cmd run resilience:control -- restore api
+
+npm.cmd run resilience:control -- crash edge-1
+npm.cmd run resilience:control -- restore edge-1
+
+npm.cmd run resilience:control -- crash origin-primary
+npm.cmd run resilience:control -- restore origin-primary
+```
+
+After API-1 fails, API-2 serves surviving requests and sockets reconnect using the shared session/Redis adapter. probe expects both peers, so it reports a failure until API-1 is restored; the browser/API readiness route can remain available through API-2. Edge failure retries media requests through the other edge, preserving the origin timeline. Primary failure triggers bounded player reinitialization on standby. Restoration uses the same configuration and DNS discovery; routing is not edited during incidents. The player stays on a working standby to avoid flapping; **Retry preferred playback source** explicitly tests primary again.
+
+For measured, isolated experiments with two disposable broadcasters and actual decoded video:
+
+```powershell
+npx.cmd playwright install chromium
+npm.cmd run test:resilience
+```
+
+This refuses an already active broadcaster, injects API/edge/origin crashes, restores services, cleans only its publishers/accounts, captures all five required UI widths and writes test-results/phase4/measurements.json. Durations use monotonic clocks, UTC injection timestamps and real request/frame observations. Traffic recovery, playback progression and infrastructure restoration are separate fields. Inspect the actual report; no zero-interruption or 30-second guarantee is implied.
+
+### Regression tests and switching topology
+
+The original test:platform, test:e2e, test:media and test:media:platform commands remain unchanged. Run them against the lightweight topology for their original Phase 1–3 coverage; CI runs those plus a separate redundant-topology browser/failure job. To return to lightweight mode without deleting data:
+
+```powershell
+npm.cmd run resilience:down
+npm.cmd run setup:platform
+docker compose up --build --wait
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run format:check
+npm.cmd test
+npm.cmd run build
+npm.cmd run test:platform
+npm.cmd run test:e2e
+npm.cmd run test:media
+npm.cmd run test:media:platform
+```
+
+To return to redundant mode, run setup:resilience and resilience:up again. To stop the redundant stack safely, stop OBS/FFmpeg and run npm.cmd run resilience:down, without -v. Both topologies retain the same postgres-data named volume.
+
+### Phase 4 troubleshooting
+
+- Use resilience:status and resilience:probe. Inspect a selected service with node infrastructure/resilience/compose.mjs logs --tail=50 SERVICE. Do not dump .env, generated media configs or resolved Compose output.
+- Regenerate configs after changing .env topology settings, then recreate affected containers with resilience:up. DNS re-resolution handles restored/recreated peers without incident-time edits.
+- A service /health probe is liveness, not proof of that stream's fresh HLS. The API separately checks publisher/source evidence; only progressing decoded frames prove viewer playback.
+- Live playlists bypass edge caches; media objects have bounded caches keyed by origin-prefixed URL. Errors and stale playlists are not cached. A new source uses a distinct timeline and full player reinitialization.
+- A primary-origin HTTP error does not mark every edge dead; edge transport failures and origin availability are distinct boundaries.
+- API gateway retries do not enable non_idempotent on public writes. A failed ambiguous creation/key rotation should be checked in Studio before submitting again.
+- PostgreSQL/Redis, ingest relay, gateways, frontend and Docker host remain single points of failure. Existing HLS can continue through an API failure; starting new supply still needs database-backed authorization.
 
 ## Windows VS Code: first run
 
@@ -21,7 +114,7 @@ Start Docker Desktop and wait for the engine. In a VS Code PowerShell terminal:
 git clone https://github.com/Rashi-Bhojwani/StreamShield.git
 cd StreamShield
 git fetch origin
-git switch --track origin/feature/phase-3-streaming-platform
+git switch --track origin/feature/phase-4-redundancy-failover
 code .
 npm.cmd ci
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
@@ -171,4 +264,4 @@ Do not add -v: it deletes named volumes. Never paste resolved Compose config or 
 
 ## Phase boundaries
 
-Accounts, Studio, channels, independent streams, chat and approximate active-player estimates are real. Following, categories, uploads, email verification/password reset, moderation tooling and StreamShield Control are not implemented. Native Safari, physical OBS/webcam and Windows execution require manual verification. This phase makes no redundancy, recovery-time or capacity claim. [Phase 4 handoff](docs/PHASE_3.md) describes extension points without deploying them prematurely.
+Accounts, Studio, channels, independent streams, chat and approximate active-player estimates are real. Following, categories, uploads, email verification/password reset, moderation tooling and StreamShield Control are not implemented. Native Safari, physical OBS/webcam and Windows execution require manual verification. The lightweight topology remains a single-instance workflow. Optional Phase 4 service redundancy and measured recovery are described in [PHASE_4.md](docs/PHASE_4.md); no host-level availability, recovery-time guarantee or audience-capacity claim is made.

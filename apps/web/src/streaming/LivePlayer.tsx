@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-import type { PlaybackObservation } from "@streamshield/shared";
+import type { PlaybackObservation, Stream } from "@streamshield/shared";
 import { createPlaybackObserver } from "./observability";
 import { config } from "../config";
 
@@ -24,11 +24,15 @@ export function LivePlayer({
   source,
   sourceId = "unidentified-source",
   onObservation,
+  alternateSources,
 }: {
   source: string;
   sourceId?: string;
+  alternateSources?: Stream["playbackSources"];
   onObservation?: (observation: PlaybackObservation) => void;
 }) {
+  const sourcesKey = JSON.stringify(alternateSources || []);
+  const [deliverySource, setDeliverySource] = useState("primary");
   const subscriber = useRef(onObservation);
   useEffect(() => {
     subscriber.current = onObservation;
@@ -40,8 +44,20 @@ export function LivePlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    const alternatives = JSON.parse(sourcesKey) as NonNullable<
+      Stream["playbackSources"]
+    >;
+    let selected: "primary" | "standby" = "primary";
+    let activeSource = source;
+    setDeliverySource(selected);
     const observer = createPlaybackObserver(sourceId, (observation) =>
-      subscriber.current?.(observation),
+      subscriber.current?.({
+        ...observation,
+        event: {
+          ...observation.event,
+          ...(alternatives.length ? { deliverySource: selected } : {}),
+        },
+      }),
     );
     observer.record("player_initialized");
     let disposed = false;
@@ -79,14 +95,27 @@ export function LivePlayer({
           message: reason,
           fatal: true,
         });
+        observer.record("recovery_failed");
         update("error", `${reason} Automatic retry budget exhausted.`);
         return;
       }
       attempts += 1;
+      if (alternatives.length) {
+        observer.record("source_failure_detected");
+        const standby = alternatives.find(
+          (s) => s.id === "standby" && s.url !== activeSource,
+        );
+        if (selected === "primary" && standby) {
+          selected = "standby";
+          activeSource = standby.url;
+          setDeliverySource(selected);
+          observer.record("alternate_source_selected");
+        }
+      }
       observer.record("retry_scheduled");
       update(
         "reconnecting",
-        `${reason} Retry ${attempts} of ${config.VITE_PLAYER_RETRY_LIMIT}.`,
+        `${selected === "standby" ? "Reconnecting through an alternate playback source. " : reason + " "}Retry ${attempts} of ${config.VITE_PLAYER_RETRY_LIMIT}.`,
       );
       retryTimer = setTimeout(() => {
         retryTimer = undefined;
@@ -179,6 +208,8 @@ export function LivePlayer({
       if (disposed) return;
       lastTime = -1;
       observer.reopen();
+      if (alternatives.length) observer.record("source_selected");
+      if (attempts) observer.record("playback_reinitialized");
       if (Hls.isSupported()) {
         const policy = {
           default: {
@@ -234,11 +265,11 @@ export function LivePlayer({
                 : "HLS delivery failed.",
             );
         });
-        hls.loadSource(source);
+        hls.loadSource(activeSource);
         hls.attachMedia(video);
         watchStall();
       } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = source;
+        video.src = activeSource;
         video.addEventListener("loadedmetadata", nativeReady);
         watchStall();
       } else {
@@ -276,9 +307,9 @@ export function LivePlayer({
       video.removeEventListener("loadedmetadata", nativeReady);
       detach();
     };
-  }, [source, sourceId, session]);
+  }, [source, sourceId, session, sourcesKey]);
   return (
-    <div className="player">
+    <div className="player" data-delivery-source={deliverySource}>
       <video
         ref={videoRef}
         controls
@@ -306,6 +337,14 @@ export function LivePlayer({
           </button>
         )}
       </div>
+      {deliverySource === "standby" && (
+        <button
+          className="text-button"
+          onClick={() => setSession((n) => n + 1)}
+        >
+          Retry preferred playback source
+        </button>
+      )}
       <p className="player-note">
         Starts muted. Use the player controls for sound, pause and fullscreen.
       </p>

@@ -21,8 +21,14 @@ export function createApp(
   const app = express();
   app.disable("x-powered-by");
   app.use((req, res, next) => {
-    // Generate our own IDs; untrusted incoming IDs are never reflected or logged.
-    const requestId = randomUUID();
+    // Default to our own ID; opt-in local gateway mode accepts only its fixed hex format.
+    const incoming = req.headers["x-request-id"];
+    const requestId =
+      config.TRUST_GATEWAY_IDS === "true" &&
+      typeof incoming === "string" &&
+      /^[a-f0-9]{32}$/.test(incoming)
+        ? incoming
+        : randomUUID();
     res.locals.requestId = requestId;
     res.setHeader("X-Request-ID", requestId);
     const started = performance.now();
@@ -65,8 +71,12 @@ export function createApp(
     res.setHeader("Cache-Control", "no-store");
     res.json({
       name: "StreamShield",
-      version: platform ? "0.3.0" : "0.2.0",
-      phase: platform ? 3 : 2,
+      version: config.MEDIA_STANDBY_API_BASE_URL
+        ? "0.4.0"
+        : platform
+          ? "0.3.0"
+          : "0.2.0",
+      phase: config.MEDIA_STANDBY_API_BASE_URL ? 4 : platform ? 3 : 2,
       capabilities: [
         "API health probes",
         "System metadata",

@@ -89,3 +89,13 @@ The supported Socket.IO Redis adapter uses separate pub/sub clients and namespac
 Presence counts distinct browser login/anonymous identities per stream with socket leases, based on actual advancing visible video time. Tabs sharing a session are deduplicated; pause, visibility, disconnect and expiry remove leases. Counts are approximate active players, not unique humans or complete HLS audience measurements.
 
 DB/Redis readiness is independent of already-ingested HLS. Failed metadata refresh retains the active player and labels status unknown. Independent-instance integration verifies shared session/chat/rate/presence boundaries without introducing Phase 4 replica deployment. See [Phase 3 handoff](docs/PHASE_3.md) for schema, endpoints, limitations, migration/testing and future edge/origin extension points.
+
+## Phase 4 optional redundant topology
+
+The lightweight Phase 3 deployment remains the default. setup:resilience generates a validated private overlay for two independently identified APIs behind Nginx, two Nginx HLS edges behind a video gateway, and primary/standby MediaMTX packagers pulling the authenticated relay's dynamic paths over RTSP/TCP. PostgreSQL sessions/data and Redis adapter/limits/presence remain shared; no schema reset is introduced.
+
+Public HLS paths distinguish origin timelines. Each edge proxies one selected origin per URL, bypasses live playlist caches and bounds immutable segment caching. A private MediaMTX HLS CDN credential prevents edge/session-cookie mismatches. Edge transport loss retries the same-origin URL through another edge; origin loss triggers bounded player reinitialization on a different explicit source. Restored peers resolve through Docker DNS, with explicit preferred-source retry for stable failback.
+
+API routing uses OSS passive checks and bounded retries, without non-idempotent public write replay. Private instance diagnostics require service authentication. WebSocket-only Socket.IO remains compatible with round-robin routing and the supported Redis adapter. The existing media/player metrics are extended with safe source-selection events, not a fabricated monitoring/healing UI.
+
+The relay warming hook keeps both origin paths supplied while a publisher exists; it is not a general service controller. Relay, gateways, web, PostgreSQL, Redis and Docker host remain single points of failure. See [Phase 4 architecture/evidence](docs/PHASE_4.md) and [plan](docs/PHASE_4_PLAN.md) for topology, security, operations and measured failure results. No host-level HA or audience-capacity claim follows.

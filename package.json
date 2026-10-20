@@ -1,6 +1,6 @@
 {
   "name": "streamshield",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -27,7 +27,14 @@
     "db:migrate": "node scripts/migrate.mjs",
     "test:platform": "docker compose run --rm -T --no-deps api node --import tsx tests/platform.integration.mjs",
     "test:media:platform": "node scripts/platform-media-integration.mjs",
-    "account:role": "node scripts/set-role.mjs"
+    "account:role": "node scripts/set-role.mjs",
+    "setup:resilience": "node scripts/setup-resilience.mjs",
+    "resilience:up": "node infrastructure/resilience/compose.mjs up --build --wait",
+    "resilience:down": "node infrastructure/resilience/compose.mjs down",
+    "resilience:status": "node infrastructure/resilience/compose.mjs ps",
+    "test:resilience": "node scripts/resilience-integration.mjs",
+    "resilience:probe": "node scripts/resilience-probe.mjs",
+    "resilience:control": "node scripts/resilience-control.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

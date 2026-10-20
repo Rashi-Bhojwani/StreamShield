@@ -17,6 +17,7 @@ export function createMediaAuth(
   c: PlatformConfig,
   media: Config,
   legacy: { user: string; password: string },
+  diagnostics?: () => Promise<unknown>,
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -30,6 +31,17 @@ export function createMediaAuth(
       return;
     }
     next();
+  });
+  app.get("/internal/instance", async (_req, res) => {
+    if (!diagnostics) {
+      res.sendStatus(404);
+      return;
+    }
+    try {
+      res.json(await diagnostics());
+    } catch {
+      res.sendStatus(503);
+    }
   });
   app.use(express.json({ limit: "16kb" }));
   app.post("/internal/media/auth", async (req, res) => {
@@ -49,6 +61,35 @@ export function createMediaAuth(
           ? 204
           : 401,
       );
+      return;
+    }
+    if (a.action === "read") {
+      if (
+        a.protocol !== "rtsp" ||
+        !c.MEDIA_REPLICATION_SECRET ||
+        !equal(a.user, "replica") ||
+        !equal(a.password, c.MEDIA_REPLICATION_SECRET)
+      ) {
+        res.sendStatus(401);
+        return;
+      }
+      if (c.ENABLE_LEGACY_STREAM && a.path === media.MEDIA_STREAM_PATH) {
+        res.sendStatus(204);
+        return;
+      }
+      if (!/^s-[a-f0-9]{32}$/.test(a.path)) {
+        res.sendStatus(401);
+        return;
+      }
+      try {
+        const found = await r.db.query(
+          "SELECT s.id FROM streams s JOIN channels c ON c.id=s.channel_id JOIN users u ON u.id=c.owner_id WHERE s.media_path=$1 AND s.lifecycle='ready' AND s.publish_hash IS NOT NULL AND u.role IN ('broadcaster','administrator')",
+          [a.path],
+        );
+        res.sendStatus(found.rowCount ? 204 : 401);
+      } catch {
+        res.sendStatus(503);
+      }
       return;
     }
     if (a.action !== "publish" || a.protocol !== "rtmp") {
