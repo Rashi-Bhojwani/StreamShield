@@ -1,11 +1,17 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchStream } from "../api";
 import { config } from "../config";
 import { LivePlayer } from "./LivePlayer";
+import { Icon } from "../ui/Icon";
+import { StatusBadge } from "../ui/StatusBadge";
+import { ConnectionStatus } from "../ui/ConnectionStatus";
 
 export default function Watch() {
   const { id = "" } = useParams();
+  const [diagnostics, setDiagnostics] = useState(false);
+  const [shared, setShared] = useState("");
   const query = useQuery({
     queryKey: ["stream", id],
     queryFn: ({ signal }) => fetchStream(id, signal),
@@ -14,44 +20,41 @@ export default function Watch() {
   });
   const stream = query.data;
   return (
-    <>
-      <div className="page-heading">
-        <Link className="eyebrow" to="/">
-          ← PLATFORM OVERVIEW
+    <div className="watch-page">
+      <div className="watch-breadcrumb">
+        <Link className="text-link" to="/live">
+          <Icon name="chevron" />
+          Live streams
         </Link>
-        <span className="tag">PHASE 02 / LIVE VIDEO</span>
+        <span>{stream?.title || "Channel"}</span>
       </div>
-      <div className="watch-heading">
-        <div>
-          <span className="eyebrow">THE LIVE EXPERIENCE</span>
-          <h1>{stream?.title || "Live player"}</h1>
-          <p>One genuine source. A direct media delivery path.</p>
-        </div>
-        <span
-          className={`source-badge ${!query.isError && stream?.status === "live" ? "available" : ""}`}
-        >
-          {query.isPending
-            ? "Checking source"
-            : query.isError
-              ? "Source status unknown"
-              : stream?.status === "live"
-                ? "Source available"
-                : stream?.status === "offline"
-                  ? "Publisher offline"
-                  : stream?.status === "starting"
-                    ? "Preparing HLS"
-                    : "Origin unavailable"}
-        </span>
-      </div>
-      <div className="watch-grid">
+      <div className="watch-layout">
         <section className="watch-main" aria-label="Video playback">
           {stream?.status === "live" ? (
             <LivePlayer key={stream.playbackUrl} source={stream.playbackUrl} />
           ) : (
             <div className="video-empty">
-              <span className="empty-icon" aria-hidden="true">
-                ▷
+              <span className="video-empty-label">
+                <Icon name="live" />
+                {query.isPending
+                  ? "Checking source"
+                  : query.isError
+                    ? "Status unknown"
+                    : stream?.status === "offline"
+                      ? "Offline"
+                      : stream?.status === "starting"
+                        ? "Connecting"
+                        : "Origin unavailable"}
               </span>
+              <div className="offline-player-art" aria-hidden="true">
+                <Icon
+                  name={
+                    query.isError || stream?.status === "unavailable"
+                      ? "refresh"
+                      : "studio"
+                  }
+                />
+              </div>
               <h2>
                 {query.isPending
                   ? "Finding your signal…"
@@ -60,108 +63,156 @@ export default function Watch() {
                     : stream?.status === "offline"
                       ? "Waiting for a broadcaster"
                       : stream?.status === "starting"
-                        ? "Your source is warming up"
-                        : "The origin could not be reached"}
+                        ? "Your stream is getting ready"
+                        : "The stream is unavailable"}
               </h2>
               <p>
                 {stream?.status === "offline"
-                  ? "Start OBS or the bounded FFmpeg test publisher. This page checks for source availability automatically."
-                  : "Publisher availability and HLS delivery must both be verified before loading video."}
+                  ? "This channel isn’t broadcasting right now. Keep this page open — the player will appear when the source returns."
+                  : query.isError
+                    ? "We couldn’t check the channel. Try again to see its current availability."
+                    : "We’re waiting for a verified video source. Please try again in a moment."}
               </p>
               <button
                 className="button secondary"
                 onClick={() => void query.refetch()}
                 disabled={query.isFetching}
               >
+                <Icon name="refresh" />
                 {query.isFetching ? "Checking…" : "Check source again"}
               </button>
             </div>
           )}
-          {query.isError && stream && (
-            <p className="observation-warning" role="status">
-              Current source status is unknown. Any ongoing playback is
-              independent of this failed metadata check.
+          <div className="watch-information">
+            <div className="stream-identity">
+              <span className="channel-symbol large">
+                <Icon name="studio" />
+              </span>
+              <div>
+                <h1>{stream?.title || "Live channel"}</h1>
+                <p>StreamShield Live channel</p>
+              </div>
+            </div>
+            <div className="watch-info-actions">
+              <StatusBadge
+                status={
+                  query.isPending || query.isError
+                    ? "unknown"
+                    : stream?.status || "unknown"
+                }
+              />
+              <button
+                className="button secondary share-button"
+                onClick={() => {
+                  void navigator.clipboard
+                    ?.writeText(window.location.href)
+                    .then(() => setShared("Link copied"))
+                    .catch(() =>
+                      setShared("Copy the address from your browser to share."),
+                    );
+                  if (!navigator.clipboard)
+                    setShared("Copy the address from your browser to share.");
+                }}
+              >
+                <Icon name="share" />
+                Share
+              </button>
+            </div>
+          </div>
+          {shared && (
+            <p className="share-message" role="status">
+              {shared}
             </p>
           )}
-          <div className="media-evidence panel">
-            <span className="eyebrow">LATEST SOURCE OBSERVATION</span>
-            <dl>
-              <div>
-                <dt>Publisher</dt>
-                <dd>
-                  {query.isError ? "unknown" : stream?.publisher || "checking"}
-                </dd>
-              </div>
-              <div>
-                <dt>HLS manifest</dt>
-                <dd>
-                  {query.isError
-                    ? "unknown"
-                    : stream?.hls.replace("_", " ") || "checking"}
-                </dd>
-              </div>
-              <div>
-                <dt>Tracks</dt>
-                <dd>{stream?.tracks.join(" · ") || "Not observed"}</dd>
-              </div>
-              <div>
-                <dt>Observed at</dt>
-                <dd>
-                  {stream
-                    ? new Date(stream.checkedAt).toLocaleTimeString()
-                    : "Pending"}
-                </dd>
-              </div>
-            </dl>
+          {query.isError && stream && (
+            <p className="observation-warning" role="status">
+              Current source status is unknown. Ongoing playback is independent
+              of this failed channel check.
+            </p>
+          )}
+          <div className="stream-about">
+            <h2>About this stream</h2>
             <p>
-              A verified playlist confirms availability, not successful playback
-              on every device. No viewer counts or recovery metrics are
-              estimated.
+              {stream?.status === "live"
+                ? "A live broadcast on StreamShield. Use the player controls for sound, pause and fullscreen."
+                : "The next live moment starts when the broadcaster goes on air."}
             </p>
           </div>
+          <details
+            className="advanced-diagnostics"
+            onToggle={(event) => setDiagnostics(event.currentTarget.open)}
+          >
+            <summary>
+              <Icon name="pulse" />
+              Advanced stream diagnostics
+              <Icon name="chevron" />
+            </summary>
+            {diagnostics && (
+              <div className="diagnostics-content">
+                <dl>
+                  <div>
+                    <dt>Publisher</dt>
+                    <dd>
+                      {query.isError
+                        ? "unknown"
+                        : stream?.publisher || "checking"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>HLS manifest</dt>
+                    <dd>
+                      {query.isError
+                        ? "unknown"
+                        : stream?.hls.replace("_", " ") || "checking"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Observed tracks</dt>
+                    <dd>{stream?.tracks.join(" · ") || "Not observed"}</dd>
+                  </div>
+                  <div>
+                    <dt>Observed at</dt>
+                    <dd>
+                      {stream
+                        ? new Date(stream.checkedAt).toLocaleTimeString()
+                        : "Pending"}
+                    </dd>
+                  </div>
+                </dl>
+                <p className="fine-print">
+                  Source availability and decoded playback are independent. A
+                  verified playlist does not guarantee playback on every device.
+                  Player reconnect does not restart infrastructure.
+                </p>
+                <ConnectionStatus />
+              </div>
+            )}
+          </details>
         </section>
-        <aside className="broadcast-guide panel">
-          <span className="eyebrow">BRING YOUR OWN SIGNAL</span>
-          <h2>Make it live.</h2>
-          <ol>
-            <li>
-              <strong>Start the media origin</strong>
-              <p>
-                Prepare local credentials, then start the Docker services using
-                the README.
-              </p>
-            </li>
-            <li>
-              <strong>Connect your broadcaster</strong>
-              <p>
-                Use OBS with H.264 / AAC, or run{" "}
-                <code>npm run broadcast:test</code> for an explicitly labelled
-                test pattern.
-              </p>
-            </li>
-            <li>
-              <strong>Watch the real result</strong>
-              <p>
-                Source availability and browser playback are reported
-                independently. Allow a few seconds for HLS buffering.
-              </p>
-            </li>
-          </ol>
-          <div className="guide-footnote">
-            Publishing credentials stay in your local environment. They are
-            never returned by this API.
+        <aside className="chat-panel" aria-label="Live chat">
+          <div className="chat-heading">
+            <h2>
+              <Icon name="chat" />
+              Live chat
+            </h2>
+            <span className="soon-badge">Coming soon</span>
+          </div>
+          <div className="chat-empty">
+            <span className="chat-illustration">
+              <Icon name="chat" />
+            </span>
+            <h3>A place for the conversation.</h3>
+            <p>
+              Live chat isn’t available yet. For now, settle in and enjoy the
+              stream.
+            </p>
+          </div>
+          <div className="chat-unavailable">
+            <Icon name="lock" />
+            <span>Messaging is not available</span>
           </div>
         </aside>
       </div>
-      <section className="planned panel">
-        <span className="tag">CLEAR BOUNDARIES</span>
-        <h2>Live streaming, without invented resilience.</h2>
-        <p>
-          Bounded player reconnection can reopen an available source. It cannot
-          restart an origin or restore a broadcaster. Redundancy, incident
-          tracking and automatic infrastructure healing come in later phases.
-        </p>
-      </section>
-    </>
+    </div>
   );
 }

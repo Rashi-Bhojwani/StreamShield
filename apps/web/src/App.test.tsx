@@ -26,7 +26,7 @@ function mount(path = "/") {
 }
 afterEach(() => vi.unstubAllGlobals());
 describe("application shell", () => {
-  it("shows an honest empty state and connects using real response contracts", async () => {
+  it("connects diagnostics using real response contracts", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -42,14 +42,14 @@ describe("application shell", () => {
           ),
       ),
     );
-    mount();
+    mount("/diagnostics");
     expect(
       screen.getByRole("heading", { name: "Checking API" }),
     ).toBeInTheDocument();
     expect(
       await screen.findByRole("heading", { name: "API connected" }),
     ).toBeInTheDocument();
-    expect(await screen.findByText(/No streams yet/)).toBeInTheDocument();
+
     expect(fetch).toHaveBeenCalledWith(
       "/api/v1/health/ready",
       expect.any(Object),
@@ -84,7 +84,7 @@ describe("application shell", () => {
       "fetch",
       vi.fn(async () => new Response("{}")),
     );
-    mount();
+    mount("/diagnostics");
     expect(
       await screen.findByRole("heading", { name: "API unavailable" }),
     ).toBeInTheDocument();
@@ -93,14 +93,12 @@ describe("application shell", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     mount("/missing");
     expect(
-      screen.getByRole("heading", { name: /Off the signal path/ }),
+      screen.getByRole("heading", { name: /This page is off the air/ }),
     ).toBeInTheDocument();
-    await userEvent.click(
-      screen.getByRole("link", { name: /Back to overview/ }),
-    );
+    await userEvent.click(screen.getByRole("link", { name: /Back to Home/ }));
     await waitFor(() =>
       expect(
-        screen.getByRole("heading", { name: /Every stream/ }),
+        screen.getByRole("heading", { name: /A good place to tune in/ }),
       ).toBeInTheDocument(),
     );
   });

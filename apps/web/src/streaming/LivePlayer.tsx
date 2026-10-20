@@ -223,9 +223,7 @@ export function LivePlayer({ source }: { source: string }) {
         )}
       </div>
       <p className="player-note">
-        Playback starts muted. Use the native controls for sound, pause, volume
-        and fullscreen. Player state describes this browser, not infrastructure
-        recovery.
+        Starts muted. Use the player controls for sound, pause and fullscreen.
       </p>
     </div>
   );

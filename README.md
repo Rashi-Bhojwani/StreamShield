@@ -130,7 +130,7 @@ In PowerShell:
 git clone https://github.com/Rashi-Bhojwani/StreamShield.git
 cd StreamShield
 git fetch origin
-git switch --track origin/feature/phase-2-live-streaming
+git switch --track origin/feature/streamshield-platform-ui-redesign
 # After merging the PR, use main instead of the feature branch.
 code .
 node --version
@@ -183,3 +183,7 @@ docker compose down
 ## Next phase
 
 Phase 3 can reuse the player, observed stream contracts, media configuration and API conventions to add authenticated accounts/roles, durable stream management, scoped publishing authorization, PostgreSQL/Redis, chat and viewer sessions. Do not call player reconnect “self-healing”; infrastructure recovery requires later independent detection, playbooks and outcome verification.
+
+## StreamShield Live interface
+
+Home, Live and Search now prioritize actual channels and video. The full-width sidebar layout adapts to mobile; advanced health details are at `/diagnostics`. Accounts, studio, chat, categories and Control remain clearly marked future features. See [UI redesign and Windows setup](docs/UI_REDESIGN.md) for product boundaries, screenshots and review instructions.
