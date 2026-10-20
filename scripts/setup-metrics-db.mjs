@@ -52,6 +52,11 @@ try {
   await db.query(
     "GRANT USAGE,SELECT ON SEQUENCE monitoring_incident_events_seq_seq TO streamshield_observer",
   );
+  if (
+    (await db.query("SELECT to_regclass('healing_attempts') AS name")).rows[0]
+      .name
+  )
+    await db.query("GRANT SELECT ON healing_attempts TO streamshield_observer");
   console.log(
     "Restricted pg_monitor exporter identity prepared; no application table grants.",
   );

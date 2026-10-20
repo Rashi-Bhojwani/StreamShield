@@ -111,7 +111,16 @@ export async function persist(
             [active.id, first, evidence, now],
           );
         }
-        if (c.successes >= policy.successes) {
+        const repair = (
+          await client.query(
+            "SELECT state FROM healing_attempts WHERE incident_id=$1 ORDER BY updated_at DESC LIMIT 1",
+            [active.id],
+          )
+        ).rows[0];
+        if (
+          c.successes >= policy.successes &&
+          (!repair || repair.state === "VERIFIED")
+        ) {
           await event(active.id, "RECOVERY_VERIFIED", {
             ...evidence,
             verification:

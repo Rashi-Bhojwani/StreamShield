@@ -1,6 +1,61 @@
 # StreamShield Live + Control
 
-Phase 5 adds the administrator-only **StreamShield Control Center**, an independent health observer, durable incidents, private Prometheus scrapes and provisioned Grafana dashboards. See the [Phase 5 setup, policies and security](docs/PHASE_5.md) and [implementation plan](docs/PHASE_5_PLAN.md). This branch is stacked on open Phase 4 PR #5; existing prerequisite PRs are not automatically merged.
+Phase 6 adds the independent **StreamShield Healer**: confirmed Phase 5 incidents select bounded recovery playbooks, a private control adapter starts explicitly managed stopped services, and independent application/media verification determines outcomes. Recovery runs with the browser closed. The Control Center displays actual recovery audit records, escalation and circuit state. See [Phase 6 setup, evidence and limitations](docs/PHASE_6.md), [implementation plan](docs/PHASE_6_PLAN.md) and [architecture](ARCHITECTURE.md).
+
+## Phase 6 quick start in Windows VS Code
+
+Start Docker Desktop in Linux-container mode. Use Node.js 24, Git, Chrome and FFmpeg with H.264/AAC support:
+
+```powershell
+git clone https://github.com/Rashi-Bhojwani/StreamShield.git
+cd StreamShield
+git fetch origin
+git switch --track origin/feature/phase-6-autonomous-healing
+code .
+npm.cmd ci
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+npm.cmd run setup:healing -- --enable-local-repairs
+node infrastructure/healing/compose.mjs config --quiet
+npm.cmd run healing:up
+npm.cmd run healing:probe
+```
+
+This starts redundancy, monitoring and the independent Healer together. Privileged actions otherwise default disabled. Open http://localhost:5173, register, create an owned stream in Studio, and copy its exact OBS Server/Stream Key. OBS uses Custom, H.264/yuv420p, AAC and two-second keyframes. npm.cmd run broadcast:test provides a bounded FFmpeg development source at /watch/live. Use two owned streams for isolation tests.
+
+Grant your existing account administrator access from the trusted terminal:
+
+```powershell
+node infrastructure/healing/compose.mjs exec -T api-2 node scripts/set-role.mjs YOUR_USERNAME administrator
+```
+
+Reload http://localhost:5173/control and open Recoveries. Grafana http://localhost:3000 uses operator and the generated private OBS_GRAFANA_PASSWORD; its Autonomous Recovery dashboard reads actual Healer metrics. Prometheus and control endpoints remain private.
+
+Inject one bounded local crash, then observe automatic repair without issuing a restore command:
+
+```powershell
+npm.cmd run healing:control -- crash api
+# Wait for VERIFIED in Control / Recoveries before the next experiment.
+npm.cmd run healing:control -- crash edge-1
+npm.cmd run healing:control -- crash origin-primary
+npm.cmd run healing:control -- crash redis
+```
+
+Wait between experiments. Default policy allows two starts per service per ten minutes and a 30-second cooldown. PostgreSQL/storage issues escalate for operator review; a disconnected camera cannot be reconstructed. Source/network return is observed separately from an autonomous container start. The adapter is privileged trusted local infrastructure, not production tenant isolation.
+
+```powershell
+npx.cmd playwright install chromium
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run format:check
+npm.cmd test
+npm.cmd run build
+npm.cmd run test:healing
+npm.cmd run healing:down
+```
+
+Stop your own broadcaster before automated failure tests. Shutdown preserves named volumes; never add -v to preserve account/chat/incident/journal data. See the [complete Phase 6 Windows handoff](docs/PHASE_6.md) for database escalation, source reconnection, metrics, measured results and troubleshooting. Older monitoring-only and lightweight workflows follow below; stop one topology before starting another.
+
+GitHub ancestry checked on 2026-10-20: Phase 5 PR #6 was merged into the Phase 4 branch, but its implementation has not reached main. This phase targets the Phase 4 branch containing that verified Phase 5 baseline. No prerequisite PR is automatically merged.
 
 ## Phase 5 quick start in Windows VS Code
 
@@ -39,7 +94,7 @@ A multi-user livestreaming platform with real RTMP ingestion, HLS browser playba
 
 Phase 3 builds on [Phase 2 PR #3](https://github.com/Rashi-Bhojwani/StreamShield/pull/3). While that PR remains open, the Phase 3 branch and PR are stacked on feature/phase-2-live-streaming. No PR is automatically merged. See [Phase 3 implementation](docs/PHASE_3.md), [plan](docs/PHASE_3_PLAN.md), [architecture](ARCHITECTURE.md) and [roadmap](IMPLEMENTATION_PLAN.md).
 
-This is development infrastructure. The optional Phase 4 topology provides service-level redundancy on one Docker host. Host-level redundancy, automated healing, chaos controls, a production CDN and evidence for 50,000–60,000 viewers remain future work.
+This is development infrastructure. The optional Phase 4 topology provides service-level redundancy on one Docker host. Host-level redundancy, chaos controls, a production CDN and evidence for 50,000–60,000 viewers remain future work.
 
 ## Prerequisites
 

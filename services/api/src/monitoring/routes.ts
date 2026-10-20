@@ -1,4 +1,5 @@
 import { localAdmission } from "./admission.js";
+import { recoveryRoutes } from "../healing/routes.js";
 import express from "express";
 import { z } from "zod";
 import type { Resources } from "../platform/resources.js";
@@ -42,6 +43,7 @@ export function monitoringRouter(r: Resources) {
       next(e);
     }
   });
+  recoveryRoutes(router, r);
   router.get("/snapshot", async (_req, res, next) => {
     try {
       let snapshot;

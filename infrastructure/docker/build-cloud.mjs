@@ -21,11 +21,14 @@ if (proxy) {
 if (process.env.NODE_EXTRA_CA_CERTS) {
   args.push("--secret", `id=npm_ca,src=${process.env.NODE_EXTRA_CA_CERTS}`);
 }
+const healing = process.argv.includes("--healing");
 args.push(
   "-t",
-  "streamshield-development",
+  healing ? "streamshield-healing-runtime" : "streamshield-development",
   "-f",
-  "infrastructure/docker/development.Dockerfile",
+  healing
+    ? "infrastructure/healing/runtime.Dockerfile"
+    : "infrastructure/docker/development.Dockerfile",
   ".",
 );
 const child = spawn("docker", args, {

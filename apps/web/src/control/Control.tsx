@@ -15,6 +15,7 @@ import { Protected } from "../platform/Auth";
 import { Brand } from "../ui/Brand";
 import { config } from "../config";
 import "./control.css";
+import { Recoveries, RecoverySummary } from "./Recovery";
 const clock = (date: string | null | undefined) =>
   date ? new Date(date).toLocaleString() : "Not observed";
 const shortTime = (date: string | null | undefined) =>
@@ -575,8 +576,9 @@ function IncidentDetail() {
           injection. Restart-spanning durations use UTC wall clocks.
           Verification applies to this component only; routing failover and
           playback recovery remain unverified unless separate evidence exists.
-          No automated recovery action occurred.
+          Recovery attempts, when present, are recorded separately below.
         </p>
+        <Recoveries incidentId={i.id} />
         <h3>Observation timeline</h3>
         <ol className="cc-timeline">
           {i.events?.map((e, n) => (
@@ -653,6 +655,7 @@ function ServiceDetail({
           Type-specific metrics are available in the provisioned Grafana
           dashboard; missing resource metrics are not estimated.
         </p>
+        <Recoveries component={c.id} />
         <h3>Recent incidents & transitions</h3>
         {history.isError ? (
           <p>History unavailable.</p>
@@ -688,7 +691,9 @@ function Console() {
         void query.invalidateQueries({ queryKey: ["monitoring"] });
       });
     });
-    socket.on("monitoring:v1", () => {
+    socket.on("monitoring:v1", (event: { kind: string }) => {
+      if (event.kind === "recovery_changed")
+        void query.invalidateQueries({ queryKey: ["monitoring", "healing"] });
       void query.invalidateQueries({ queryKey: ["monitoring", "snapshot"] });
       void query.invalidateQueries({ queryKey: ["monitoring", "incidents"] });
       void query.invalidateQueries({ queryKey: ["monitoring", "incident"] });
@@ -775,15 +780,18 @@ function Console() {
           <NavLink to="/control/metrics">
             <span>⌁</span>Metrics
           </NavLink>
+          <NavLink to="/control/recoveries">
+            <span>⟳</span>Recoveries
+          </NavLink>
         </nav>
         <div className="cc-sidebar-bottom">
           <p>
             <span className="cc-pulse" /> Independent observer
           </p>
           <small>
-            Observation & verified restoration
+            Observation & verified recovery
             <br />
-            Automated Healer · Phase 6
+            Independent Healer · Phase 6
           </small>
           <Link to="/">← StreamShield Live</Link>
         </div>
@@ -870,6 +878,7 @@ function Console() {
               </article>
             ))}
           </section>
+          <RecoverySummary />
           {!s ? (
             <section className="cc-panel">
               <h2>
@@ -894,6 +903,7 @@ function Console() {
                 element={<Topology components={s.components} stale={stale} />}
               />
               <Route path="metrics" element={<MetricsPage />} />
+              <Route path="recoveries" element={<Recoveries />} />
               <Route path="incidents" element={<History />} />
               <Route path="incidents/:id" element={<IncidentDetail />} />
               <Route
@@ -904,9 +914,9 @@ function Console() {
             </Routes>
           )}
           <footer className="cc-footer">
-            <span>StreamShield Control · Observation layer v1</span>
+            <span>StreamShield Control · Recovery audit v1</span>
             <span>
-              UTC evidence · {counts.UNKNOWN} unknown · No autonomous actions
+              UTC evidence · {counts.UNKNOWN} unknown · Allowlisted recovery
             </span>
           </footer>
         </main>

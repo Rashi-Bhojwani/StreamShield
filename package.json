@@ -1,6 +1,6 @@
 {
   "name": "streamshield",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -42,7 +42,14 @@
     "test:monitoring": "node scripts/monitoring-integration.mjs",
     "monitoring:control": "node scripts/monitoring-command.mjs control",
     "test:resilience:monitoring": "node scripts/monitoring-command.mjs test",
-    "monitoring:probe": "node scripts/monitoring-probe.mjs"
+    "monitoring:probe": "node scripts/monitoring-probe.mjs",
+    "setup:healing": "node scripts/setup-healing.mjs",
+    "healing:up": "node infrastructure/healing/compose.mjs up --build --wait",
+    "healing:down": "node infrastructure/healing/compose.mjs down",
+    "healing:status": "node infrastructure/healing/compose.mjs ps",
+    "healing:probe": "node scripts/healing-probe.mjs",
+    "healing:control": "node scripts/healing-control.mjs",
+    "test:healing": "node scripts/healing-integration.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
