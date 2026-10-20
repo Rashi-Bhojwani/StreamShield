@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HealingSnapshot } from "@streamshield/shared";
+import type { HealingSnapshot, RecoveryAttempt } from "@streamshield/shared";
 import { chaosConfig, scenarios } from "./config.js";
 import { ChaosJournal } from "./journal.js";
 import { ChaosEngine } from "./engine.js";
@@ -53,6 +53,7 @@ function fixture() {
   };
   engine.healer = {
     available: true,
+    databaseAvailable: true,
     enabled: true,
     leader: true,
     observedAt: new Date().toISOString(),
@@ -259,10 +260,58 @@ describe("durable chaos lifecycle", () => {
     await engine.finish(e, "COMPLETED", "restored");
     expect(j.get(e.id)).toMatchObject({ state: "FAILED", cleanup: "FAILED" });
   });
+  it("waits for independently progressing standby media before injecting and rejects idle paths", async () => {
+    const { engine, e, j } = await submitted();
+    e.scenario = "crash-edge";
+    e.target = "edge-1";
+    e.state = "VALIDATING";
+    j.save(e);
+    engine.verifier.paths = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue(["s-" + "a".repeat(32)]);
+    engine.verifier.hls = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValue({ ok: true });
+    const control = vi.spyOn(engine, "control").mockResolvedValue({
+      state: "CONFIRMED",
+      injectedAt: new Date().toISOString(),
+      confirmedAt: new Date().toISOString(),
+      expiresAt: Date.now() + 180000,
+      cleanup: "NOT_REQUIRED",
+      evidence: {},
+    });
+    await engine["advance"](e);
+    await engine["advance"](e);
+    expect(control).not.toHaveBeenCalled();
+    expect(j.get(e.id)?.state).toBe("VALIDATING");
+    await engine["advance"](e);
+    expect(control).toHaveBeenCalledWith("/v1/inject", {
+      id: e.id,
+      scenario: "crash-edge",
+    });
+  });
+  it("does not correlate a recovery attempt that predates the actual injected fault", async () => {
+    const { engine, e, j } = await submitted();
+    e.state = "AWAITING_DETECTION";
+    e.injectedAt = new Date().toISOString();
+    j.save(e);
+    engine.healer!.attempts = [
+      {
+        id: randomUUID(),
+        component: e.target,
+        createdAt: new Date(Date.parse(e.injectedAt) - 1).toISOString(),
+      } as RecoveryAttempt,
+    ];
+    vi.spyOn(engine, "control").mockResolvedValue({ cleanup: "NOT_REQUIRED" });
+    await engine["advance"](e);
+    expect(e.recoveryIds).toEqual([]);
+  });
   it("retains actual repeated circuit transitions instead of deduplicating history", async () => {
     const { engine, e } = await submitted();
-    for (const state of ["OPEN", "HALF_OPEN", "OPEN"])
-      engine.event(e, "CIRCUIT_" + state, state);
+    for (const state of ["OPEN", "HALF_OPEN", "OPEN"] as const)
+      engine.event(e, `CIRCUIT_${state}`, state);
     expect(
       e.events.filter((x) => x.kind.startsWith("CIRCUIT_")).map((x) => x.kind),
     ).toEqual(["CIRCUIT_OPEN", "CIRCUIT_HALF_OPEN", "CIRCUIT_OPEN"]);

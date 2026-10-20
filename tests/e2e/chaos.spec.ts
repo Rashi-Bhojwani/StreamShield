@@ -546,10 +546,27 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
         ).status(),
       ).toBe(409);
       await expect
-        .poll(async () => !!(await find(id)).injectedAt, {
-          timeout: 15000,
-          intervals: [500],
-        })
+        .poll(
+          async () => {
+            const e = await find(id);
+            if (
+              ["FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state) &&
+              !e.injectedAt
+            )
+              throw Error(
+                JSON.stringify({
+                  state: e.state,
+                  reason: e.reason,
+                  events: e.events,
+                }),
+              );
+            return !!e.injectedAt;
+          },
+          {
+            timeout: 15000,
+            intervals: [500],
+          },
+        )
         .toBe(true);
       if (["network-timeout", "external-api"].includes(scenario)) {
         await expect

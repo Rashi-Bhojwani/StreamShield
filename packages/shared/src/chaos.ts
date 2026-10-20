@@ -31,8 +31,21 @@ export interface ChaosScenario {
   available: boolean;
   reason: string | null;
 }
+export type ExperimentEventKind =
+  | ExperimentState
+  | "STANDBY_VALIDATING"
+  | "CANCEL_REQUESTED"
+  | "CLEANUP_COMPLETED"
+  | "CLEANUP_FAILED"
+  | "INCIDENT_CORRELATED"
+  | "INCIDENT_DETECTED"
+  | "OBSERVATION_UNAVAILABLE"
+  | "RECEIPT_PENDING"
+  | "SERVICE_VERIFIED"
+  | "NO_ACCEPTED_FAULT"
+  | `CIRCUIT_${"CLOSED" | "OPEN" | "HALF_OPEN"}`;
 export interface ExperimentEvent {
-  kind: string;
+  kind: ExperimentEventKind;
   at: string;
   detail: string;
 }

@@ -163,7 +163,7 @@ try {
       (await a.r.db.query("SELECT count(*) FROM schema_migrations")).rows[0]
         .count,
     ),
-    3,
+    4,
   );
   assert.deepEqual(
     (

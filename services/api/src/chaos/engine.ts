@@ -4,6 +4,7 @@ import type {
   ChaosScenarioId,
   HealingSnapshot,
   ExperimentState,
+  ExperimentEventKind,
 } from "@streamshield/shared";
 import {
   chaosConfig,
@@ -49,9 +50,11 @@ export class ChaosEngine {
   current() {
     return (
       !!this.frame &&
+      this.frame.persistence &&
       Date.now() - this.frame.lastCompleted < 12000 &&
       !!this.healer?.available &&
       this.healer.enabled &&
+      this.healer.databaseAvailable &&
       this.healer.leader &&
       !!this.healer.observedAt &&
       Date.now() - Date.parse(this.healer.observedAt) < 12000 &&
@@ -131,7 +134,7 @@ export class ChaosEngine {
   }
   event(
     e: ChaosExperiment,
-    kind: string,
+    kind: ExperimentEventKind,
     detail: string,
     at = new Date().toISOString(),
   ) {
@@ -391,16 +394,19 @@ export class ChaosEngine {
         );
         return;
       }
-      if (
-        ["crash-edge", "crash-primary"].includes(e.scenario) &&
-        !(await this.verifier.standbySafe())
-      ) {
-        await this.finish(
-          e,
-          "FAILED",
-          "Fresh standby media was not independently verified",
-        );
-        return;
+      if (["crash-edge", "crash-primary"].includes(e.scenario)) {
+        const paths = await this.verifier.paths();
+        const safe =
+          paths.length > 0 &&
+          (await this.verifier.hls("origin-standby", paths, "standby")).ok;
+        if (!safe) {
+          this.event(
+            e,
+            "STANDBY_VALIDATING",
+            "Waiting for independently observed standby segment progression; no fault injected",
+          );
+          return;
+        }
       }
       this.transition(
         e,
@@ -459,7 +465,7 @@ export class ChaosEngine {
       e.evidence.lastCircuitState = this.healer!.circuit.state;
       this.event(
         e,
-        "CIRCUIT_" + this.healer!.circuit.state,
+        `CIRCUIT_${this.healer!.circuit.state}`,
         "Observed recommendation circuit " + this.healer!.circuit.state,
       );
     }
@@ -467,7 +473,7 @@ export class ChaosEngine {
       (a) =>
         a.component === e.target &&
         !e.priorRecoveryIds.includes(a.id) &&
-        Date.parse(a.createdAt) >= Date.parse(e.createdAt),
+        Date.parse(a.createdAt) >= Date.parse(e.injectedAt!),
     );
     if (!a) return;
     if (!e.recoveryIds.includes(a.id)) {
@@ -484,10 +490,10 @@ export class ChaosEngine {
       const i = await this.store.incident(e.incidentId);
       if (i && !e.incidentDetectedAt) {
         e.incidentDetectedAt = i.detected_at.toISOString();
-        e.measurements.detectionMs = Math.max(
-          0,
-          Date.parse(e.incidentDetectedAt) - Date.parse(e.injectedAt!),
-        );
+        const detection =
+          Date.parse(e.incidentDetectedAt) - Date.parse(e.injectedAt!);
+        e.measurements.detectionMs = detection >= 0 ? detection : null;
+        e.evidence.incidentPredatesFault = detection < 0;
         this.event(
           e,
           "INCIDENT_DETECTED",

@@ -249,16 +249,18 @@ function Experiment({
       <details open={!done(e.state)}>
         <summary>Recorded execution timeline</summary>
         <ol className="chaos-timeline">
-          {e.events.map((event, i) => (
-            <li key={i}>
-              <i />
-              <div>
-                <strong>{event.kind.replaceAll("_", " ")}</strong>
-                <p>{event.detail}</p>
-              </div>
-              <time>{time(event.at)}</time>
-            </li>
-          ))}
+          {[...e.events]
+            .sort((a, b) => a.at.localeCompare(b.at))
+            .map((event, i) => (
+              <li key={i}>
+                <i />
+                <div>
+                  <strong>{event.kind.replaceAll("_", " ")}</strong>
+                  <p>{event.detail}</p>
+                </div>
+                <time>{time(event.at)}</time>
+              </li>
+            ))}
         </ol>
       </details>
       <footer>
