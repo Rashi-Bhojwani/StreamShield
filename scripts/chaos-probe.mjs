@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 const code =
-  "const headers={Authorization:'Bearer '+process.env.CHAOS_SECRET};const r=await fetch(process.env.CHAOS_URL+'/state',{headers,signal:AbortSignal.timeout(5000)});if(!r.ok)throw Error('chaos');const s=await r.json();console.log(JSON.stringify({available:s.available,enabled:s.enabled,databaseAvailable:s.databaseAvailable,activeId:s.activeId,implemented:s.scenarios.filter(x=>x.supported).length}));if(!s.available||!s.databaseAvailable)process.exitCode=1;";
+  "const headers={Authorization:'Bearer '+process.env.CHAOS_SECRET};const r=await fetch(process.env.CHAOS_URL+'/state',{headers,signal:AbortSignal.timeout(5000)});if(!r.ok)throw Error('chaos');const s=await r.json();console.log(JSON.stringify({available:s.available,enabled:s.enabled,databaseAvailable:s.databaseAvailable,activeId:s.activeId,implemented:s.scenarios.filter(x=>x.supported).length,admissible:s.scenarios.filter(x=>x.available).length}));if(!s.available||!s.enabled||!s.databaseAvailable)process.exitCode=1;";
 let ready = false;
 for (let i = 0; i < 30; i++) {
   try {

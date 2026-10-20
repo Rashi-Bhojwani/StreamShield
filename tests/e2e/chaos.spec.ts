@@ -223,6 +223,12 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
     report: Record<string, unknown>[] = [],
     sockets: Socket[] = [];
   const guarded = new Set<string>();
+  const controlReadOutages: {
+    startedAt: string;
+    durationMs: number;
+    statuses: number[];
+  }[] = [];
+  let lastSnapshot: ChaosSnapshot | undefined;
   let outcome = "FAIL";
   mkdirSync("test-results/phase7", { recursive: true });
   try {
@@ -253,9 +259,45 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
     const admin = contexts[0]!,
       csrf = users[0]!.csrf;
     const state = async () => {
-      const r = await admin.request.get("/api/v1/monitoring/chaos");
-      expect(r.status()).toBe(200);
-      return (await r.json()) as ChaosSnapshot;
+      const startedAt = new Date().toISOString(),
+        start = performance.now(),
+        statuses: number[] = [];
+      let value: ChaosSnapshot | undefined;
+      await expect
+        .poll(
+          async () => {
+            let response;
+            try {
+              response = await admin.request.get("/api/v1/monitoring/chaos", {
+                timeout: 5000,
+              });
+            } catch {
+              statuses.push(0);
+              return false;
+            }
+            if ([401, 403].includes(response.status()))
+              throw Error(
+                "Current administrator authorization denied: " +
+                  response.status(),
+              );
+            if (response.status() !== 200) {
+              statuses.push(response.status());
+              return false;
+            }
+            value = (await response.json()) as ChaosSnapshot;
+            return true;
+          },
+          { timeout: 30000, intervals: [250, 500, 1000] },
+        )
+        .toBe(true);
+      if (statuses.length)
+        controlReadOutages.push({
+          startedAt,
+          durationMs: performance.now() - start,
+          statuses,
+        });
+      lastSnapshot = value;
+      return value!;
     };
     const find = async (id: string) =>
       (await state()).experiments.find((e) => e.id === id)!;
@@ -505,6 +547,7 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
         .toBe(true);
       const initial = service ? container(service) : null,
         peerInitial = peer ? container(peer) : null;
+      const outageOffset = controlReadOutages.length;
       const samplers = await Promise.all(pages.map(samplePlayback));
       let id: string;
       if (scenario === "crash-api") {
@@ -659,6 +702,7 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
         scenario,
         experiment: await find(id),
         playback,
+        controlReadOutages: controlReadOutages.slice(outageOffset),
         peerUnchanged: peer ? true : null,
         decodedStreams: 2,
       });
@@ -774,6 +818,8 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
           measuredAt: new Date().toISOString(),
           clock:
             "UTC durable event clocks; separate 250ms browser monotonic sampling, 2s stall threshold; REST polling 0.5-1s",
+          controlReadOutages,
+          latestSnapshot: lastSnapshot,
           experiments: report,
         },
         null,

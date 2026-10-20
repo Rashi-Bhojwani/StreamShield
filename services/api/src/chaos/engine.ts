@@ -228,6 +228,7 @@ export class ChaosEngine {
       this.journal.synced(e);
     } catch {
       this.store.available = false;
+      e.cleanup = "NOT_REQUIRED";
       this.transition(
         e,
         "FAILED",
@@ -382,6 +383,8 @@ export class ChaosEngine {
     }
     if (e.state === "VALIDATING") {
       if (
+        !this.c.enabled ||
+        !this.c.allowed.includes(e.scenario) ||
         !this.current() ||
         !this.store.available ||
         !this.healer?.enabled ||

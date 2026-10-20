@@ -167,10 +167,18 @@ describe("chaos authority and admission", () => {
     store.sync.mockRejectedValue(Error("database"));
     const control = vi.spyOn(engine, "control");
     await expect(
-      engine.submit(randomUUID(), randomUUID(), "crash-api", "api-1"),
+      engine.submit(
+        randomUUID(),
+        randomUUID(),
+        "network-timeout",
+        "demo-dependency",
+      ),
     ).rejects.toThrow("audit");
     expect(control).not.toHaveBeenCalled();
-    expect(j.all()[0]!.state).toBe("FAILED");
+    expect(j.all()[0]).toMatchObject({
+      state: "FAILED",
+      cleanup: "NOT_REQUIRED",
+    });
   });
 });
 describe("durable chaos lifecycle", () => {
@@ -209,6 +217,20 @@ describe("durable chaos lifecycle", () => {
     expect(j.get(e.id)).toMatchObject({
       state: "CANCELLED",
       cleanup: "NOT_REQUIRED",
+    });
+  });
+  it("honors disabled policy after admission but before injection", async () => {
+    const { engine, e, j } = await submitted();
+    e.state = "VALIDATING";
+    j.save(e);
+    engine.c.enabled = false;
+    const control = vi.spyOn(engine, "control");
+    await engine["advance"](e);
+    expect(control).not.toHaveBeenCalled();
+    expect(j.get(e.id)).toMatchObject({
+      state: "FAILED",
+      cleanup: "NOT_REQUIRED",
+      injectedAt: null,
     });
   });
   it("records injection intent before POST and never repeats a lost injection response", async () => {
