@@ -67,7 +67,7 @@ export class Verifier {
     { uri: string; at: number; advanced: boolean }
   >();
   constructor(
-    private c: HealingConfig,
+    private c: Pick<HealingConfig, "HEALER_PROBE_TIMEOUT_MS">,
     file = process.env.OBS_TARGETS_FILE || "/config/targets.json",
   ) {
     this.targets = z

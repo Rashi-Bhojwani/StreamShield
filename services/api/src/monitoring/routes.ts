@@ -1,3 +1,6 @@
+import { chaosRoutes } from "../chaos/routes.js";
+import type { PlatformConfig } from "../platform/config.js";
+import type { Config } from "../config.js";
 import { localAdmission } from "./admission.js";
 import { recoveryRoutes } from "../healing/routes.js";
 import express from "express";
@@ -6,7 +9,11 @@ import type { Resources } from "../platform/resources.js";
 import { requireUser, PlatformError, rate } from "../platform/security.js";
 import { durableSnapshot } from "./store.js";
 import { metricQueries, finitePoints } from "./queries.js";
-export function monitoringRouter(r: Resources) {
+export function monitoringRouter(
+  r: Resources,
+  platformConfig: PlatformConfig,
+  media: Config,
+) {
   const router = express.Router();
   const fallback = localAdmission();
   router.use(async (req, res, next) => {
@@ -19,31 +26,36 @@ export function monitoringRouter(r: Resources) {
           "ADMIN_REQUIRED",
           "Administrator access is required.",
         );
+      const admissionKey =
+        auth.user.id +
+        (req.path.startsWith("/chaos") ? ":chaos" : ":monitoring");
       if (r.redis.isReady) {
         try {
-          await rate(r, "monitoring:" + auth.user.id, 120, 60000);
+          await rate(r, "monitoring:" + admissionKey, 120, 60000);
         } catch (error) {
           if (error instanceof PlatformError && error.code === "RATE_LIMITED")
             throw error;
-          if (!fallback(auth.user.id))
+          if (!fallback(admissionKey))
             throw new PlatformError(
               429,
               "RATE_LIMITED",
               "Monitoring admission limit reached.",
             );
         }
-      } else if (!fallback(auth.user.id))
+      } else if (!fallback(admissionKey))
         throw new PlatformError(
           429,
           "RATE_LIMITED",
           "Monitoring admission limit reached.",
         );
+      res.locals.monitoringActor = auth.user.id;
       next();
     } catch (e) {
       next(e);
     }
   });
   recoveryRoutes(router, r);
+  chaosRoutes(router, r, platformConfig, media);
   router.get("/snapshot", async (_req, res, next) => {
     try {
       let snapshot;

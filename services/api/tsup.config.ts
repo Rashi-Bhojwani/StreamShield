@@ -4,6 +4,8 @@ export default defineConfig({
     "src/server.ts",
     "src/monitoring/observer.ts",
     "src/healing/server.ts",
+    "src/chaos/server.ts",
+    "src/chaos/adapter.ts",
     "src/healing/adapter-server.ts",
     "src/healing/dependency-demo.ts",
   ],

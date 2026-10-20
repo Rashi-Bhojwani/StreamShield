@@ -1,0 +1,12 @@
+{
+  "status": "PENDING_INTEGRATION",
+  "localVerification": {
+    "phase6BaselineUnitTests": 125,
+    "phase7UnitSecurityTests": 150,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "dockerComposeConfig": "PASS",
+    "mediaFaultSuite": "Not yet run: cloud snapshot VFS storage exhausted during full topology startup. Clean GitHub CI is the integration authority."
+  },
+  "experiments": []
+}

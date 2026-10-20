@@ -464,7 +464,7 @@ export async function createPlatform(
       label: "Approximate active players",
     });
   });
-  router.use("/monitoring", monitoringRouter(r));
+  router.use("/monitoring", monitoringRouter(r, c, media));
   const errors = (
     error: unknown,
     _req: Request,

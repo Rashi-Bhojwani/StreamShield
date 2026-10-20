@@ -111,6 +111,7 @@ let media: MediaObservation[] = [],
   lastCompleted = 0,
   lastMedia = 0;
 const failureClocks = new Map<string, number>();
+let chaosRevision = "";
 let recoveryRevision = "";
 const pendingEvidence = new Map<string, ComponentObservation>();
 const mediaSeen = new Map<
@@ -441,6 +442,18 @@ async function start() {
         recoveryRevision = revision;
       } catch {
         /* Older deployments still reconcile ordinary snapshots. */
+      }
+      try {
+        const revision =
+          (
+            await db.query(
+              "SELECT max(updated_at)::text AS revision FROM chaos_experiments",
+            )
+          ).rows[0]?.revision || "";
+        if (revision && revision !== chaosRevision) kind = "chaos_changed";
+        chaosRevision = revision;
+      } catch {
+        /* Prior compositions remain compatible. */
       }
       if (redis.isReady)
         await redis

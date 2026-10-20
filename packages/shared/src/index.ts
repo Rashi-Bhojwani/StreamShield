@@ -13,6 +13,7 @@ export const systemInfoSchema = z.object({
     z.literal(4),
     z.literal(5),
     z.literal(6),
+    z.literal(7),
   ]),
   capabilities: z.array(z.string()),
 });
@@ -112,3 +113,4 @@ export * from "./platform";
 
 export * from "./monitoring";
 export * from "./healing";
+export * from "./chaos";
