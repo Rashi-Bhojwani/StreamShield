@@ -15,3 +15,7 @@ The documentation websites were denied by this cloud's initial egress policy. Eq
 - [FFmpeg RTMP protocol reference](https://github.com/FFmpeg/FFmpeg/blob/master/doc/protocols.texi), [lavfi testsrc2/sine filters](https://github.com/FFmpeg/FFmpeg/blob/master/doc/filters.texi): bounded real-time synthetic sources and standard FLV/RTMP output.
 
 Implementation consequences: MediaMTX remuxes rather than transcodes; choose compatible publishing codecs. HLS availability is distinct from browser decoding. Prefer hls.js when MSE is supported, with native HLS fallback. Do not continuously reset retry budgets on a transient successful event. Autoplay begins muted and rejection remains visible. Destroy HLS instances and timers on unmount. MediaMTX's HLS cookie-check redirect requires explicit handling at the configured subfolder proxy.
+
+## Combined delivery review, 19 October 2026
+
+Re-read the current official hls.js API (manifest-loaded/error details, fragment failures and destruction) and MDN autoplay/codec sources, plus pinned MediaMTX RTMP, HLS and configuration sources through GitHub. The implementation also checks the installed hls.js 1.7.3 declarations. Actual error details drive typed manifest/segment classifications; HTTP 404/410 is labelled source delivery unavailable rather than publisher offline. `loadedmetadata` is native readiness, not evidence of a separately inspected HLS manifest. Startup and recovery events require progressing media time.

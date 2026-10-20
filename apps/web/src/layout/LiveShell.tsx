@@ -248,7 +248,9 @@ export function LiveShell() {
         </main>
         <footer className="app-footer">
           <span>StreamShield Live</span>
-          <span>Live moments. Shared together.</span>
+          <Link className="text-link" to="/about">
+            About this build
+          </Link>
         </footer>
       </div>
     </div>

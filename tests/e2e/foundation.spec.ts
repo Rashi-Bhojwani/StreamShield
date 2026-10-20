@@ -120,3 +120,16 @@ test("consumer search empty results and separate future Control product", async 
     page.getByRole("heading", { name: "A good place to tune in." }),
   ).toBeVisible();
 });
+
+test("developer context is separate from consumer discovery", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "About this build" }).click();
+  await expect(
+    page.getByRole("heading", { name: "The foundation behind the stream." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Planned, not operational" }),
+  ).toBeVisible();
+});

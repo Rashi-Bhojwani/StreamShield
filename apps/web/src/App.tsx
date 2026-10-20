@@ -27,6 +27,52 @@ function Diagnostics() {
     </div>
   );
 }
+function About() {
+  return (
+    <div className="diagnostics-page">
+      <Link className="text-link" to="/">
+        ← Back to Live
+      </Link>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Developer information</p>
+          <h1>The foundation behind the stream.</h1>
+          <p className="page-subtitle">
+            Implemented capabilities and the road ahead.
+          </p>
+        </div>
+      </div>
+      <section className="panel diagnostics-panel">
+        <h2>Built so far</h2>
+        <p>
+          Phase 1 established validated contracts, API health, structured
+          logging, Docker and automated checks. Phase 2 adds authenticated RTMP
+          ingestion, MediaMTX HLS delivery and real browser playback.
+        </p>
+        <p>
+          Media travels directly through the media delivery path. Express
+          provides verified source metadata; browser playback measurements
+          remain separate.
+        </p>
+        <Link className="button secondary" to="/diagnostics">
+          Check application connection
+        </Link>
+      </section>
+      <section className="panel diagnostics-panel">
+        <h2>Planned, not operational</h2>
+        <p>
+          Accounts, broadcaster tools and chat come in later phases. Redundant
+          origins, edges, incident timelines, failover and automated recovery
+          require additional implementation and verification.
+        </p>
+        <p>
+          StreamShield Control will be a separate authorized operations product.
+          No capacity or infrastructure-healing guarantee is made by this build.
+        </p>
+      </section>
+    </div>
+  );
+}
 function Control() {
   return (
     <div className="control-app">
@@ -71,6 +117,7 @@ export function App() {
         <Route path="/live" element={<Discovery view="live" />} />
         <Route path="/search" element={<Discovery view="search" />} />
         <Route path="/explore" element={<Explore />} />
+        <Route path="/about" element={<About />} />
         <Route path="/diagnostics" element={<Diagnostics />} />
         <Route
           path="/foundation"

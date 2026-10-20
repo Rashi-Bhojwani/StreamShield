@@ -1,3 +1,4 @@
+import type { PlaybackObservation } from "@streamshield/shared";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -11,6 +12,9 @@ import { ConnectionStatus } from "../ui/ConnectionStatus";
 export default function Watch() {
   const { id = "" } = useParams();
   const [diagnostics, setDiagnostics] = useState(false);
+  const [observation, setObservation] = useState<PlaybackObservation | null>(
+    null,
+  );
   const [shared, setShared] = useState("");
   const query = useQuery({
     queryKey: ["stream", id],
@@ -31,7 +35,12 @@ export default function Watch() {
       <div className="watch-layout">
         <section className="watch-main" aria-label="Video playback">
           {stream?.status === "live" ? (
-            <LivePlayer key={stream.playbackUrl} source={stream.playbackUrl} />
+            <LivePlayer
+              key={stream.playbackUrl}
+              source={stream.playbackUrl}
+              sourceId={stream.id}
+              onObservation={setObservation}
+            />
           ) : (
             <div className="video-empty">
               <span className="video-empty-label">
@@ -149,6 +158,55 @@ export default function Watch() {
             </summary>
             {diagnostics && (
               <div className="diagnostics-content">
+                {observation && observation.metrics.sourceId === id && (
+                  <section aria-label="Measured browser playback">
+                    <h3>Measured browser playback</h3>
+                    <dl>
+                      <div>
+                        <dt>Source identifier</dt>
+                        <dd>{observation.metrics.sourceId}</dd>
+                      </div>
+                      <div>
+                        <dt>Playback startup</dt>
+                        <dd data-testid="startup-metric">
+                          {observation.metrics.startupMs === null
+                            ? "Not observed"
+                            : `${Math.round(observation.metrics.startupMs)} ms`}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Stall count</dt>
+                        <dd>{observation.metrics.stallCount}</dd>
+                      </div>
+                      <div>
+                        <dt>Observed stall duration</dt>
+                        <dd>
+                          {Math.round(observation.metrics.stallDurationMs)} ms
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Last player event</dt>
+                        <dd data-testid="player-event">
+                          {observation.event.kind}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Last playback error</dt>
+                        <dd>
+                          {observation.metrics.lastError?.code ||
+                            "None observed"}
+                        </dd>
+                      </div>
+                    </dl>
+                    <p className="fine-print">
+                      Local session measurements at the last event. Startup
+                      requires advancing media time. Paused time is excluded
+                      from stalls. Native HLS does not expose manifest or
+                      segment events. These values are not infrastructure
+                      recovery metrics.
+                    </p>
+                  </section>
+                )}
                 <dl>
                   <div>
                     <dt>Publisher</dt>

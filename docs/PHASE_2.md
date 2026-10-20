@@ -2,6 +2,8 @@
 
 ## Scope and delivery
 
+**Current combined handoff:** The initial engine was merged in PR #1. The consumer redesign from PR #2 is preserved and included on the requested `feature/phase-2-live-streaming` branch together with typed playback observations. The sections below retain original engine evidence; the final combined verification section records the expanded current checks.
+
 Phase 1 was inspected from disk, not inferred from a summary. Its 42 uncommitted files were preserved in initial commit `387cc57709f946b89362968b71430b79463f4a96`. The 22 original tests, type checks, lint, formatting, build and Compose validation passed before implementation. The original `docs/PHASE_1.md` remains a historical handoff.
 
 The initial push was rejected with GitHub 403. After the user restored connected repository access, the Phase 1 commit was successfully pushed to remote `main`, fetched explicitly and confirmed as the feature branch's ancestor. All Phase 2 changes are isolated on `feature/phase-2-live-streaming`. No reset, force-push, discarded work or automatic PR merge is used. Final GitHub delivery is reported in the PR and chat handoff.
@@ -84,3 +86,33 @@ Phase 3 should retain the current player/contracts/configuration and add authent
 ## Reproduction
 
 The exact portable commands, configuration inventory, OBS settings, bounded test broadcaster, local npm alternative and PowerShell walkthrough are in [README.md](../README.md). Use an idle local channel for `test:media`; never aim it at shared/production infrastructure.
+
+## Combined engine and professional platform UI
+
+The full-width StreamShield Live shell includes working Home/Live/Explore routes, search over actual API titles/IDs, persistent desktop sidebar, mobile keyboard navigation, honest future-feature labels, real featured HLS preview and polished offline states. Watch keeps actual 16:9 video prominent, title/status below it and unavailable chat at the side (stacked on mobile). Reusable design tokens/components and responsive behavior are described in [UI_REDESIGN.md](UI_REDESIGN.md). Developer foundation/roadmap information is preserved under `/about`; health remains under `/diagnostics`, with `/foundation` compatibility redirect. StreamShield Control is only a separate future-product notice.
+
+### Typed playback observations
+
+`LivePlayer` exposes an optional `onObservation` callback using shared `PlaybackEvent`, `PlaybackMetrics` and `PlaybackObservation` contracts. Events cover initialization, HLS manifest delivery/failure, segment failure, first progressing playback, stalls/resumption, pause/end, source delivery unavailable (404/410), fatal errors, blocked autoplay, retry scheduling and release. Native HLS exposes `native_media_ready` rather than invented manifest/segment events.
+
+The recorder measures initialization-to-first-progress startup, deduplicated post-start stall count and monotonic stall duration; user pauses end a stall and paused time is excluded. Retry reopening resets the media timeline baseline without resetting cumulative session metrics. A source change or manual new-session retry creates fresh metrics. Last error is retained after recovery. Snapshot values reflect their event timestamp; no synthetic live ticking, persisted event buffer or network analytics is added. Observer exceptions cannot stop video, and callback identity changes do not reattach HLS. Sanitized events carry an explicit channel ID, not raw media URLs or library error objects.
+
+Measured values appear only inside collapsed Watch diagnostics. They describe this browser session, not infrastructure healing, viewer counts, capacity or publisher certainty. Missing startup remains “Not observed.” Cleanup destroys the HLS instance, removes listeners/timers and releases the observer.
+
+### Current reproduction and limits
+
+Use the Windows PowerShell walkthrough in [README.md](../README.md) with `feature/phase-2-live-streaming`. Start Docker Desktop, run `npm ci`, copy `.env.example` to `.env`, run `npm run setup:media`, then `docker compose up --build --wait`. Run `npm run broadcast:test` and open `http://localhost:5173`. OBS uses the generated local credentials, H.264/AAC, 1280×720, 30 fps, 2500 kbps video / 128 kbps audio, two-second keyframes. Never publish simultaneously from OBS and FFmpeg to the same path. Full troubleshooting, variable inventory, FFmpeg settings and Docker/host address distinctions remain in the README.
+
+No new dependencies, environment variables, public admin interfaces, redundant origins, edges, accounts, chat or healing controls are added by the observability completion. Existing validated retry/time limits and development-only publishing configuration remain in effect. Physical OBS/webcam, Windows execution and Safari still require platform testing; FFmpeg and Chromium provide executable evidence for the compatible media pipeline.
+
+### Combined verification results
+
+- Baseline before completion: 57 tests passed; api, web and MediaMTX were healthy.
+- Current unit/API/tooling suite: **61 tests across six files passed**, including the new pure observer suite (the web test matcher now includes both `.test.ts` and `.test.tsx`).
+- Typecheck, ESLint, formatting and production build passed. Existing Vite bundle-size advisories remain visible.
+- Browser suite: **nine tests passed**; actual API recovery, real configured channel search, no-match search, separate Control/developer context, mobile drawer keyboard behavior and expanding Home/Watch layouts at 375, 768, 1280, 1440, 1680 and 1920px.
+- Real media suite: authenticated H.264/AAC publication, rejected invalid/wrong-path/competing publication, actual HLS playlists/segment bytes, decoded advancing video in **two simultaneous viewers**, real Home preview, measured startup diagnostics, source stop/return and origin outage handling passed. No mock media or publisher state toggles are used.
+- Compose configuration validates; all three services are healthy after test-owned publishers are stopped and the origin is restored.
+- Current Home/live Watch screenshots were visually inspected across the requested widths. Capture normalizes scroll position after interacting with diagnostics to avoid displacing fixed/sticky elements in full-page screenshots. Actual measured diagnostics are captured in [phase-2-measured-diagnostics.png](images/phase-2-measured-diagnostics.png).
+
+These are Linux Docker / Chromium results. They do not establish physical OBS hardware behavior, Windows/Safari compatibility, audience capacity, redundancy or automatic infrastructure recovery.

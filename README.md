@@ -25,7 +25,7 @@ docker compose ps
 
 The cross-platform setup command creates `.env` if absent, adds missing defaults to existing files, preserves nonempty values, generates unique local publishing/API passwords, and writes `.local/mediamtx.yml`. Neither secrets nor generated config should be committed. Running setup again preserves existing credentials and produces the same media configuration. Regenerate after changing media path, credentials, ports, origins or HLS settings. Restart/recreate affected containers after configuration changes.
 
-With the checked-in defaults, open **http://127.0.0.1:5173**, then **Open live player**. The default channel is **http://127.0.0.1:5173/watch/live**. It is offline until a real publisher connects.
+With the checked-in defaults, open **http://127.0.0.1:5173**, then **Visit channel** (offline) or **Watch live**. The default channel is **http://127.0.0.1:5173/watch/live**. It is offline until a real publisher connects.
 
 In a second terminal at the repository root:
 
@@ -49,7 +49,7 @@ Defaults below come from `.env.example`. Use your configured values if changed.
 1. **Settings → Stream → Service: Custom**.
 2. **Server:** `rtmp://127.0.0.1:1935` (`MEDIA_RTMP_BASE_URL`).
 3. **Stream key:** `live?user=broadcaster&pass=YOUR_LOCAL_MEDIA_PUBLISH_PASSWORD`. Substitute `MEDIA_STREAM_PATH`, `MEDIA_PUBLISH_USER` and the generated `MEDIA_PUBLISH_PASSWORD` from your private `.env`; never commit or share that resulting key. Credentials are URL-safe in the generated defaults.
-4. **Output → Streaming:** H.264 (x264 or compatible hardware encoder), AAC audio, keyframe interval **2 seconds**, 30 fps; start with 1280×720 and a suitable local bitrate. Do not select AV1/HEVC as a substitute for this verified browser-compatible path.
+4. **Output → Streaming:** H.264 (x264 or compatible hardware encoder), AAC audio, keyframe interval **2 seconds**, 30 fps; start with 1280×720, 2500 kbps video and 128 kbps AAC audio. Do not select AV1/HEVC as a substitute for this verified browser-compatible path.
 5. Add a camera, screen or media source, then **Start Streaming**. Open the watch page and allow several seconds for HLS generation/buffering. Playback starts muted; use native video controls for audio/fullscreen.
 6. Stop streaming to observe publisher-offline state. Returning to the same path reopens the player after a verified source returns. This does not restart failed infrastructure.
 
@@ -130,7 +130,7 @@ In PowerShell:
 git clone https://github.com/Rashi-Bhojwani/StreamShield.git
 cd StreamShield
 git fetch origin
-git switch --track origin/feature/streamshield-platform-ui-redesign
+git switch --track origin/feature/phase-2-live-streaming
 # After merging the PR, use main instead of the feature branch.
 code .
 node --version
@@ -152,7 +152,7 @@ npm.cmd run broadcast:test
 
 If FFmpeg is missing, install a trusted Windows FFmpeg build (for example `winget install --id Gyan.FFmpeg -e`), reopen the terminal, and verify `ffmpeg -version`. If not on PATH, set `$env:FFMPEG_PATH` to your installed `ffmpeg.exe`. The install command is Windows-specific and was not executed in the Linux cloud. For a webcam/screen, stop the test publisher and use the OBS settings above.
 
-Verification and shutdown:
+Verification and shutdown (stop your broadcaster with Ctrl+C before browser/media tests; the media suite starts its own):
 
 ```powershell
 npm.cmd run typecheck
@@ -163,7 +163,6 @@ npm.cmd run build
 npx.cmd playwright install chromium
 npm.cmd run test:e2e
 npm.cmd run test:media
-# Ctrl+C in the broadcaster terminal, then:
 docker compose down
 ```
 
@@ -187,3 +186,7 @@ Phase 3 can reuse the player, observed stream contracts, media configuration and
 ## StreamShield Live interface
 
 Home, Live and Search now prioritize actual channels and video. The full-width sidebar layout adapts to mobile; advanced health details are at `/diagnostics`. Accounts, studio, chat, categories and Control remain clearly marked future features. See [UI redesign and Windows setup](docs/UI_REDESIGN.md) for product boundaries, screenshots and review instructions.
+
+## Measured playback diagnostics
+
+Expand **Advanced stream diagnostics** on Watch to see local startup time, stall count/duration, last event and last error. Startup requires advancing unpaused media time; a loaded manifest alone is not playback. Stall timing uses a monotonic clock, excludes pauses and is sampled at event timestamps. Values reset on source change or manual new-session retry, remain local and are not recovery/capacity metrics. Typed event contracts are in `packages/shared/src/index.ts`; `LivePlayer` accepts `sourceId` and an optional `onObservation` subscriber without restarting playback when that callback changes. Native HLS exposes readiness but not individual manifest/segment events. Foundation and future roadmap context are available under `/about`.

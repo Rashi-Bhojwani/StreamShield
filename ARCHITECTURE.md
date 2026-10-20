@@ -53,3 +53,11 @@ Phases 8–10 validate load/resilience and production deployment. The 50,000–6
 StreamShield Live owns `/`, `/live`, `/search`, `/explore` and `/watch/:id` through a full-width shared shell. Discovery and sidebar share a single React Query stream list. Search operates on verified API channel metadata. The existing player lifecycle and media transport remain unchanged. `/diagnostics` contains application health; Watch mounts these checks only inside expanded diagnostics. `/foundation` redirects for compatibility.
 
 StreamShield Control has a separate `/control` product notice. It exposes no operational capabilities. Authentication and authorization must precede future operations tooling. See [UI redesign](docs/UI_REDESIGN.md).
+
+## Browser observation boundary
+
+Shared `PlaybackEvent`, `PlaybackMetrics` and `PlaybackObservation` interfaces carry source ID, event timestamp, elapsed monotonic time and sanitized error classifications. The reusable player accepts an optional observation subscriber; callback changes do not recreate HLS. Each source/manual session owns a bounded-memory recorder and releases it alongside HLS, listeners and retry timers. No playback URLs, raw library errors, event history or publishing credentials are sent to diagnostics.
+
+Startup is measured to first advancing unpaused media time, not manifest delivery. Waiting/stalled events after startup and no-progress retries identify interruptions; duplicate notifications form one stall until progress or user pause. Measured duration excludes user pauses. Reopening a source resets its media-time baseline so recovery is observable even when the new timeline begins at zero. Metrics are snapshots at event timestamps, not continuous wall-clock counters. Native HLS cannot expose network-level manifest/segment events through the video element. Source 404/410 errors are delivery observations, not proof that a broadcaster disconnected. Backend availability remains separately authoritative for publisher observations.
+
+Future monitoring can consume this callback and correlate independently verified source/edge health; this phase adds no telemetry ingestion, persistence, failover, chaos or healing controller. `/about` preserves developer foundation/roadmap information outside consumer discovery.
