@@ -259,42 +259,43 @@ test("real monitoring: access, scrape, durable deduplicated outages, restart, st
     await viewer.goto("/watch/" + process.env.MEDIA_STREAM_PATH);
     const video = viewer.getByLabel("Live stream video");
     const advances = async () => {
-      const before = await video.evaluate((n) => ({
-        time: (n as HTMLVideoElement).currentTime,
-        frames: (n as HTMLVideoElement).getVideoPlaybackQuality()
-          .totalVideoFrames,
-      }));
-      await expect
-        .poll(
-          () =>
-            video.evaluate((n) => {
-              const v = n as HTMLVideoElement;
-              return {
-                time: v.currentTime,
-                frames: v.getVideoPlaybackQuality().totalVideoFrames,
-              };
-            }),
-          { timeout: 30000, intervals: [1000] },
-        )
-        .toEqual(
-          expect.objectContaining({
-            time: expect.any(Number),
-            frames: expect.any(Number),
-          }),
+      const sample = () =>
+        video.evaluate((n) => {
+          const v = n as HTMLVideoElement;
+          return {
+            time: v.currentTime,
+            frames: v.getVideoPlaybackQuality().totalVideoFrames,
+            ready: v.readyState,
+            paused: v.paused,
+            error: v.error?.code ?? null,
+          };
+        });
+      let previous = await sample();
+      const observations: Awaited<ReturnType<typeof sample>>[] = [];
+      try {
+        await expect
+          .poll(
+            async () => {
+              const current = await sample();
+              observations.push(current);
+              // Primary and standby have independent media clocks. Require real decoded
+              // progression within the selected timeline instead of comparing epochs.
+              const progresses =
+                current.time > previous.time &&
+                current.frames > previous.frames + 5;
+              previous = current;
+              return progresses;
+            },
+            { timeout: 30000, intervals: [1000] },
+          )
+          .toBe(true);
+      } catch (error) {
+        console.log(
+          "Actual decoded playback observations:",
+          JSON.stringify(observations.slice(-12)),
         );
-      await expect
-        .poll(
-          () =>
-            video.evaluate((n, before) => {
-              const v = n as HTMLVideoElement;
-              return (
-                v.currentTime > before.time &&
-                v.getVideoPlaybackQuality().totalVideoFrames > before.frames + 5
-              );
-            }, before),
-          { timeout: 30000, intervals: [1000] },
-        )
-        .toBe(true);
+        throw error;
+      }
     };
     await advances();
     await expect

@@ -1,6 +1,6 @@
 {
   "name": "streamshield",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -49,7 +49,13 @@
     "healing:status": "node infrastructure/healing/compose.mjs ps",
     "healing:probe": "node scripts/healing-probe.mjs",
     "healing:control": "node scripts/healing-control.mjs",
-    "test:healing": "node scripts/healing-integration.mjs"
+    "test:healing": "node scripts/healing-integration.mjs",
+    "setup:chaos": "node scripts/setup-chaos.mjs",
+    "chaos:up": "node infrastructure/chaos/compose.mjs up --build --wait",
+    "chaos:down": "node infrastructure/chaos/compose.mjs down",
+    "chaos:status": "node infrastructure/chaos/compose.mjs ps",
+    "chaos:probe": "node scripts/chaos-probe.mjs",
+    "test:chaos": "node scripts/chaos-integration.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

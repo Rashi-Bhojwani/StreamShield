@@ -9,7 +9,7 @@ export function attachMonitoring(io: Server, r: Resources) {
       version: z.literal(1),
       sequence: z.string().regex(/^\d+$/),
       at: z.iso.datetime(),
-      kind: z.enum(["snapshot_changed", "recovery_changed"]),
+      kind: z.enum(["snapshot_changed", "recovery_changed", "chaos_changed"]),
     })
     .strict();
   let delivering = false;

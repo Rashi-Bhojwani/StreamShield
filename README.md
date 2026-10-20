@@ -1,5 +1,37 @@
 # StreamShield Live + Control
 
+Phase 7 adds the administrator-only **Chaos Laboratory** and **Live Demo**. Inject one of six real allowlisted local faults, watch the independent observer/Healer respond, and inspect durable incident/recovery evidence. Chaos never executes recovery playbooks. Database and broadcaster fault controls remain disabled with explicit safety reasons. See [Phase 7 Windows setup, scenarios and demo](docs/PHASE_7.md), [design](docs/PHASE_7_PLAN.md), and [actual measurements](docs/PHASE_7_MEASUREMENTS.json).
+
+All five [clean CI jobs](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39466656790) passed, including 155 unit/security tests and all six authenticated real-fault experiments with two independent decoded live streams. [Measured results and screenshots](docs/PHASE_7.md#verified-results) distinguish actual component restoration, timed cleanup, control-read outages and browser playback.
+
+## Phase 7 quick start
+
+Start Docker Desktop (Linux containers), use Node.js 24 and PowerShell:
+
+```powershell
+git clone https://github.com/Rashi-Bhojwani/StreamShield.git
+cd StreamShield
+git fetch origin
+git switch --track origin/feature/phase-7-chaos-control-center
+code .
+npm.cmd ci
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+npm.cmd run setup:chaos -- --enable-local-chaos
+npm.cmd run chaos:up
+npm.cmd run chaos:probe
+```
+
+Open http://localhost:5173, register, then grant that existing account administrator access:
+
+```powershell
+node infrastructure/chaos/compose.mjs exec -T api-2 node scripts/set-role.mjs YOUR_USERNAME administrator
+npm.cmd run broadcast:test
+```
+
+Open /control/demo for genuine video and /control/chaos for fault controls. Confirm the exact API-1 target once, then observe autonomous recovery without issuing a restore command. Wait for completion and healthy baseline before edge/primary faults. npm.cmd run test:chaos runs real authenticated failure experiments; npm.cmd run chaos:down stops services while retaining data. See the complete handoff for OBS, ten-minute FFmpeg publishing, tests, safety, troubleshooting and the five-minute judge demonstration.
+
+Phase 6 PR #7 was merged into feature/phase-4-redundancy-failover at c7655cc, which contains the verified Phase 1–6 baseline. Phase 7 is stacked on that branch; main does not yet contain the whole stack. Earlier phase workflows below remain available in their respective isolated compositions.
+
 Phase 6 adds the independent **StreamShield Healer**: confirmed Phase 5 incidents select bounded recovery playbooks, a private control adapter starts explicitly managed stopped services, and independent application/media verification determines outcomes. Recovery runs with the browser closed. The Control Center displays actual recovery audit records, escalation and circuit state. See [Phase 6 setup, evidence and limitations](docs/PHASE_6.md), [implementation plan](docs/PHASE_6_PLAN.md) and [architecture](ARCHITECTURE.md).
 
 ## Phase 6 quick start in Windows VS Code

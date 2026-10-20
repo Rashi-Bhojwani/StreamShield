@@ -81,7 +81,7 @@ export interface MonitoringEvent {
   version: 1;
   sequence: string;
   at: string;
-  kind: "snapshot_changed" | "recovery_changed";
+  kind: "snapshot_changed" | "recovery_changed" | "chaos_changed";
 }
 export interface MetricSeries {
   id: string;

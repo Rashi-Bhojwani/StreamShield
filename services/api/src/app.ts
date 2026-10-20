@@ -74,24 +74,28 @@ export function createApp(
     res.setHeader("Cache-Control", "no-store");
     res.json({
       name: "StreamShield",
-      version: config.HEALER_URL
-        ? "0.6.0"
-        : config.OBS_URL
-          ? "0.5.0"
-          : config.MEDIA_STANDBY_API_BASE_URL
-            ? "0.4.0"
-            : platform
-              ? "0.3.0"
-              : "0.2.0",
-      phase: config.HEALER_URL
-        ? 6
-        : config.OBS_URL
-          ? 5
-          : config.MEDIA_STANDBY_API_BASE_URL
-            ? 4
-            : platform
-              ? 3
-              : 2,
+      version: config.CHAOS_URL
+        ? "0.7.0"
+        : config.HEALER_URL
+          ? "0.6.0"
+          : config.OBS_URL
+            ? "0.5.0"
+            : config.MEDIA_STANDBY_API_BASE_URL
+              ? "0.4.0"
+              : platform
+                ? "0.3.0"
+                : "0.2.0",
+      phase: config.CHAOS_URL
+        ? 7
+        : config.HEALER_URL
+          ? 6
+          : config.OBS_URL
+            ? 5
+            : config.MEDIA_STANDBY_API_BASE_URL
+              ? 4
+              : platform
+                ? 3
+                : 2,
       capabilities: [
         "API health probes",
         "System metadata",

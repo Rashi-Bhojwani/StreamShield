@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, useParams, Routes, Route } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  useParams,
+  useLocation,
+  Routes,
+  Route,
+} from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { io } from "socket.io-client";
 import type {
@@ -15,6 +22,8 @@ import { Protected } from "../platform/Auth";
 import { Brand } from "../ui/Brand";
 import { config } from "../config";
 import "./control.css";
+import { ChaosLab, ChaosDemo } from "./Chaos";
+import { useChaos } from "./useChaos";
 import { Recoveries, RecoverySummary } from "./Recovery";
 const clock = (date: string | null | undefined) =>
   date ? new Date(date).toLocaleString() : "Not observed";
@@ -154,12 +163,17 @@ function Topology({
   components: ComponentObservation[];
   stale: boolean;
 }) {
+  const chaos = useChaos();
+  const experiment = chaos.data?.experiments.find(
+    (e) => !["COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state),
+  );
   const layers = [
     ["web"],
     ["api-gateway", "video-gateway"],
     ["api-1", "api-2", "edge-1", "edge-2"],
     ["postgres", "redis", "origin-primary", "origin-standby"],
     ["relay"],
+    ["demo-dependency"],
     ["prometheus", "grafana"],
   ];
   const groups = [
@@ -168,6 +182,7 @@ function Topology({
     "Service peers",
     "Dependencies & origins",
     "Ingest",
+    "Simulated external dependency",
     "Independent observability",
   ];
   return (
@@ -180,40 +195,51 @@ function Topology({
         <span className="cc-unit">Select a component to investigate ↗</span>
       </div>
       <div className="cc-topology">
-        {layers.map((ids, n) => (
-          <div className="cc-topology-layer" key={groups[n]}>
-            <span className="cc-layer-label">{groups[n]}</span>
-            <div className="cc-topology-nodes">
-              {ids.map((id) => {
-                const c = components.find((c) => c.id === id);
-                return c ? (
-                  <Link
-                    className={
-                      "cc-node cc-border-" + effective(c, stale).toLowerCase()
-                    }
-                    to={"/control/services/" + id}
-                    key={id}
-                  >
-                    <span className="cc-node-icon" aria-hidden="true">
-                      {c.group === "Data"
-                        ? "▱"
-                        : c.group === "Media"
-                          ? "▷"
-                          : "▦"}
-                    </span>
-                    <strong>{c.name}</strong>
-                    <Badge state={effective(c, stale)} />
-                    <small>
-                      {c.dependencies.length
-                        ? "→ " + c.dependencies.join(" · ")
-                        : "No downstream dependencies"}
-                    </small>
-                  </Link>
-                ) : null;
-              })}
+        {layers.map((ids, n) =>
+          ids.some((id) => components.some((c) => c.id === id)) ? (
+            <div className="cc-topology-layer" key={groups[n]}>
+              <span className="cc-layer-label">{groups[n]}</span>
+              <div className="cc-topology-nodes">
+                {ids.map((id) => {
+                  const c = components.find((c) => c.id === id);
+                  return c ? (
+                    <Link
+                      className={
+                        "cc-node cc-border-" +
+                        effective(c, stale).toLowerCase() +
+                        (chaos.live && experiment?.target === id
+                          ? " chaos-target-active"
+                          : "")
+                      }
+                      to={"/control/services/" + id}
+                      key={id}
+                    >
+                      <span className="cc-node-icon" aria-hidden="true">
+                        {c.group === "Data"
+                          ? "▱"
+                          : c.group === "Media"
+                            ? "▷"
+                            : "▦"}
+                      </span>
+                      <strong>{c.name}</strong>
+                      <Badge state={effective(c, stale)} />
+                      {chaos.live && experiment?.target === id && (
+                        <span className="chaos-target-label">
+                          Experiment · {experiment.state.replaceAll("_", " ")}
+                        </span>
+                      )}
+                      <small>
+                        {c.dependencies.length
+                          ? "→ " + c.dependencies.join(" · ")
+                          : "No downstream dependencies"}
+                      </small>
+                    </Link>
+                  ) : null;
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ) : null,
+        )}
       </div>
       <p className="cc-note">
         Arrows list actual downstream dependencies. HLS flows relay → origins →
@@ -667,6 +693,7 @@ function ServiceDetail({
   );
 }
 function Console() {
+  const location = useLocation();
   const auth = useAuth(),
     query = useQueryClient(),
     [transport, setTransport] = useState("Connecting"),
@@ -692,8 +719,10 @@ function Console() {
       });
     });
     socket.on("monitoring:v1", (event: { kind: string }) => {
-      if (event.kind === "recovery_changed")
+      if (["recovery_changed", "chaos_changed"].includes(event.kind)) {
         void query.invalidateQueries({ queryKey: ["monitoring", "healing"] });
+        void query.invalidateQueries({ queryKey: ["monitoring", "chaos"] });
+      }
       void query.invalidateQueries({ queryKey: ["monitoring", "snapshot"] });
       void query.invalidateQueries({ queryKey: ["monitoring", "incidents"] });
       void query.invalidateQueries({ queryKey: ["monitoring", "incident"] });
@@ -783,6 +812,12 @@ function Console() {
           <NavLink to="/control/recoveries">
             <span>⟳</span>Recoveries
           </NavLink>
+          <NavLink to="/control/chaos">
+            <span>ϟ</span>Chaos Lab
+          </NavLink>
+          <NavLink to="/control/demo">
+            <span>▷</span>Live Demo
+          </NavLink>
         </nav>
         <div className="cc-sidebar-bottom">
           <p>
@@ -791,7 +826,7 @@ function Console() {
           <small>
             Observation & verified recovery
             <br />
-            Independent Healer · Phase 6
+            Controlled experiments · Phase 7
           </small>
           <Link to="/">← StreamShield Live</Link>
         </div>
@@ -809,7 +844,15 @@ function Console() {
             </span>
           </div>
         </header>
-        <main id="main" className="cc-main">
+        <main
+          id="main"
+          className={
+            "cc-main" +
+            (["/control/chaos", "/control/demo"].includes(location.pathname)
+              ? " chaos-focused"
+              : "")
+          }
+        >
           <div className="cc-page-title">
             <div>
               <p className="cc-kicker">STREAMSHIELD / LIVE OPERATIONS</p>
@@ -901,6 +944,19 @@ function Console() {
               <Route
                 path="topology"
                 element={<Topology components={s.components} stale={stale} />}
+              />
+              <Route path="chaos" element={<ChaosLab />} />
+              <Route
+                path="demo"
+                element={
+                  <ChaosDemo
+                    components={s.components}
+                    stale={stale}
+                    topology={
+                      <Topology components={s.components} stale={stale} />
+                    }
+                  />
+                }
               />
               <Route path="metrics" element={<MetricsPage />} />
               <Route path="recoveries" element={<Recoveries />} />
