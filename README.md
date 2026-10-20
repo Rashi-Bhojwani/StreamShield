@@ -2,6 +2,8 @@
 
 Phase 7 adds the administrator-only **Chaos Laboratory** and **Live Demo**. Inject one of six real allowlisted local faults, watch the independent observer/Healer respond, and inspect durable incident/recovery evidence. Chaos never executes recovery playbooks. Database and broadcaster fault controls remain disabled with explicit safety reasons. See [Phase 7 Windows setup, scenarios and demo](docs/PHASE_7.md), [design](docs/PHASE_7_PLAN.md), and [actual measurements](docs/PHASE_7_MEASUREMENTS.json).
 
+All five [clean CI jobs](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39466656790) passed, including 155 unit/security tests and all six authenticated real-fault experiments with two independent decoded live streams. [Measured results and screenshots](docs/PHASE_7.md#verified-results) distinguish actual component restoration, timed cleanup, control-read outages and browser playback.
+
 ## Phase 7 quick start
 
 Start Docker Desktop (Linux containers), use Node.js 24 and PowerShell:

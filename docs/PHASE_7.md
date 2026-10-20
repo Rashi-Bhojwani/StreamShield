@@ -82,6 +82,8 @@ Both SQLite journals use WAL/FULL synchronization. Experiment intent is persiste
 
 The lifecycle is CREATED → VALIDATING → INJECTING → FAULT_CONFIRMED → AWAITING_DETECTION → HEALING_OBSERVED → VERIFYING, followed by COMPLETED, FAILED, TIMED_OUT or CANCELLED. A completed experiment requires actual injection evidence, a new independent recovery attempt and additional functional verification. Experiment outcomes never turn other infrastructure green. Database outage before injection denies the fault; later audit outage keeps the local record for synchronization.
 
+A cancellation accepted during an in-flight fault response is retained in the journal. An older PostgreSQL acknowledgement cannot overwrite newer local intent or falsely mark it synchronized. The controller also rechecks cancellation after audit persistence and before sending an injection request. Deterministic concurrency tests cover both interleavings.
+
 The adapter removes only its UUID-named temporary toxic at expiry, independent of browser and orchestrator. Cleanup failure remains visible and is retried; unresolved ownership prevents new injection. Cancellation removes an owned network condition where possible and stops experiment observation. It cannot undo SIGKILL and never starts a crashed service. Timeout does not prove restoration. Adapter/host unavailability can delay cleanup beyond the configured target duration; durable retry resumes when that infrastructure returns. Emergency operator review is required if the privileged adapter itself cannot run.
 
 ## APIs, events and measurements
@@ -132,3 +134,40 @@ For this constrained VFS cloud only, infrastructure/docker/start-healing-cloud.m
 ## Phase 8 handoff
 
 Reusable experiment UUIDs, typed contracts, durable audit, exact scenario boundaries and separate playback/server measurements are ready for a later capacity-testing design. Phase 7 introduces no high-concurrency traffic simulation, host-level redundancy, production chaos permission model or audience-capacity guarantee.
+
+## Reference semantics and environment limits
+
+Temporary faults follow [Toxiproxy 2.13.0's documented toxic API](https://github.com/Shopify/toxiproxy/blob/v2.13.0/README.md). Logical SIGKILL targets use the same narrowly discovered Docker identities as the existing adapter; see [Docker Engine API](https://docs.docker.com/reference/api/engine/) and [VFS storage behavior](https://docs.docker.com/engine/storage/drivers/vfs-driver/). [Socket.IO delivery guarantees](https://socket.io/docs/v4/delivery-guarantees/) explain why persisted REST reconciliation remains necessary.
+
+Media preflight independently observes a nonempty authorized path set and subsequent standby segment progression; a first segment alone is insufficient. Verification is bounded to five active authorized paths by the inherited verifier. A capacity/precondition failure cannot authorize a partial media fault. Playback checks require consecutive advancing video time and decoded frames within the current source timeline, because primary and standby clocks are independent.
+
+Tests execute on clean Linux GitHub runners. PowerShell/Docker Desktop instructions are documented from the actual repository scripts; a Windows VM was not available for execution here. The current cloud snapshot's 32 GB VFS writable storage remains insufficient for the full extended topology despite safe staging/cache recovery. Local source, credentials and named volumes were preserved; the actual CI results establish integration verification.
+
+## Verified results
+
+All five clean Linux CI jobs passed on [007743a](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39466656790): verify, resilience, monitoring, healing and chaos. The verify job includes build, lint, formatting, types, all 155 unit/security tests, migrations/platform integration, browser and real media regressions. The other jobs retain Phase 4–6 coverage and add the six authenticated Phase 7 experiments. Test artifacts include both independent decoded broadcasts, cross-instance chat/durable history, observer/Healer admission denial, controller restart during an owned toxic, UUID duplication/concurrency denial, browser refresh/reconnect, idempotent cleanup receipts, cancellation before injection and actual no-source instructions.
+
+The following are single-run observations, not availability guarantees. Restoration is independent server verification, not the duration of browser interruption. Network cases use timed cleanup and safe-read/circuit reconnection rather than a service restart.
+
+| Scenario        | Detection (s) | Healing start (s) | Action request (ms) | Independent restoration (s) | Largest sampled decode gap (s) |
+| --------------- | ------------: | ----------------: | ------------------: | --------------------------: | -----------------------------: |
+| crash-api       |         2.626 |             3.403 |                 218 |                      12.540 |                          0.500 |
+| crash-edge      |         3.550 |             3.854 |                 166 |                      12.333 |                          0.500 |
+| crash-primary   |         3.000 |             5.008 |                 271 |                      23.399 |                          1.500 |
+| crash-redis     |         2.674 |             3.471 |                 179 |                      15.305 |                          0.500 |
+| network-timeout |         4.415 |             6.647 |                   3 |                      30.955 |                          0.501 |
+| external-api    |         3.262 |             4.060 |                   5 |                      30.330 |                          0.500 |
+
+The largest observed control-read retry interval was 4.784 seconds. That sampled window is separate from media continuity; it is not a claim about total endpoint outage duration. The maximum counted interruption total in any one viewer experiment window, using the 2-second threshold, was 0.000 seconds. All raw event times, incident/recovery UUIDs, receipts, two-viewer samples and measurement definitions are retained in [PHASE_7_MEASUREMENTS.json](PHASE_7_MEASUREMENTS.json).
+
+Both Laboratory and Demo were captured and visually inspected at all five requested widths. The screenshots show the actual live FFmpeg signal and durable backend records. Layout checks reject document-level horizontal overflow; screenshots wait for real catalog/history data. Additional captures show exact-target confirmation, an API experiment, an in-flight edge experiment and the honest no-live-source state.
+
+| Width  | Chaos Laboratory                              | Live demonstration                            |
+| ------ | --------------------------------------------- | --------------------------------------------- |
+| 375px  | [Laboratory](screenshots/phase7/lab-375.png)  | [Live Demo](screenshots/phase7/demo-375.png)  |
+| 768px  | [Laboratory](screenshots/phase7/lab-768.png)  | [Live Demo](screenshots/phase7/demo-768.png)  |
+| 1280px | [Laboratory](screenshots/phase7/lab-1280.png) | [Live Demo](screenshots/phase7/demo-1280.png) |
+| 1440px | [Laboratory](screenshots/phase7/lab-1440.png) | [Live Demo](screenshots/phase7/demo-1440.png) |
+| 1920px | [Laboratory](screenshots/phase7/lab-1920.png) | [Live Demo](screenshots/phase7/demo-1920.png) |
+
+[Confirmation](screenshots/phase7/confirm-api.png) · [API execution](screenshots/phase7/active-api-experiment.png) · [Live edge experiment](screenshots/phase7/live-edge-experiment.png) · [No source](screenshots/phase7/no-live-source.png).
