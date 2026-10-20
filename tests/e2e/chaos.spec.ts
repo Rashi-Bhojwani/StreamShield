@@ -562,6 +562,16 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
         await card.getByRole("button").click();
         const dialog = control.getByRole("dialog");
         await expect(dialog).toBeVisible();
+        const dialogBox = (await dialog.boundingBox())!;
+        const checkboxBox = (await dialog.getByRole("checkbox").boundingBox())!;
+        expect(Math.abs(dialogBox.x + dialogBox.width / 2 - 720)).toBeLessThan(
+          2,
+        );
+        expect(Math.abs(dialogBox.y + dialogBox.height / 2 - 550)).toBeLessThan(
+          2,
+        );
+        expect(checkboxBox.width).toBeGreaterThanOrEqual(14);
+        expect(checkboxBox.width).toBeLessThanOrEqual(24);
         await expect(
           dialog.getByRole("button", { name: "Inject controlled failure" }),
         ).toBeDisabled();

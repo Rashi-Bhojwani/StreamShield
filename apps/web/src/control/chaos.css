@@ -406,6 +406,10 @@
   overflow-wrap: anywhere;
 }
 .chaos-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
   border: 1px solid #596074;
   border-radius: 15px;
   background: #111d2b;
@@ -482,7 +486,14 @@
   line-height: 1.5;
   margin: 22px 0;
 }
-.chaos-check input {
+.chaos-dialog .chaos-check input[type="checkbox"] {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
+  padding: 0;
+  flex: 0 0 16px;
+  appearance: auto;
   margin-top: 3px;
   accent-color: #e6bb80;
 }
