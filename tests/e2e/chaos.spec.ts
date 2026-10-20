@@ -545,6 +545,13 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
           { timeout, intervals: [1000] },
         )
         .toBe(true);
+      if (scenario === "crash-edge") {
+        await control.goto("/control/demo");
+        await control
+          .getByLabel("Demonstration stream")
+          .selectOption(streams[0]!);
+        await advances(control, 640);
+      }
       const initial = service ? container(service) : null,
         peerInitial = peer ? container(peer) : null;
       const outageOffset = controlReadOutages.length;
@@ -560,6 +567,11 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
         ).toBeDisabled();
         await dialog.getByRole("textbox").fill(target);
         await dialog.getByRole("checkbox").check();
+        await control.screenshot({
+          path: "test-results/phase7/confirm-api.png",
+          fullPage: false,
+          animations: "disabled",
+        });
         const response = control.waitForResponse(
           (r) =>
             r.url().endsWith("/monitoring/chaos/experiments") &&
@@ -636,6 +648,21 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
         await expect(
           control.locator('[data-experiment="' + id + '"]'),
         ).toBeVisible();
+        await control.screenshot({
+          path: "test-results/phase7/active-api-experiment.png",
+          fullPage: true,
+          animations: "disabled",
+        });
+      }
+      if (scenario === "crash-edge") {
+        await expect(
+          control.locator('[data-experiment="' + id + '"]'),
+        ).toBeVisible();
+        await control.screenshot({
+          path: "test-results/phase7/live-edge-experiment.png",
+          fullPage: true,
+          animations: "disabled",
+        });
       }
       if (scenario === "network-timeout") {
         // Fault expiry remains independent while the durable experiment process restarts.
@@ -674,6 +701,18 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
         expect(e.evidence.stoppedObserved).toBe(true);
       } else {
         expect(e.cleanup).toBe("COMPLETED");
+        const cleanups = e.events.filter((x) => x.kind === "CLEANUP_COMPLETED");
+        expect(cleanups).toHaveLength(1);
+        const rereleased = inside(
+          "chaos-controller",
+          `const {id}=JSON.parse((await import('node:fs')).readFileSync(0,'utf8'));const headers={Authorization:'Bearer '+process.env.CHAOS_CONTROL_SECRET,'Content-Type':'application/json'};const url=process.env.CHAOS_CONTROL_URL+'/v1/faults/'+id;const before=await (await fetch(url,{headers})).json();const after=await (await fetch(url+'/release',{method:'POST',headers,body:'{}'})).json();console.log(JSON.stringify({before:before.cleanupAt,after:after.cleanupAt,state:after.state}));`,
+          { id },
+        );
+        expect(rereleased).toEqual({
+          before: cleanups[0]!.at,
+          after: cleanups[0]!.at,
+          state: "CLOSED",
+        });
         expect(e.events.some((x) => x.kind === "CIRCUIT_OPEN")).toBe(true);
       }
       if (peer) expect(container(peer).StartedAt).toBe(peerInitial!.StartedAt);
@@ -751,6 +790,10 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
       await expect(
         control.getByRole("heading", { name: "Chaos Laboratory", exact: true }),
       ).toBeVisible();
+      await expect(control.locator("[data-scenario]")).toHaveCount(8);
+      await expect(
+        control.locator('[data-experiment="' + last.id + '"]'),
+      ).toBeVisible();
       await control.screenshot({
         path: "test-results/phase7/lab-" + width + ".png",
         fullPage: true,
@@ -768,6 +811,57 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
         .selectOption(streams[0]!);
       await advances(control, 640);
     }
+    await expect
+      .poll(
+        async () =>
+          (await state()).scenarios.find((s) => s.id === "crash-api")
+            ?.available,
+        { timeout, intervals: [1000] },
+      )
+      .toBe(true);
+    const cancelledId = randomUUID();
+    expect(
+      (
+        await post({
+          id: cancelledId,
+          scenario: "crash-api",
+          confirmation: "api-1",
+        })
+      ).status(),
+    ).toBe(201);
+    expect(
+      (
+        await write(
+          admin.request,
+          csrf,
+          "/monitoring/chaos/experiments/" + cancelledId + "/cancel",
+          {},
+        )
+      ).status(),
+    ).toBe(200);
+    await expect
+      .poll(async () => (await find(cancelledId)).state, {
+        timeout: 15000,
+        intervals: [500],
+      })
+      .toBe("CANCELLED");
+    expect(await find(cancelledId)).toMatchObject({
+      injectedAt: null,
+      cleanup: "NOT_REQUIRED",
+      cancelRequestedBy: users[0]!.user.id,
+    });
+    for (const p of publishers) await stop(p);
+    await expect(
+      control.getByRole("heading", {
+        name: "Start a real live source",
+        exact: true,
+      }),
+    ).toBeVisible({ timeout: 30000 });
+    await control.screenshot({
+      path: "test-results/phase7/no-live-source.png",
+      fullPage: true,
+      animations: "disabled",
+    });
     // The exact same session loses mutation authority immediately after durable role revocation.
     compose(
       "exec",
@@ -784,6 +878,9 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
       security:
         "anonymous/non-admin/CSRF/origin/allowlist/confirmation/fresh-role-revocation PASS",
       durableBrowserRefresh: true,
+      cancellationBeforeInjection: true,
+      noSourceInstructionVerified: true,
+      observerHealerUnavailableAdmissionDenied: true,
       controllerRestartDuringFault: true,
       chaosRealtimeEvents: chaosEvents,
       captures,

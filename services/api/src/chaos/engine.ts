@@ -264,7 +264,7 @@ export class ChaosEngine {
     try {
       const f = await this.control("/v1/faults/" + e.id + "/release", {});
       e.cleanup = f.cleanup;
-      if (f.cleanupAt)
+      if (f.cleanupAt && !e.events.some((x) => x.kind === "CLEANUP_COMPLETED"))
         this.event(
           e,
           "CLEANUP_COMPLETED",
@@ -481,6 +481,8 @@ export class ChaosEngine {
     if (!a) return;
     if (!e.recoveryIds.includes(a.id)) {
       e.recoveryIds.push(a.id);
+      e.evidence.recoveryAction = a.action;
+      e.evidence.recoveryPlaybook = a.playbook;
       e.incidentId = a.incidentId;
       this.event(
         e,
@@ -515,7 +517,7 @@ export class ChaosEngine {
       this.transition(
         e,
         "HEALING_OBSERVED",
-        "Independent Healer action observed",
+        "Independent Healer action observed: " + a.action.replaceAll("_", " "),
       );
     }
     if (a.verificationStartedAt && e.state !== "VERIFYING") {

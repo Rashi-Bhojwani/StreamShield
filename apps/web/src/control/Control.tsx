@@ -173,6 +173,7 @@ function Topology({
     ["api-1", "api-2", "edge-1", "edge-2"],
     ["postgres", "redis", "origin-primary", "origin-standby"],
     ["relay"],
+    ["demo-dependency"],
     ["prometheus", "grafana"],
   ];
   const groups = [
@@ -181,6 +182,7 @@ function Topology({
     "Service peers",
     "Dependencies & origins",
     "Ingest",
+    "Simulated external dependency",
     "Independent observability",
   ];
   return (
@@ -193,49 +195,51 @@ function Topology({
         <span className="cc-unit">Select a component to investigate ↗</span>
       </div>
       <div className="cc-topology">
-        {layers.map((ids, n) => (
-          <div className="cc-topology-layer" key={groups[n]}>
-            <span className="cc-layer-label">{groups[n]}</span>
-            <div className="cc-topology-nodes">
-              {ids.map((id) => {
-                const c = components.find((c) => c.id === id);
-                return c ? (
-                  <Link
-                    className={
-                      "cc-node cc-border-" +
-                      effective(c, stale).toLowerCase() +
-                      (chaos.live && experiment?.target === id
-                        ? " chaos-target-active"
-                        : "")
-                    }
-                    to={"/control/services/" + id}
-                    key={id}
-                  >
-                    <span className="cc-node-icon" aria-hidden="true">
-                      {c.group === "Data"
-                        ? "▱"
-                        : c.group === "Media"
-                          ? "▷"
-                          : "▦"}
-                    </span>
-                    <strong>{c.name}</strong>
-                    <Badge state={effective(c, stale)} />
-                    {chaos.live && experiment?.target === id && (
-                      <span className="chaos-target-label">
-                        Experiment · {experiment.state.replaceAll("_", " ")}
+        {layers.map((ids, n) =>
+          ids.some((id) => components.some((c) => c.id === id)) ? (
+            <div className="cc-topology-layer" key={groups[n]}>
+              <span className="cc-layer-label">{groups[n]}</span>
+              <div className="cc-topology-nodes">
+                {ids.map((id) => {
+                  const c = components.find((c) => c.id === id);
+                  return c ? (
+                    <Link
+                      className={
+                        "cc-node cc-border-" +
+                        effective(c, stale).toLowerCase() +
+                        (chaos.live && experiment?.target === id
+                          ? " chaos-target-active"
+                          : "")
+                      }
+                      to={"/control/services/" + id}
+                      key={id}
+                    >
+                      <span className="cc-node-icon" aria-hidden="true">
+                        {c.group === "Data"
+                          ? "▱"
+                          : c.group === "Media"
+                            ? "▷"
+                            : "▦"}
                       </span>
-                    )}
-                    <small>
-                      {c.dependencies.length
-                        ? "→ " + c.dependencies.join(" · ")
-                        : "No downstream dependencies"}
-                    </small>
-                  </Link>
-                ) : null;
-              })}
+                      <strong>{c.name}</strong>
+                      <Badge state={effective(c, stale)} />
+                      {chaos.live && experiment?.target === id && (
+                        <span className="chaos-target-label">
+                          Experiment · {experiment.state.replaceAll("_", " ")}
+                        </span>
+                      )}
+                      <small>
+                        {c.dependencies.length
+                          ? "→ " + c.dependencies.join(" · ")
+                          : "No downstream dependencies"}
+                      </small>
+                    </Link>
+                  ) : null;
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ) : null,
+        )}
       </div>
       <p className="cc-note">
         Arrows list actual downstream dependencies. HLS flows relay → origins →

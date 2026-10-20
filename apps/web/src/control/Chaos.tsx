@@ -234,7 +234,11 @@ function Experiment({
       </div>
       <p className="chaos-mechanism">
         {e.mechanism ||
-          "Awaiting observed recovery evidence. No completion is inferred."}
+          (e.actionStartedAt && e.evidence.recoveryAction
+            ? "Observed independent Healer action: " +
+              String(e.evidence.recoveryAction).replaceAll("_", " ") +
+              ". Awaiting functional verification."
+            : "Awaiting observed recovery evidence. No completion is inferred.")}
       </p>
       <div className="chaos-audit-strip">
         <span>

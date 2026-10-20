@@ -211,6 +211,13 @@ app.post("/v1/faults/:id/release", async (q, r) => {
     r.status(404).json({ code: "not_accepted" });
     return;
   }
+  if (
+    f.state === "CLOSED" &&
+    ["COMPLETED", "NOT_REQUIRED"].includes(f.cleanup)
+  ) {
+    r.json(f);
+    return;
+  }
   if (await cleanup(f)) {
     f.state = "CLOSED";
     save(f, false);
