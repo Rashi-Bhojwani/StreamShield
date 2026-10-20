@@ -219,6 +219,52 @@ describe("durable chaos lifecycle", () => {
       cleanup: "NOT_REQUIRED",
     });
   });
+  it("preserves cancellation received while the fault receipt is in flight", async () => {
+    const { engine, e, j } = await submitted();
+    e.state = "VALIDATING";
+    j.save(e);
+    vi.spyOn(engine, "control").mockImplementation(async (path) => {
+      if (path === "/v1/inject") {
+        engine.cancel(e.id, e.actor);
+        return {
+          state: "CONFIRMED",
+          injectedAt: new Date().toISOString(),
+          confirmedAt: new Date().toISOString(),
+          expiresAt: Date.now() + 180000,
+          cleanup: "NOT_REQUIRED",
+          evidence: {},
+        };
+      }
+      return { cleanup: "NOT_REQUIRED" };
+    });
+    await engine["advance"](e);
+    const current = j.get(e.id)!;
+    expect(current.cancelRequestedBy).toBe(e.actor);
+    expect(
+      current.events.filter((x) => x.kind === "CANCEL_REQUESTED"),
+    ).toHaveLength(1);
+    await engine["advance"](current);
+    expect(j.get(e.id)?.state).toBe("CANCELLED");
+  });
+  it("does not erase a cancellation with an older PostgreSQL acknowledgement or inject afterward", async () => {
+    const { engine, e, j, store } = await submitted();
+    e.state = "VALIDATING";
+    j.save(e);
+    store.sync.mockImplementationOnce(async () => {
+      engine.cancel(e.id, e.actor);
+    });
+    const control = vi
+      .spyOn(engine, "control")
+      .mockResolvedValue({ cleanup: "NOT_REQUIRED" });
+    await engine["advance"](e);
+    expect(control).not.toHaveBeenCalled();
+    expect(j.get(e.id)).toMatchObject({
+      cancelRequestedBy: e.actor,
+      databasePersisted: false,
+    });
+    await engine["advance"](j.get(e.id)!);
+    expect(j.get(e.id)?.state).toBe("CANCELLED");
+  });
   it("honors disabled policy after admission but before injection", async () => {
     const { engine, e, j } = await submitted();
     e.state = "VALIDATING";

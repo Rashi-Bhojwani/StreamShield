@@ -292,6 +292,7 @@ export class ChaosEngine {
     this.transition(e, state, reason);
   }
   private async sync(e: ChaosExperiment) {
+    e = this.journal.get(e.id) || e;
     if (e.databasePersisted || Date.now() < this.nextSync) return;
     try {
       await this.store.sync(e);
@@ -418,6 +419,7 @@ export class ChaosEngine {
       );
       await this.store.sync(e);
       this.journal.synced(e);
+      if (this.journal.get(e.id)?.cancelRequestedBy) return;
       try {
         const f = await this.control("/v1/inject", {
           id: e.id,
