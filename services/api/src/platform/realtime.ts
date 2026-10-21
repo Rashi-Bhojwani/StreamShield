@@ -405,7 +405,7 @@ export function createRealtime(
               id: randomUUID(),
               seq,
               streamId,
-              username: `Load-${agent.runId.slice(0, 6)}-${agent.index}`,
+              username: `Load-${agent.runId.slice(0, 6)}-${agent.workerId.slice(0, 4)}-${agent.index}`,
               content: "[SYNTHETIC] " + body.content,
               createdAt: new Date().toISOString(),
               synthetic: true,

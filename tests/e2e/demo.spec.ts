@@ -98,7 +98,7 @@ const publish = (p: Publishing, size: string) =>
       MEDIA_PUBLISH_USER: p.user,
       MEDIA_PUBLISH_PASSWORD: p.key,
       TEST_PUBLISH_SIZE: size,
-      TEST_PUBLISH_DURATION_SECONDS: "900",
+      TEST_PUBLISH_DURATION_SECONDS: "600",
     },
     stdio: ["ignore", "ignore", "ignore", "ipc"],
   });
@@ -666,7 +666,12 @@ test("three real channels, guest isolation, measured capacity and independent he
       (
         await request.post(`/api/v1/capacity/agent/${worker}/report`, {
           headers,
-          data: { ...report, seq: 1, requests: 2 },
+          data: {
+            ...report,
+            seq: 1,
+            requests: 2,
+            requestHistogram: [2, ...Array(16).fill(0)],
+          },
         })
       ).status(),
     ).toBe(409);
@@ -812,10 +817,29 @@ test("three real channels, guest isolation, measured capacity and independent he
     const continuousResult = await continuous.result();
     evidence.runs.push(continuousResult);
     expect(continuousResult.measurements.stopReason).toBe("signal");
+    // Stop only our test-owned third publisher; the other two sources must remain live.
+    await stop(publishers[3]!);
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get("/api/v1/streams/streamer-3")).json())
+            .status,
+        { timeout },
+      )
+      .toBe("offline");
+    for (const slot of [1, 2])
+      expect(
+        (await (await request.get("/api/v1/streams/streamer-" + slot)).json())
+          .status,
+      ).toBe("live");
+    evidence.checks.independentSourceStop = true;
     // Key rotation affects only one owned source, then its new publisher returns.
     const rotated = operator({ action: "rotate", slot: 3 });
     expect(rotated.key === keys[2]!.key).toBe(false);
-    await stop(publishers[3]!); // publishers[0] is the rejected cross-key attempt.
+    const oldKeyAttempt = publish(keys[2]!, "320x180");
+    publishers.push(oldKeyAttempt);
+    await expect.poll(() => oldKeyAttempt.exitCode, { timeout }).not.toBeNull();
+    expect(oldKeyAttempt.exitCode).not.toBe(0);
     const returning = publish({ ...keys[2]!, ...rotated }, "320x180");
     publishers.push(returning);
     await expect

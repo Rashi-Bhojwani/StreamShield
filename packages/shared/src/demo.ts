@@ -88,7 +88,17 @@ export const capacityReport = z
       "grant-revoked",
     ]),
   })
-  .strict();
+  .strict()
+  .superRefine((r, ctx) => {
+    if (
+      r.requestHistogram.reduce((a, b) => a + b, 0) !== r.requests ||
+      r.deliveryHistogram.reduce((a, b) => a + b, 0) !== r.delivered
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Histogram counts must match the cumulative observations",
+      });
+  });
 export type CapacityReport = z.infer<typeof capacityReport>;
 export type CapacityConfig = z.infer<typeof capacityConfig>;
 export interface CapacitySummary {

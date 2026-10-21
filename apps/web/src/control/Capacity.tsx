@@ -155,10 +155,16 @@ export function CapacityPage() {
       refetchInterval: 15000,
       retry: false,
     });
-  const metric = (id: string) =>
-    metrics.data?.available
-      ? metrics.data.series.find((s) => s.id === id)?.points.at(-1)?.[1]
+  const metric = (id: string) => {
+    const point =
+      metrics.data?.available && !metrics.isError
+        ? metrics.data.series.find((s) => s.id === id)?.points.at(-1)
+        : null;
+    return point &&
+      Date.parse(metrics.data?.checkedAt || "") / 1000 - point[0] <= 30
+      ? point[1]
       : null;
+  };
   const snapshot = useQuery({
     queryKey: ["monitoring", "snapshot"],
     queryFn: () => call<MonitoringSnapshot>("/monitoring/snapshot"),
@@ -200,8 +206,8 @@ export function CapacityPage() {
           <h2>Actual concurrent activity</h2>
           <p>
             Fresh worker reports, sampled once per second. Stale intervals are
-            omitted. Historical peak is the largest aggregate sample, not the
-            sum of independent worker peaks.
+            omitted. A single-worker peak is directly observed; distributed peak
+            uses aggregate samples, never a sum of unrelated worker peaks.
           </p>
           <ActiveChart run={run} />
           <dl className="capacity-metadata">

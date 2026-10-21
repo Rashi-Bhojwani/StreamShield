@@ -18,6 +18,7 @@ type Run = {
   created_at: Date;
   expires_at: Date;
   distributed: boolean;
+  stopped_at?: Date | null;
   duration_seconds: number;
   chat_per_second: number;
 };
@@ -61,7 +62,9 @@ export function summarize(
   const expired = run.expires_at.getTime() <= now;
   const elapsed = Math.max(
     0.001,
-    (Math.min(now, run.expires_at.getTime()) - run.created_at.getTime()) / 1000,
+    (Math.min(run.stopped_at?.getTime() ?? now, run.expires_at.getTime()) -
+      run.created_at.getTime()) /
+      1000,
   );
   return {
     id: run.id,
@@ -78,7 +81,11 @@ export function summarize(
     allocatedClients: workers.reduce((a, w) => a + w.clients, 0),
     freshWorkers: fresh.length,
     staleWorkers: stale,
-    actualActive: expired ? 0 : active,
+    actualActive: expired
+      ? workers.every((w) => w.finished)
+        ? 0
+        : null
+      : active,
     peakReported: Math.max(
       ...(workers.length === 1 ? [workers[0]?.report?.peak || 0] : []),
       0,
@@ -135,13 +142,22 @@ export async function capacitySummaries(r: Resources) {
       ).rows as Worker[];
       const samples = (
         await r.db.query(
-          "SELECT sample FROM capacity_samples WHERE run_id=$1 ORDER BY second DESC LIMIT 120",
+          "SELECT sample,max((sample->>'active')::integer) OVER() AS run_peak FROM capacity_samples WHERE run_id=$1 ORDER BY second DESC LIMIT 120",
           [run.id],
         )
-      ).rows
-        .reverse()
-        .map((row) => row.sample) as CapacitySummary["samples"];
-      return summarize(run, workers, samples);
+      ).rows;
+      const result = summarize(
+        run,
+        workers,
+        samples
+          .map((row) => row.sample)
+          .reverse() as CapacitySummary["samples"],
+      );
+      result.peakReported = Math.max(
+        result.peakReported,
+        Number(samples[0]?.run_peak || 0),
+      );
+      return result;
     }),
   );
 }

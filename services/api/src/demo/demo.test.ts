@@ -115,6 +115,40 @@ describe("owned-target capacity boundaries", () => {
   });
 });
 describe("truthful distributed aggregation", () => {
+  it("freezes historical rates at the actual run completion time", () => {
+    const value = summarize(
+      { ...run, state: "COMPLETED", stopped_at: new Date(now - 5000) },
+      [
+        {
+          id: "a",
+          clients: 100,
+          updated_at: new Date(now - 5000),
+          report: report({ active: 0, finished: true }),
+          finished: true,
+        },
+      ],
+      [],
+      now + 10000,
+    );
+    expect(value.requestsPerSecond).toBe(2);
+  });
+  it("does not infer stopped public traffic from an expired missing generator", () => {
+    const value = summarize(
+      { ...run, expires_at: new Date(now - 1) },
+      [
+        {
+          id: "a",
+          clients: 100,
+          updated_at: new Date(now - 30000),
+          report: report(),
+          finished: false,
+        },
+      ],
+      [],
+      now,
+    );
+    expect(value.actualActive).toBeNull();
+  });
   it("merges histogram counts rather than averaging percentiles", () => {
     const a = report(),
       b = report({
