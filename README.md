@@ -2,6 +2,8 @@
 
 The new explicit **three-channel demo mode** provides Streamer 1/2/3, guest viewing/chat, private CLI broadcaster provisioning and one-use local administrator access. The presentation screen combines three genuine live players, real capacity measurements and the existing independent Healer/Chaos controls. The **50,000 simulated-client target remains unverified**; workload profiles and achieved counts are kept separate.
 
+Platform acceptance passed all seven [CI jobs](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528) with 174 unit/security tests, genuine three-source playback, guest isolation and real recovery under bounded load. The isolated 1,000-socket trial reached 252 connected sockets; the 50K milestone remains PARTIAL. [Actual measurements and screenshots](docs/THREE_CHANNEL_DEMO.md#verified-results-and-capacity-limits).
+
 See [three-channel Windows/OBS/LAN guide](docs/THREE_CHANNEL_DEMO.md), [capacity harness and distributed stages](docs/CAPACITY_TESTING.md), [design](docs/THREE_CHANNEL_DEMO_PLAN.md) and [actual verification status](docs/THREE_CHANNEL_DEMO_MEASUREMENTS.json).
 
 ```powershell

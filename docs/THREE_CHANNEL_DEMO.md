@@ -148,3 +148,49 @@ To return to an earlier workflow, set `DEMO_ENABLED=false` and `VITE_DEMO_MODE=f
 A LAN RTMP binding is not internet access. An internet deployment needs reachable authenticated ingest, TLS/RTMPS where supported, HTTPS playback/websockets, secure cookies, publishing-key transport/rotation, an appropriately configured reverse proxy/CDN, resource limits, egress bandwidth, external storage and network access control. Keep all privileged adapters/control/database endpoints private; the Docker socket remains host-equivalent authority in this trusted local topology.
 
 The repository's single-host gateways, relay, PostgreSQL, Redis and host remain failure/capacity domains. Default Nginx connection limits, file descriptors, media egress, generator memory/CPU and database/Socket.IO work constrain achievable load. No claim of 50,000 decoded viewers or 50,000 achieved clients is made without evidence. See the actual measurement artifact and PR checks for the maximum verified workloads. Three independent publishers are tested with real encoded media; three physical Windows laptops and their firewall were not available for automated execution.
+
+## Verified results and capacity limits
+
+Platform acceptance: **PASS**. The 50,000-client milestone: **PARTIAL / UNVERIFIED**. All seven [clean Linux CI jobs](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528) passed on `60ff491`: verify, resilience, monitoring, healing, chaos, demo and capacity. Build/lint/format/typecheck and 174 unit/security tests passed. The original Phase 1–7 media, authenticated platform, redundancy, monitoring, healing and chaos regressions were retained.
+
+The demo job verified three simultaneous real FFmpeg/RTMP/HLS sources with independently decoded widths 640, 480 and 320; guest identity continuity; cross-API chat and room isolation; durable history; plain-text/XSS boundaries; rate rejection; no public signup/login; one-use/expired/CSRF/admin denial; safe publishing-key rotation and old-key rejection; independent source stop/return; worker allocation, monotonic/idempotent final receipts and reporting consistency. No account, channel, real workload history or named data volume was reset. Only the newly-created protocol-vector run was removed so artificial validation vectors do not appear as measured traffic.
+
+Single-worker smoke observations with all three genuine sources active:
+
+| Profile | Requested workers/clients | Actual observed peak | Raw HTTP requests | HTTP errors | HTTP p95 bucket (ms) |
+| ------- | ------------------------: | -------------------: | ----------------: | ----------: | -------------------: |
+| api     |                        20 |                   14 |              1060 |           0 |                   32 |
+| socket  |                       100 |                  100 |               N/A |         N/A |                    — |
+| chat    |                        12 |                   12 |               N/A |         N/A |                    — |
+| hls     |                         6 |                    2 |              1283 |           0 |                    8 |
+| browser |                         3 |                    3 |               N/A |         N/A |                    — |
+
+The chat profile confirmed 21 messages at another same-room client. The browser profile verified three actual decoded Chromium viewers; its startup and stalls are retained in the raw evidence. HTTP counters are N/A for socket/chat/browser profiles, rather than a claim that a browser made no network requests.
+
+The separate socket-only capacity job requested 100 and 1,000 clients. The 100-client stage reached 100 with 0 connection failures. The 1,000-client stage peaked at **252 connected sockets**, with **11,117 failed connection attempts** (including retries), and confirmed its final audit. This does not establish three-stream or decoded-viewer capacity at that scale. The default gateway's 512 worker connections are a relevant constraint consistent with the result. No 50K stage or distributed deployment was executed, and these short observations are not a sustainable-capacity guarantee.
+
+Five real failures were injected during separate bounded API load stages. Every fault completed through independent observer/Healer verification; no manual restore action was used:
+
+| Fault           | Detection (s) | Healing start (s) | Action (ms) | Functional restoration (s) | HTTP errors / completions | Load stage ended by |
+| --------------- | ------------: | ----------------: | ----------: | -------------------------: | ------------------------: | ------------------- |
+| crash-api       |         3.515 |             4.385 |         261 |                     18.998 |                   0 / 944 | signal              |
+| crash-edge      |         2.427 |             2.879 |         260 |                     14.607 |                   0 / 890 | signal              |
+| crash-primary   |         2.926 |             5.175 |         220 |                     23.497 |                   0 / 986 | signal              |
+| crash-redis     |         2.664 |             3.652 |         231 |                     15.339 |                 120 / 286 | error-budget        |
+| network-timeout |         4.362 |             7.071 |           5 |                     32.346 |                  0 / 1496 | signal              |
+
+Redis produced 120 errors from 286 workload completions and triggered the unchanged `error-budget` guard. That is a measured availability limit, not a successful uninterrupted load stage. Independent healing and confirmed final reporting still completed; the next stage began only after healthy admission. Other `signal` endings are test-owned IPC shutdown after verified restoration. Network restoration includes expiry/cleanup and reconnection, not a Docker restart.
+
+All three browser players were sampled through every fault. Largest sampled decoded-progress gap: 1.501 seconds; maximum counted interruption in any one viewer/fault window: 0.000 seconds using the two-second threshold. This is bounded browser evidence, not zero-buffering or global uptime assurance. [Raw runs, timings, receipts and definitions](THREE_CHANNEL_DEMO_MEASUREMENTS.json) retain the exact observations.
+
+Home, presentation and capacity pages were captured and visually inspected at all five requested widths. Presentation captures wait for advancing decoded frames in all three previews. Watch was additionally inspected on mobile and desktop. Layout checks reject document-level horizontal overflow.
+
+| Width  | Public channels                                 | Three-stream presentation                                       | Capacity dashboard                                      |
+| ------ | ----------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------- |
+| 375px  | [Home](screenshots/three-channel/home-375.png)  | [Presentation](screenshots/three-channel/presentation-375.png)  | [Capacity](screenshots/three-channel/capacity-375.png)  |
+| 768px  | [Home](screenshots/three-channel/home-768.png)  | [Presentation](screenshots/three-channel/presentation-768.png)  | [Capacity](screenshots/three-channel/capacity-768.png)  |
+| 1280px | [Home](screenshots/three-channel/home-1280.png) | [Presentation](screenshots/three-channel/presentation-1280.png) | [Capacity](screenshots/three-channel/capacity-1280.png) |
+| 1440px | [Home](screenshots/three-channel/home-1440.png) | [Presentation](screenshots/three-channel/presentation-1440.png) | [Capacity](screenshots/three-channel/capacity-1440.png) |
+| 1920px | [Home](screenshots/three-channel/home-1920.png) | [Presentation](screenshots/three-channel/presentation-1920.png) | [Capacity](screenshots/three-channel/capacity-1920.png) |
+
+[Guest Watch at 375px](screenshots/three-channel/watch-375.png) · [Guest Watch at 1440px](screenshots/three-channel/watch-1440.png).
