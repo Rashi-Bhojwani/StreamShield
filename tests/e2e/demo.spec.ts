@@ -854,6 +854,17 @@ test("three real channels, guest isolation, measured capacity and independent he
       stoppedGrantRejected: true,
       syntheticNotPersisted: true,
     };
+    // This newly created protocol fixture contains validation vectors, not measured traffic.
+    // Remove only that UUID so it cannot appear as an achieved workload in UI/evidence.
+    // All actual generator runs, existing user data and application audit remain intact.
+    db("DELETE FROM capacity_samples WHERE run_id=$1", [grant.id]);
+    db("DELETE FROM capacity_workers WHERE run_id=$1", [grant.id]);
+    expect(
+      db(
+        "DELETE FROM capacity_runs WHERE id=$1 AND state='STOPPED' RETURNING id",
+        [grant.id],
+      ),
+    ).toHaveLength(1);
     async function startFaultLoad() {
       const continuous = capacity("api", 20, 240, ["--think-ms", "500"]);
       loadChildren.push(continuous.child);
