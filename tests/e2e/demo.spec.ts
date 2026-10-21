@@ -346,6 +346,41 @@ async function screenshot(page: Page, path: string) {
   ).toBe(true);
   await page.screenshot({ path, fullPage: true, animations: "disabled" });
 }
+async function previewsAdvance(page: Page) {
+  let previous: { time: number; frames: number }[] = [];
+  await expect
+    .poll(
+      async () => {
+        const samples = await page
+          .locator(".three-preview video")
+          .evaluateAll((nodes) =>
+            nodes.map((node) => {
+              const v = node as HTMLVideoElement;
+              return {
+                time: v.currentTime,
+                frames: v.getVideoPlaybackQuality().totalVideoFrames,
+                width: v.videoWidth,
+                playing: !v.paused && v.readyState >= 2,
+              };
+            }),
+          );
+        const progressing =
+          samples.length === 3 &&
+          previous.length === 3 &&
+          samples.every(
+            (s, i) =>
+              s.playing &&
+              s.width === [640, 480, 320][i] &&
+              s.frames > previous[i]!.frames &&
+              s.time > previous[i]!.time,
+          );
+        previous = samples;
+        return progressing;
+      },
+      { timeout, intervals: [250, 500, 1000] },
+    )
+    .toBe(true);
+}
 
 test("three real channels, guest isolation, measured capacity and independent healing under load", async ({
   browser,
@@ -1028,6 +1063,13 @@ test("three real channels, guest isolation, measured capacity and independent he
       const homePath = `test-results/demo/home-${width}.png`;
       await screenshot(home, homePath);
       evidence.screenshots.push(homePath);
+      if ([375, 1440].includes(width)) {
+        await pages[0]!.setViewportSize({ width, height: 1100 });
+        await advances(pages[0]!, 640);
+        const watchPath = `test-results/demo/watch-${width}.png`;
+        await screenshot(pages[0]!, watchPath);
+        evidence.screenshots.push(watchPath);
+      }
       await adminPage.setViewportSize({ width, height: 1100 });
       await adminPage.goto("/control/three-stream-demo");
       await expect(adminPage.locator(".three-preview")).toHaveCount(3);
@@ -1037,6 +1079,7 @@ test("three real channels, guest isolation, measured capacity and independent he
         })
         .toBe(3);
       const demoPath = `test-results/demo/presentation-${width}.png`;
+      await previewsAdvance(adminPage);
       await screenshot(adminPage, demoPath);
       evidence.screenshots.push(demoPath);
       await adminPage.goto("/control/capacity");
