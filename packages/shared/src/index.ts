@@ -114,3 +114,4 @@ export * from "./platform";
 export * from "./monitoring";
 export * from "./healing";
 export * from "./chaos";
+export * from "./demo.js";

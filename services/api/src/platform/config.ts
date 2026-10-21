@@ -3,6 +3,9 @@ const int = (min: number, max: number) =>
   z.coerce.number().int().min(min).max(max);
 const bool = z.enum(["true", "false"]).transform((v) => v === "true");
 const schema = z.object({
+  DEMO_ENABLED: bool.default(false),
+  DEMO_GUEST_TTL_SECONDS: int(300, 86400).default(21600),
+  DEMO_GUEST_CREATE_LIMIT: int(1, 1000).default(120),
   MEDIA_REPLICATION_SECRET: z
     .string()
     .regex(/^[a-zA-Z0-9_-]{43}$/)
@@ -66,6 +69,10 @@ export function parsePlatformConfig(input: Record<string, unknown>) {
         result.error.issues.map((i) => i.path.join(".")).join(", "),
     );
   const c = result.data;
+  if (c.DEMO_ENABLED && input.NODE_ENV !== "development")
+    throw new Error(
+      "Three-channel demo requires explicit development environment",
+    );
   if (c.PRESENCE_HEARTBEAT_MS * 2 >= c.PRESENCE_TTL_SECONDS * 1000)
     throw new Error("Presence TTL must exceed two heartbeat intervals");
   if (

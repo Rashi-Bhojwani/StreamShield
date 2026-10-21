@@ -1,6 +1,8 @@
 import { createContext, useContext } from "react";
 import type { User } from "@streamshield/shared";
 export interface Auth {
+  demoMode?: boolean;
+  guest?: { id: string; name: string } | null;
   user: User | null;
   csrf: string;
   loading: boolean;

@@ -26,6 +26,8 @@ export const userSchema = z.object({
 });
 export type User = z.infer<typeof userSchema>;
 export const authSchema = z.object({
+  demoMode: z.boolean().default(false),
+  guest: z.object({ id: z.uuid(), name: z.string() }).nullable().default(null),
   user: userSchema.nullable(),
   csrf: z.string(),
   presenceHeartbeatMs: z.number(),
@@ -77,6 +79,7 @@ export const messageInput = z
   })
   .strict();
 export const chatMessageSchema = z.object({
+  synthetic: z.boolean().optional(),
   id: z.uuid(),
   seq: z.string(),
   streamId: z.uuid(),

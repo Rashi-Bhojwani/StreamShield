@@ -1,6 +1,6 @@
 {
   "name": "streamshield",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -55,7 +55,21 @@
     "chaos:down": "node infrastructure/chaos/compose.mjs down",
     "chaos:status": "node infrastructure/chaos/compose.mjs ps",
     "chaos:probe": "node scripts/chaos-probe.mjs",
-    "test:chaos": "node scripts/chaos-integration.mjs"
+    "test:chaos": "node scripts/chaos-integration.mjs",
+    "setup:demo": "node scripts/setup-demo.mjs",
+    "demo:up": "node scripts/demo-cli.mjs up",
+    "demo:seed": "node scripts/demo-cli.mjs seed",
+    "demo:admin": "node scripts/demo-cli.mjs admin",
+    "demo:provision": "node scripts/demo-cli.mjs provision",
+    "demo:down": "node infrastructure/demo/compose.mjs down",
+    "demo:status": "node infrastructure/demo/compose.mjs ps",
+    "capacity:run": "node --import tsx scripts/capacity/run.mjs",
+    "capacity:create": "node --import tsx scripts/capacity/run.mjs --create-only",
+    "capacity:worker": "node --import tsx scripts/capacity/run.mjs --worker",
+    "capacity:stop": "node scripts/capacity/stop.mjs",
+    "test:demo": "node scripts/demo-integration.mjs",
+    "capacity:stages": "node --import tsx scripts/capacity/stages.mjs",
+    "broadcast:demo": "node scripts/demo-broadcast.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

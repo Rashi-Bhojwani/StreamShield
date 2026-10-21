@@ -1,0 +1,13 @@
+{
+  "platformStatus": "PENDING_INTEGRATION",
+  "capacity50000Status": "PARTIAL_UNVERIFIED",
+  "baselineCommit": "5993c65",
+  "baselineUnitTests": 155,
+  "currentUnitTests": 172,
+  "measuredRuns": [],
+  "limitations": [
+    "No 50,000-client run has been executed.",
+    "No three physical Windows laptops were available; genuine independent publishers are exercised in Linux integration.",
+    "Full local VFS composition is storage constrained; clean CI integration results will be recorded separately."
+  ]
+}

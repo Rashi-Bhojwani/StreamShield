@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   createHash,
   createHmac,
@@ -144,6 +145,12 @@ export function publicError(error: unknown): {
   code: string;
   message: string;
 } {
+  if (error instanceof z.ZodError)
+    return {
+      status: 400,
+      code: "INVALID_INPUT",
+      message: "Invalid request fields.",
+    };
   if (error instanceof PlatformError)
     return { status: error.status, code: error.code, message: error.message };
   if (

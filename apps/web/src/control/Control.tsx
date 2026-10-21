@@ -1,3 +1,4 @@
+import { CapacityPage, ThreeStreamDemo } from "./Capacity";
 import { useEffect, useState } from "react";
 import {
   Link,
@@ -812,6 +813,12 @@ function Console() {
           <NavLink to="/control/recoveries">
             <span>⟳</span>Recoveries
           </NavLink>
+          <NavLink to="/control/three-stream-demo">
+            <span>◉</span>Three-stream demo
+          </NavLink>
+          <NavLink to="/control/capacity">
+            <span>⌁</span>Capacity
+          </NavLink>
           <NavLink to="/control/chaos">
             <span>ϟ</span>Chaos Lab
           </NavLink>
@@ -848,7 +855,12 @@ function Console() {
           id="main"
           className={
             "cc-main" +
-            (["/control/chaos", "/control/demo"].includes(location.pathname)
+            ([
+              "/control/chaos",
+              "/control/demo",
+              "/control/capacity",
+              "/control/three-stream-demo",
+            ].includes(location.pathname)
               ? " chaos-focused"
               : "")
           }
@@ -944,6 +956,11 @@ function Console() {
               <Route
                 path="topology"
                 element={<Topology components={s.components} stale={stale} />}
+              />
+              <Route path="capacity" element={<CapacityPage />} />
+              <Route
+                path="three-stream-demo"
+                element={<ThreeStreamDemo snapshot={s} />}
               />
               <Route path="chaos" element={<ChaosLab />} />
               <Route

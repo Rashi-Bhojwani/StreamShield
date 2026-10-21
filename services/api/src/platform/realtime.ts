@@ -1,3 +1,5 @@
+import { findGuest } from "../demo/guests.js";
+import { capacityCredential } from "../demo/capacity.js";
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { randomUUID } from "node:crypto";
@@ -25,7 +27,7 @@ export async function history(
   after?: string,
 ) {
   const rows = await r.db.query(
-    "SELECT m.id,m.seq::text,m.stream_id,m.content,m.created_at,u.username FROM chat_messages m JOIN users u ON u.id=m.sender_id WHERE m.stream_id=$1 AND m.deleted_at IS NULL AND ($2::bigint IS NULL OR m.seq<$2) AND ($3::bigint IS NULL OR m.seq>$3) ORDER BY m.seq DESC LIMIT $4",
+    "SELECT m.id,m.seq::text,m.stream_id,m.content,m.created_at,COALESCE(u.username,g.name) AS username FROM chat_messages m LEFT JOIN users u ON u.id=m.sender_id LEFT JOIN demo_guests g ON g.id=m.guest_id WHERE m.stream_id=$1 AND m.deleted_at IS NULL AND ($2::bigint IS NULL OR m.seq<$2) AND ($3::bigint IS NULL OR m.seq>$3) ORDER BY m.seq DESC LIMIT $4",
     [streamId, before || null, after || null, limit],
   );
   return rows.rows.reverse().map((row) => ({
@@ -118,6 +120,47 @@ export function createRealtime(
   });
   io.use(async (socket, next) => {
     try {
+      if (c.DEMO_ENABLED && socket.handshake.auth.loadToken) {
+        const { run, worker } = await capacityCredential(
+          r,
+          socket.handshake.auth.loadToken,
+          socket.handshake.headers.origin,
+          socket.handshake.auth.workerId,
+        );
+        const index = socket.handshake.auth.clientIndex;
+        if (
+          !worker ||
+          !Number.isInteger(index) ||
+          index < 0 ||
+          index >= worker.clients ||
+          !["socket", "chat"].includes(run.profile)
+        )
+          throw new PlatformError(
+            403,
+            "LOAD_IDENTITY_INVALID",
+            "Invalid synthetic participant.",
+          );
+        const key = `capacity:socket:${worker.id}:${index}`;
+        const claimed = await r.redis.set(key, socket.id, { NX: true, EX: 30 });
+        if (!claimed)
+          throw new PlatformError(
+            409,
+            "LOAD_IDENTITY_ACTIVE",
+            "Synthetic participant already connected.",
+          );
+        socket.data.capacity = {
+          runId: run.id,
+          workerId: worker.id,
+          index,
+          key,
+          expiresAt: run.expires_at.getTime(),
+          chatPerSecond: run.chat_per_second,
+          profile: run.profile,
+        };
+        socket.data.identity = `synthetic:${run.id}:${worker.id}:${index}`;
+        next();
+        return;
+      }
       checkCsrf(
         socket.handshake.headers.origin,
         socket.handshake.auth.csrf,
@@ -138,7 +181,18 @@ export function createRealtime(
         c.AUTH_RATE_WINDOW_MS,
       );
       const auth = await session(r, socket.handshake.headers.cookie);
+      const guest = c.DEMO_ENABLED
+        ? await findGuest(r, socket.handshake.headers.cookie)
+        : null;
+      if (c.DEMO_ENABLED && !guest)
+        throw new PlatformError(
+          401,
+          "GUEST_REQUIRED",
+          "Refresh to establish a temporary guest identity.",
+        );
+      socket.data.guest = guest;
       socket.data.identity =
+        guest?.id ||
         auth?.tokenHash ||
         digest(cookies(socket.handshake.headers.cookie).ss_csrf || "");
       socket.data.sessionHash = auth?.tokenHash;
@@ -154,6 +208,52 @@ export function createRealtime(
     let streamId: string | undefined;
     let expiryTimer: ReturnType<typeof setTimeout> | undefined;
     let lastHeartbeat = 0;
+    const agent = socket.data.capacity as
+      | {
+          runId: string;
+          workerId: string;
+          index: number;
+          key: string;
+          expiresAt: number;
+          chatPerSecond: number;
+          profile: string;
+        }
+      | undefined;
+    const guest = socket.data.guest as { id: string; name: string } | null;
+    const agentTimer = agent
+      ? setInterval(() => {
+          void (async () => {
+            const active = await r.db.query(
+              "SELECT id FROM capacity_runs WHERE id=$1 AND state='RUNNING' AND expires_at>now()",
+              [agent.runId],
+            );
+            if (!active.rowCount || Date.now() > agent.expiresAt) {
+              socket.disconnect(true);
+              return;
+            }
+            const valid = await r.redis.eval(
+              "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('EXPIRE',KEYS[1],30) else return 0 end",
+              { keys: [agent.key], arguments: [socket.id] },
+            );
+            if (!valid) socket.disconnect(true);
+          })().catch(() => socket.disconnect(true));
+        }, 10000)
+      : undefined;
+    agentTimer?.unref();
+    if (guest) {
+      void r.db
+        .query("SELECT expires_at FROM demo_guests WHERE id=$1", [guest.id])
+        .then((result) => {
+          const expires = result.rows[0]?.expires_at as Date | undefined;
+          if (!expires || !socket.connected) return;
+          expiryTimer = setTimeout(
+            () => socket.disconnect(true),
+            Math.max(0, expires.getTime() - Date.now()),
+          );
+          expiryTimer.unref();
+        })
+        .catch(() => socket.disconnect(true));
+    }
     if (socket.data.sessionHash) {
       void r.db
         .query("SELECT expires_at FROM auth_sessions WHERE token_hash=$1", [
@@ -208,9 +308,13 @@ export function createRealtime(
             c.WRITE_RATE_LIMIT,
             c.AUTH_RATE_WINDOW_MS,
           );
-          const found = await r.db.query("SELECT id FROM streams WHERE id=$1", [
-            value.streamId,
-          ]);
+          const found = await r.db.query(
+            "SELECT id FROM streams WHERE id=$1" +
+              (c.DEMO_ENABLED
+                ? " AND id IN (SELECT stream_id FROM demo_channels)"
+                : ""),
+            [value.streamId],
+          );
           if (!found.rowCount)
             throw new PlatformError(
               404,
@@ -257,7 +361,7 @@ export function createRealtime(
               "Chat transport is unavailable.",
             );
           const auth = await session(r, socket.handshake.headers.cookie);
-          if (!auth)
+          if (!auth && !guest && !agent)
             throw new PlatformError(
               401,
               "AUTH_REQUIRED",
@@ -277,16 +381,68 @@ export function createRealtime(
               "ROOM_REQUIRED",
               "Join this stream before sending.",
             );
+          if (agent) {
+            if (agent.profile !== "chat" || agent.chatPerSecond < 1)
+              throw new PlatformError(
+                403,
+                "CHAT_PROFILE_REQUIRED",
+                "This grant permits connections only.",
+              );
+            await rate(
+              r,
+              "synthetic-chat:" + agent.runId,
+              agent.chatPerSecond,
+              1000,
+            );
+            const seq = String(
+              (
+                await r.db.query(
+                  "SELECT nextval('chat_messages_seq_seq')::text AS seq",
+                )
+              ).rows[0].seq,
+            );
+            const message = {
+              id: randomUUID(),
+              seq,
+              streamId,
+              username: `Load-${agent.runId.slice(0, 6)}-${agent.index}`,
+              content: "[SYNTHETIC] " + body.content,
+              createdAt: new Date().toISOString(),
+              synthetic: true,
+            };
+            io.to("stream:" + streamId).emit("message", message);
+            if (typeof ack === "function") ack({ ok: true, data: message });
+            return;
+          }
+          if (guest && !(await findGuest(r, socket.handshake.headers.cookie)))
+            throw new PlatformError(
+              401,
+              "GUEST_EXPIRED",
+              "Refresh your guest session.",
+            );
           await rate(
             r,
-            "chat:" + auth.user.id,
+            "chat:" + (guest?.id || auth!.user.id),
             c.CHAT_RATE_LIMIT,
             c.CHAT_RATE_WINDOW_MS,
           );
+          if (guest)
+            await rate(
+              r,
+              "guest-chat-ip:" + socket.handshake.address,
+              120,
+              60000,
+            );
           const row = (
             await r.db.query(
-              "INSERT INTO chat_messages(id,stream_id,sender_id,content) SELECT $1,s.id,$2,$3 FROM streams s WHERE s.id=$4 AND s.lifecycle!='ended' RETURNING id,seq::text,created_at",
-              [randomUUID(), auth.user.id, body.content, streamId],
+              "INSERT INTO chat_messages(id,stream_id,sender_id,guest_id,content) SELECT $1,s.id,$2,$3,$4 FROM streams s WHERE s.id=$5 AND s.lifecycle!='ended' RETURNING id,seq::text,created_at",
+              [
+                randomUUID(),
+                guest ? null : auth!.user.id,
+                guest?.id || null,
+                body.content,
+                streamId,
+              ],
             )
           ).rows[0];
           if (!row)
@@ -299,7 +455,7 @@ export function createRealtime(
             id: row.id,
             seq: row.seq,
             streamId,
-            username: auth.user.username,
+            username: guest?.name || auth!.user.username,
             content: body.content,
             createdAt: row.created_at.toISOString(),
           };
@@ -329,6 +485,12 @@ export function createRealtime(
               "Use a valid player heartbeat.",
             );
           const body = parsed.data;
+          if (agent)
+            throw new PlatformError(
+              403,
+              "SYNTHETIC_PRESENCE_DENIED",
+              "Synthetic connections are not decoded viewers.",
+            );
           if (streamId !== body.streamId)
             throw new PlatformError(
               403,
@@ -406,6 +568,14 @@ export function createRealtime(
     );
     socket.on("disconnect", () => {
       if (expiryTimer) clearTimeout(expiryTimer);
+      if (agentTimer) clearInterval(agentTimer);
+      if (agent)
+        void r.redis
+          .eval(
+            "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end",
+            { keys: [agent.key], arguments: [socket.id] },
+          )
+          .catch(() => {});
       void leavePresence().catch(() => {});
     });
   });

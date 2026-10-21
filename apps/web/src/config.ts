@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 export const webConfigSchema = z.object({
+  VITE_DEMO_MODE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
   VITE_CHAT_WINDOW_LIMIT: z.coerce
     .number()
     .int()

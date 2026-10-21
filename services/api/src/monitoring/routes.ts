@@ -1,3 +1,4 @@
+import { capacityAdminRoutes } from "../demo/routes.js";
 import { chaosRoutes } from "../chaos/routes.js";
 import type { PlatformConfig } from "../platform/config.js";
 import type { Config } from "../config.js";
@@ -54,6 +55,7 @@ export function monitoringRouter(
       next(e);
     }
   });
+  router.use(capacityAdminRoutes(r));
   recoveryRoutes(router, r);
   chaosRoutes(router, r, platformConfig, media);
   router.get("/snapshot", async (_req, res, next) => {

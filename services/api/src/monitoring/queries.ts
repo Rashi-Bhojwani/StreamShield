@@ -1,5 +1,11 @@
 export const metricQueries = [
   {
+    id: "sockets",
+    label: "API Socket.IO connections",
+    unit: "connections",
+    query: 'sum(streamshield_socket_connections{job="api"})',
+  },
+  {
     id: "throughput",
     label: "API throughput",
     unit: "req/s",

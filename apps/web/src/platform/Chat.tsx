@@ -187,6 +187,7 @@ export function Chat({
     streamId,
     auth.csrf,
     auth.user?.id,
+    auth.guest?.id,
     auth.heartbeatMs,
     playerContainer,
     refreshAuth,
@@ -345,7 +346,7 @@ export function Chat({
           send();
         }}
       >
-        {auth.user ? (
+        {auth.user || auth.guest ? (
           <>
             <label className="sr-only" htmlFor="chat-message">
               Your message
@@ -367,7 +368,7 @@ export function Chat({
             />
             <div>
               <span className="fine-print">
-                Chatting as {auth.user.username}
+                Chatting as {auth.guest?.name || auth.user?.username}
               </span>
               <button
                 className="button primary"

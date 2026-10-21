@@ -68,3 +68,7 @@ The independent Healer consumes actual Phase 5 evidence, chooses typed versioned
 ## Phase 7 interactive experiments
 
 Implemented six allowlisted authenticated local fault scenarios, separate fault/recovery authorities, durable admission/expiry/audit, Chaos Laboratory and genuine live Demo. Database and unowned broadcaster controls remain visibly disabled. The independent observer/Healer interfaces, Phase 4 routing and prior regression suites are retained. See [Phase 7 plan](docs/PHASE_7_PLAN.md), [handoff](docs/PHASE_7.md) and [measured results](docs/PHASE_7_MEASUREMENTS.json) for actual acceptance evidence and current limitations. Phase 8 high-concurrency testing remains unimplemented.
+
+## Three-channel streaming and capacity demonstration
+
+Builds on merged Phase 7 PR #8 in the verified integration branch. Additive demo mappings/guest identity/local capability tables and capacity audit extend existing platform storage without data reset. Three stable public channels, guest chat, private publishing, LAN ingest, capacity profiles/dashboard and three-stream presentation are implemented on feature/three-channel-streaming-load-demo. Runtime verification and exact achieved load remain pending the new integration job; the 50K milestone is explicitly unverified. The original five CI jobs retain Phase 1–7 coverage with demo mode disabled. See docs/THREE_CHANNEL_DEMO_PLAN.md and docs/THREE_CHANNEL_DEMO_MEASUREMENTS.json for current evidence.
