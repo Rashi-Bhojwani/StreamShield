@@ -141,3 +141,53 @@ jobs:
           if-no-files-found: ignore
       - if: always()
         run: if [ -f .local/chaos/compose.yml ]; then npm run chaos:down; fi
+
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:demo -- --enable-local-chaos
+      - run: node infrastructure/demo/compose.mjs config --quiet
+      - run: npm run demo:up
+      - run: npm run chaos:probe
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:demo
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: three-channel-demo-results
+          path: test-results/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/demo/compose.yml ]; then npm run demo:down; fi
+
+  capacity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:demo
+      - run: npm run demo:up
+      - run: npm run capacity:run -- --profile socket --clients 100 --duration 10 --ramp 5 --authorize-owned-target
+      - run: npm run capacity:run -- --profile socket --clients 1000 --duration 20 --ramp 20 --authorize-owned-target
+      - run: node scripts/capacity/collect-evidence.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bounded-capacity-results
+          path: test-results/capacity/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/demo/compose.yml ]; then npm run demo:down; fi

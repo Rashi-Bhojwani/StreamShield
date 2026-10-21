@@ -42,6 +42,13 @@ export function createCatalog(
       observers.set(row.media_path, source);
     }
     const evidence = await source.getStream();
+    if (c.DEMO_ENABLED)
+      await r.db.query(
+        `WITH changed AS (
+      UPDATE demo_channels SET last_status=$2 WHERE stream_id=$1 AND last_status IS DISTINCT FROM $2 RETURNING stream_id
+    ) INSERT INTO demo_broadcast_history(stream_id,status) SELECT stream_id,$2 FROM changed`,
+        [row.id, evidence.status],
+      );
     if (row.lifecycle === "ready" && evidence.status === "live") {
       await r.db.query(
         "UPDATE streams SET started_at=COALESCE(started_at,now()),last_live_at=now(),ended_at=NULL WHERE id=$1 AND lifecycle='ready'",
@@ -75,11 +82,24 @@ export function createCatalog(
     invalidate: (path: string) => observers.delete(path),
     observe,
     async get(id: string) {
-      if (c.ENABLE_LEGACY_STREAM && id === mediaConfig.MEDIA_STREAM_PATH)
+      if (
+        !c.DEMO_ENABLED &&
+        c.ENABLE_LEGACY_STREAM &&
+        id === mediaConfig.MEDIA_STREAM_PATH
+      )
         return legacy.getStream();
-      if (!z.uuid().safeParse(id).success)
+      if (
+        !z.uuid().safeParse(id).success &&
+        !(c.DEMO_ENABLED && /^streamer-[123]$/.test(id))
+      )
         throw new PlatformError(404, "STREAM_NOT_FOUND", "Stream not found.");
-      const result = await r.db.query(streamSelect + " WHERE s.id=$1", [id]);
+      const result = await r.db.query(
+        streamSelect +
+          (c.DEMO_ENABLED
+            ? " WHERE s.id IN (SELECT stream_id FROM demo_channels) AND (s.id::text=$1 OR c.slug=$1)"
+            : " WHERE s.id::text=$1"),
+        [id],
+      );
       if (!result.rows[0])
         throw new PlatformError(404, "STREAM_NOT_FOUND", "Stream not found.");
       return observe(result.rows[0]);
@@ -92,7 +112,10 @@ export function createCatalog(
     ) {
       const result = await r.db.query(
         streamSelect +
-          " WHERE ($1::text IS NULL OR c.id::text=$1) AND ($2='' OR s.title ILIKE $3 OR c.display_name ILIKE $3 OR c.slug ILIKE $3) ORDER BY s.created_at DESC,s.id DESC LIMIT $4 OFFSET $5",
+          (c.DEMO_ENABLED
+            ? " WHERE s.id IN (SELECT stream_id FROM demo_channels) AND "
+            : " WHERE ") +
+          "($1::text IS NULL OR c.id::text=$1) AND ($2='' OR s.title ILIKE $3 OR c.display_name ILIKE $3 OR c.slug ILIKE $3) ORDER BY s.created_at DESC,s.id DESC LIMIT $4 OFFSET $5",
         [
           channel || null,
           search,
@@ -104,6 +127,7 @@ export function createCatalog(
       const rows = result.rows.slice(0, limit);
       const streams = await Promise.all(rows.map(observe));
       if (
+        !c.DEMO_ENABLED &&
         c.ENABLE_LEGACY_STREAM &&
         offset === 0 &&
         !channel &&

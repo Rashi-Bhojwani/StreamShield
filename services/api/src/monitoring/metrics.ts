@@ -32,6 +32,12 @@ export function createMetrics() {
     help: "Locally connected Socket.IO clients",
     registers: [registry],
   });
+  const chat = new Counter({
+    name: "streamshield_chat_accepted_total",
+    help: "Accepted chat events; guest/account are persisted, synthetic is ephemeral",
+    labelNames: ["kind", "channel"],
+    registers: [registry],
+  });
   const middleware: RequestHandler = (req, res, next) => {
     inflight.inc();
     const start = performance.now();
@@ -71,6 +77,6 @@ export function createMetrics() {
     res.once("close", finish);
     next();
   };
-  return { registry, middleware, sockets };
+  return { registry, middleware, sockets, chat };
 }
 export type ApiMetrics = ReturnType<typeof createMetrics>;

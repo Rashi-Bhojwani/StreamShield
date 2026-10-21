@@ -1,5 +1,25 @@
 export const metricQueries = [
   {
+    id: "chat",
+    label: "Durable chat writes",
+    unit: "messages/s",
+    query:
+      'sum(rate(streamshield_chat_accepted_total{job="api",kind!="synthetic"}[1m]))',
+  },
+  {
+    id: "synthetic-chat",
+    label: "Accepted ephemeral synthetic chat",
+    unit: "messages/s",
+    query:
+      'sum(rate(streamshield_chat_accepted_total{job="api",kind="synthetic"}[1m]))',
+  },
+  {
+    id: "sockets",
+    label: "API Socket.IO connections",
+    unit: "connections",
+    query: 'sum(streamshield_socket_connections{job="api"})',
+  },
+  {
     id: "throughput",
     label: "API throughput",
     unit: "req/s",

@@ -1,3 +1,5 @@
+import { demoRoutes } from "../demo/routes.js";
+import { ensureGuest } from "../demo/guests.js";
 import { monitoringRouter } from "../monitoring/routes.js";
 import { randomUUID } from "node:crypto";
 import express, {
@@ -51,6 +53,23 @@ export async function createPlatform(
 ) {
   const catalog = createCatalog(r, c, media);
   const router = express.Router();
+  router.use(demoRoutes(r, c, media, catalog));
+  router.use((req, _res, next) => {
+    if (
+      c.DEMO_ENABLED &&
+      (["/auth/register", "/auth/login", "/auth/profile"].includes(req.path) ||
+        req.path.startsWith("/studio") ||
+        (req.method !== "GET" && req.path.startsWith("/channels")))
+    )
+      return next(
+        new PlatformError(
+          403,
+          "PRIVATE_PROVISIONING_ONLY",
+          "Use trusted local provisioning for this demonstration.",
+        ),
+      );
+    next();
+  });
   const dummy = await hash(secret(), {
     algorithm: Algorithm.Argon2id,
     memoryCost: 19456,
@@ -127,6 +146,8 @@ export async function createPlatform(
     const auth = await session(r, req.headers.cookie);
     res.json({
       user: auth?.user || null,
+      demoMode: c.DEMO_ENABLED,
+      guest: c.DEMO_ENABLED ? await ensureGuest(r, c, req, res) : null,
       csrf: token,
       presenceHeartbeatMs: c.PRESENCE_HEARTBEAT_MS,
     });
@@ -215,7 +236,11 @@ export async function createPlatform(
       req.query,
     );
     const rows = await r.db.query(
-      "SELECT c.*,u.username FROM channels c JOIN users u ON u.id=c.owner_id WHERE c.display_name ILIKE $1 OR c.slug ILIKE $1 ORDER BY c.created_at DESC,c.id LIMIT $2 OFFSET $3",
+      "SELECT c.*,u.username FROM channels c JOIN users u ON u.id=c.owner_id WHERE " +
+        (c.DEMO_ENABLED
+          ? "c.id IN (SELECT channel_id FROM demo_channels) AND "
+          : "") +
+        " (c.display_name ILIKE $1 OR c.slug ILIKE $1) ORDER BY c.created_at DESC,c.id LIMIT $2 OFFSET $3",
       ["%" + q.q.replace(/[%_\\]/g, "\\$&") + "%", q.limit + 1, q.offset],
     );
     res.json({
@@ -229,7 +254,11 @@ export async function createPlatform(
       req.params.slug,
     );
     const result = await r.db.query(
-      "SELECT c.*,u.username FROM channels c JOIN users u ON u.id=c.owner_id WHERE c.slug=$1",
+      "SELECT c.*,u.username FROM channels c JOIN users u ON u.id=c.owner_id WHERE " +
+        (c.DEMO_ENABLED
+          ? "c.id IN (SELECT channel_id FROM demo_channels) AND "
+          : "") +
+        " c.slug=$1",
       [slug],
     );
     if (!result.rows[0])
@@ -454,9 +483,13 @@ export async function createPlatform(
   });
   route("get", "/streams/:id/presence", async (req, res) => {
     const streamId = id(req.params.id);
-    const row = await r.db.query("SELECT id FROM streams WHERE id=$1", [
-      streamId,
-    ]);
+    const row = await r.db.query(
+      "SELECT id FROM streams WHERE id=$1" +
+        (c.DEMO_ENABLED
+          ? " AND id IN (SELECT stream_id FROM demo_channels)"
+          : ""),
+      [streamId],
+    );
     if (!row.rowCount)
       throw new PlatformError(404, "STREAM_NOT_FOUND", "Stream not found.");
     res.json({

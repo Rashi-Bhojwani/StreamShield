@@ -16,6 +16,7 @@ export default defineConfig({
           environment: "jsdom",
           setupFiles: ["./tests/web-setup.ts"],
           env: {
+            VITE_DEMO_MODE: "false",
             VITE_API_BASE_URL: "/api/v1",
             VITE_API_TIMEOUT_MS: "5000",
             VITE_STATUS_POLL_MS: "15000",

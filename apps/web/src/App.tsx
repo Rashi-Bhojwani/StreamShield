@@ -1,3 +1,6 @@
+import { config } from "./config";
+import { DemoRoutes } from "./demo/ThreeChannels";
+import { useAuth } from "./platform/auth-context";
 import { AuthProvider, AuthPage, Profile, Protected } from "./platform/Auth";
 
 import { ChannelPage, Channels } from "./platform/Channels";
@@ -84,80 +87,94 @@ function About() {
     </div>
   );
 }
-export function App() {
+function LegacyRoutes() {
   return (
-    <AuthProvider>
-      <Routes>
+    <Routes>
+      <Route
+        path="/control/*"
+        element={
+          <Suspense
+            fallback={<p className="loading-surface">Loading Control…</p>}
+          >
+            <Control />
+          </Suspense>
+        }
+      />
+      <Route element={<LiveShell />}>
+        <Route path="/login" element={<AuthPage />} />
+        <Route path="/signup" element={<AuthPage signup />} />
+        <Route path="/profile" element={<Profile />} />
         <Route
-          path="/control/*"
+          path="/studio"
+          element={
+            <Protected>
+              <Suspense
+                fallback={<p className="loading-surface">Loading Studio…</p>}
+              >
+                <Studio />
+              </Suspense>
+            </Protected>
+          }
+        />
+        <Route path="/channels" element={<Channels />} />
+        <Route path="/channels/:slug" element={<ChannelPage />} />
+        <Route path="/" element={<Discovery />} />
+        <Route path="/live" element={<Discovery view="live" />} />
+        <Route path="/search" element={<Discovery view="search" />} />
+        <Route path="/explore" element={<Explore />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/diagnostics" element={<Diagnostics />} />
+        <Route
+          path="/foundation"
+          element={<Navigate to="/diagnostics" replace />}
+        />
+        <Route
+          path="/watch/:id"
           element={
             <Suspense
-              fallback={<p className="loading-surface">Loading Control…</p>}
+              fallback={
+                <p className="loading-surface" role="status">
+                  Loading the live player…
+                </p>
+              }
             >
-              <Control />
+              <Watch />
             </Suspense>
           }
         />
-        <Route element={<LiveShell />}>
-          <Route path="/login" element={<AuthPage />} />
-          <Route path="/signup" element={<AuthPage signup />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route
-            path="/studio"
-            element={
-              <Protected>
-                <Suspense
-                  fallback={<p className="loading-surface">Loading Studio…</p>}
-                >
-                  <Studio />
-                </Suspense>
-              </Protected>
-            }
-          />
-          <Route path="/channels" element={<Channels />} />
-          <Route path="/channels/:slug" element={<ChannelPage />} />
-          <Route path="/" element={<Discovery />} />
-          <Route path="/live" element={<Discovery view="live" />} />
-          <Route path="/search" element={<Discovery view="search" />} />
-          <Route path="/explore" element={<Explore />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/diagnostics" element={<Diagnostics />} />
-          <Route
-            path="/foundation"
-            element={<Navigate to="/diagnostics" replace />}
-          />
-          <Route
-            path="/watch/:id"
-            element={
-              <Suspense
-                fallback={
-                  <p className="loading-surface" role="status">
-                    Loading the live player…
-                  </p>
-                }
-              >
-                <Watch />
-              </Suspense>
-            }
-          />
-          <Route
-            path="*"
-            element={
-              <div className="not-found">
-                <span className="state-symbol">
-                  <Icon name="search" />
-                </span>
-                <h1>This page is off the air.</h1>
-                <p>The page you’re looking for doesn’t exist.</p>
-                <Link className="button primary" to="/">
-                  Back to Home
-                  <Icon name="arrow" />
-                </Link>
-              </div>
-            }
-          />
-        </Route>
-      </Routes>
+        <Route
+          path="*"
+          element={
+            <div className="not-found">
+              <span className="state-symbol">
+                <Icon name="search" />
+              </span>
+              <h1>This page is off the air.</h1>
+              <p>The page you’re looking for doesn’t exist.</p>
+              <Link className="button primary" to="/">
+                Back to Home
+                <Icon name="arrow" />
+              </Link>
+            </div>
+          }
+        />
+      </Route>
+    </Routes>
+  );
+}
+
+function Experience() {
+  const auth = useAuth();
+  return config.VITE_DEMO_MODE || auth.demoMode ? (
+    <DemoRoutes />
+  ) : (
+    <LegacyRoutes />
+  );
+}
+export function App() {
+  return (
+    <AuthProvider>
+      <Experience />
     </AuthProvider>
   );
 }

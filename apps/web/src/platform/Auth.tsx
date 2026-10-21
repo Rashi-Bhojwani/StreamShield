@@ -28,6 +28,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
+        demoMode: query.data?.demoMode || false,
+        guest: query.data?.guest || null,
         user: query.data?.user || null,
         csrf: token,
         loading: query.isPending,
@@ -56,6 +58,19 @@ export function Protected({ children }: { children: ReactNode }) {
         >
           Retry connection
         </button>
+      </div>
+    );
+  if (!auth.user && auth.demoMode)
+    return (
+      <div className="cc-access">
+        <h1>Private operator access</h1>
+        <p>
+          Use the trusted local terminal to issue a short-lived administrator
+          session.
+        </p>
+        <Link className="button secondary" to="/">
+          Return to live channels
+        </Link>
       </div>
     );
   if (!auth.user)

@@ -1,5 +1,23 @@
 # StreamShield Live + Control
 
+The new explicit **three-channel demo mode** provides Streamer 1/2/3, guest viewing/chat, private CLI broadcaster provisioning and one-use local administrator access. The presentation screen combines three genuine live players, real capacity measurements and the existing independent Healer/Chaos controls. The **50,000 simulated-client target remains unverified**; workload profiles and achieved counts are kept separate.
+
+Platform acceptance passed all seven [CI jobs](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528) with 174 unit/security tests, genuine three-source playback, guest isolation and real recovery under bounded load. The isolated 1,000-socket trial reached 252 connected sockets; the 50K milestone remains PARTIAL. [Actual measurements and screenshots](docs/THREE_CHANNEL_DEMO.md#verified-results-and-capacity-limits).
+
+See [three-channel Windows/OBS/LAN guide](docs/THREE_CHANNEL_DEMO.md), [capacity harness and distributed stages](docs/CAPACITY_TESTING.md), [design](docs/THREE_CHANNEL_DEMO_PLAN.md) and [actual verification status](docs/THREE_CHANNEL_DEMO_MEASUREMENTS.json).
+
+```powershell
+npm.cmd ci
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+npm.cmd run setup:demo -- --enable-local-chaos
+npm.cmd run demo:up
+npm.cmd run demo:admin
+$env:TEST_PUBLISH_DURATION_SECONDS="600"
+npm.cmd run broadcast:demo -- all
+```
+
+Open http://127.0.0.1:5173 for the three public channels. Use the private terminal-issued link for `/control/three-stream-demo` and `/control/capacity`; no public password login exists in this mode. `npm.cmd run demo:down` preserves data volumes. Earlier phase workflows below apply with demo mode off; do not run fault compositions simultaneously.
+
 Phase 7 adds the administrator-only **Chaos Laboratory** and **Live Demo**. Inject one of six real allowlisted local faults, watch the independent observer/Healer respond, and inspect durable incident/recovery evidence. Chaos never executes recovery playbooks. Database and broadcaster fault controls remain disabled with explicit safety reasons. See [Phase 7 Windows setup, scenarios and demo](docs/PHASE_7.md), [design](docs/PHASE_7_PLAN.md), and [actual measurements](docs/PHASE_7_MEASUREMENTS.json).
 
 All five [clean CI jobs](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39466656790) passed, including 155 unit/security tests and all six authenticated real-fault experiments with two independent decoded live streams. [Measured results and screenshots](docs/PHASE_7.md#verified-results) distinguish actual component restoration, timed cleanup, control-read outages and browser playback.

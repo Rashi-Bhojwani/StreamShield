@@ -37,7 +37,7 @@ async function main() {
     lifecycle.ready = true;
     logger.info({ port: config.API_PORT }, "Platform API listening");
   });
-  const io = createRealtime(server, r, c, config, platform);
+  const io = createRealtime(server, r, c, config, platform, metrics);
   if (process.env.OBS_URL) attachMonitoring(io, r);
   io.on("connection", (socket) => {
     metrics.sockets.inc();

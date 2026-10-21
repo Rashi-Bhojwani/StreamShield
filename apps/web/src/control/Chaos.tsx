@@ -356,6 +356,76 @@ function ScenarioCard({
     </article>
   );
 }
+export function CompactChaos() {
+  const q = useChaos(),
+    cache = useQueryClient(),
+    [chosen, setChosen] = useState("crash-api"),
+    [selection, setSelection] = useState<ChaosScenario | null>(null);
+  const policy = q.data?.scenarios.find((s) => s.id === chosen),
+    experiment =
+      q.data?.experiments.find((e) => e.id === q.data?.activeId) ||
+      q.data?.experiments[0];
+  return (
+    <section className="capacity-panel chaos-workspace">
+      <p className="cc-kicker">CONTROLLED FAILURE / INDEPENDENT RECOVERY</p>
+      <h2>Introduce a real failure</h2>
+      <p>
+        Confirm the exact target. The independent Healer detects and repairs;
+        this panel never restores a service.
+      </p>
+      <label>
+        Failure scenario
+        <select
+          aria-label="Presentation failure scenario"
+          value={chosen}
+          onChange={(e) => setChosen(e.target.value)}
+        >
+          {q.data?.scenarios
+            .filter((s) => s.supported)
+            .map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+        </select>
+      </label>
+      <p>{policy?.failure}</p>
+      <button
+        className="chaos-inject"
+        disabled={!q.live || !policy?.available}
+        onClick={() => policy && setSelection(policy)}
+      >
+        Configure selected failure
+      </button>
+      {policy?.reason && <p className="chaos-denial">{policy.reason}</p>}
+      {!q.live && (
+        <p className="chaos-denial">
+          Current local controller admission is unconfirmed.
+        </p>
+      )}
+      {experiment ? (
+        <Experiment e={experiment} compact />
+      ) : (
+        <p className="capacity-empty">
+          The actual timeline appears after an experiment is admitted.
+        </p>
+      )}
+      {selection && q.data && (
+        <Confirmation
+          scenario={selection}
+          snapshot={q.data}
+          onClose={() => setSelection(null)}
+          onCreated={() =>
+            void cache.invalidateQueries({ queryKey: ["monitoring"] })
+          }
+        />
+      )}
+      <Link className="text-link" to="/control/chaos">
+        All scenarios and experiment history ↗
+      </Link>
+    </section>
+  );
+}
 export function ChaosLab() {
   const q = useChaos(),
     cache = useQueryClient(),

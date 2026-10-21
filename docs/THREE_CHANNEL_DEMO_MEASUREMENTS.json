@@ -1,0 +1,1999 @@
+{
+  "platformStatus": "PASS",
+  "capacity50000Status": "PARTIAL_UNVERIFIED",
+  "repository": "https://github.com/Rashi-Bhojwani/StreamShield",
+  "branch": "feature/three-channel-streaming-load-demo",
+  "pullRequest": "https://github.com/Rashi-Bhojwani/StreamShield/pull/9",
+  "testedCommit": "60ff491ad9470d97008396d9cd4e64ed37f94b72",
+  "measuredAt": "2026-10-21T08:22:58.697Z",
+  "ci": {
+    "url": "https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "verify",
+        "conclusion": "success",
+        "url": "https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528/job/119114797918"
+      },
+      {
+        "name": "monitoring",
+        "conclusion": "success",
+        "url": "https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528/job/119114798154"
+      },
+      {
+        "name": "resilience",
+        "conclusion": "success",
+        "url": "https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528/job/119114798283"
+      },
+      {
+        "name": "healing",
+        "conclusion": "success",
+        "url": "https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528/job/119114798427"
+      },
+      {
+        "name": "chaos",
+        "conclusion": "success",
+        "url": "https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528/job/119114798461"
+      },
+      {
+        "name": "capacity",
+        "conclusion": "success",
+        "url": "https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528/job/119114798602"
+      },
+      {
+        "name": "demo",
+        "conclusion": "success",
+        "url": "https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39567930528/job/119114798714"
+      }
+    ]
+  },
+  "localVerification": {
+    "baselineUnitTests": 155,
+    "currentUnitTests": 174,
+    "lint": "PASS",
+    "format": "PASS",
+    "typecheck": "PASS",
+    "build": "PASS",
+    "composeConfig": "PASS",
+    "fullLocalVfsRuntime": "Not run in the storage-constrained 32 GB cloud VFS snapshot; real integration completed on clean Linux CI. No named data volumes or user work deleted."
+  },
+  "capacityAcceptance": {
+    "targetConcurrentSimulatedClients": 50000,
+    "targetAchieved": false,
+    "largestRequestedSocketStage": 1000,
+    "maximumObservedSocketConnections": 252,
+    "cleanSocketBaseline": 100,
+    "largestStageConnectionFailures": 11117,
+    "scope": "Observed socket peaks belong to the separate socket-only capacity job; they are not decoded viewers or proof of three-video performance at that scale. Use the actual numeric field above.",
+    "configurationConstraint": "Default RESILIENCE_WORKER_CONNECTIONS=512 in a single API gateway; proxied sockets consume client/upstream connections. The bounded trial is consistent with this constraint, not a full root-cause or sustainable-capacity guarantee."
+  },
+  "measurementDefinitions": {
+    "concurrency": "HTTP/HLS active means actual fetches in flight; socket/chat means connected synthetic clients; browser means active decoded Chromium viewers. Target and allocation are separate.",
+    "histograms": {
+      "upperBoundsMs": [
+        1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1000, 2000, 4000, 8000, 16000,
+        32000, 60000
+      ],
+      "percentiles": "Merged observation bucket upper bounds; null when no observations. Worker metrics retained below."
+    },
+    "http": "Completed workload HTTP requests and response bytes; intentional shutdown aborts excluded. Browser/socket handshake HTTP traffic is not instrumented by this raw-fetch counter.",
+    "chat": "Synthetic sends are visibly labelled and ephemeral; confirmed delivery requires another same-room client. Actual guest messages persist in PostgreSQL and are independently counted by server metrics.",
+    "faults": "Original observer/Healer clocks plus separate functional verification. Network case is timed cleanup and safe-read/circuit reconnection; no container repair is attributed to cleanup.",
+    "playback": "Three independent browser players sampled every 250 ms during each fault. A counted interruption uses a >=2000 ms consecutive decoded-progress gap. Server playbackInterruptionMs remains null.",
+    "audit": "All actual generator final reports were confirmed and counters matched server history. Protocol-only validation vectors were removed by their newly-created test UUID, leaving actual workload history intact."
+  },
+  "healthyProfiles": [
+    {
+      "runId": "0b40e55d-f43f-4654-8c39-9cf3d3a94f71",
+      "profile": "api",
+      "faultScenario": null,
+      "requestedClients": 20,
+      "allocatedClients": 20,
+      "observedSingleWorkerPeak": 14,
+      "elapsedSeconds": 12.210068494,
+      "httpRequests": 1060,
+      "httpErrors": 0,
+      "httpResponseBytes": 1335470,
+      "httpP50Ms": 8,
+      "httpP95Ms": 32,
+      "httpP99Ms": 64,
+      "connections": 0,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "deadline",
+      "finalAuditConfirmed": true
+    },
+    {
+      "runId": "c9005522-0feb-438c-90f7-406862195f0c",
+      "profile": "socket",
+      "faultScenario": null,
+      "requestedClients": 100,
+      "allocatedClients": 100,
+      "observedSingleWorkerPeak": 100,
+      "elapsedSeconds": 12.255193799,
+      "httpRequests": 0,
+      "httpErrors": 0,
+      "httpResponseBytes": 0,
+      "httpP50Ms": null,
+      "httpP95Ms": null,
+      "httpP99Ms": null,
+      "connections": 100,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "deadline",
+      "finalAuditConfirmed": true
+    },
+    {
+      "runId": "e5fb57b1-c849-46ae-934e-6fcbeae95a39",
+      "profile": "chat",
+      "faultScenario": null,
+      "requestedClients": 12,
+      "allocatedClients": 12,
+      "observedSingleWorkerPeak": 12,
+      "elapsedSeconds": 12.230969445000001,
+      "httpRequests": 0,
+      "httpErrors": 0,
+      "httpResponseBytes": 0,
+      "httpP50Ms": null,
+      "httpP95Ms": null,
+      "httpP99Ms": null,
+      "connections": 12,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 21,
+      "messagesConfirmedByOtherClient": 21,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": 8,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "deadline",
+      "finalAuditConfirmed": true
+    },
+    {
+      "runId": "ab80fabb-2ea2-4c7a-a991-ce120319b627",
+      "profile": "hls",
+      "faultScenario": null,
+      "requestedClients": 6,
+      "allocatedClients": 6,
+      "observedSingleWorkerPeak": 2,
+      "elapsedSeconds": 12.174413735,
+      "httpRequests": 1283,
+      "httpErrors": 0,
+      "httpResponseBytes": 111579101,
+      "httpP50Ms": 2,
+      "httpP95Ms": 8,
+      "httpP99Ms": 16,
+      "connections": 0,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "deadline",
+      "finalAuditConfirmed": true
+    },
+    {
+      "runId": "81666844-da77-4636-9a86-bcb2aba204a8",
+      "profile": "browser",
+      "faultScenario": null,
+      "requestedClients": 3,
+      "allocatedClients": 3,
+      "observedSingleWorkerPeak": 3,
+      "elapsedSeconds": 14.325387194000001,
+      "httpRequests": 0,
+      "httpErrors": 0,
+      "httpResponseBytes": 0,
+      "httpP50Ms": null,
+      "httpP95Ms": null,
+      "httpP99Ms": null,
+      "connections": 0,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": 3,
+      "startupMs": 1260.0846580000002,
+      "stalls": 0,
+      "stopReason": "deadline",
+      "finalAuditConfirmed": true
+    }
+  ],
+  "boundedSocketStages": [
+    {
+      "runId": "92958295-8d1d-4a12-bea5-19935295d328",
+      "profile": "socket",
+      "faultScenario": null,
+      "requestedClients": 100,
+      "allocatedClients": 100,
+      "observedSingleWorkerPeak": 100,
+      "elapsedSeconds": 15.411389239999998,
+      "httpRequests": 0,
+      "httpErrors": 0,
+      "httpResponseBytes": 0,
+      "httpP50Ms": null,
+      "httpP95Ms": null,
+      "httpP99Ms": null,
+      "connections": 100,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "deadline",
+      "finalAuditConfirmed": true
+    },
+    {
+      "runId": "7ec64573-ffe6-495a-8982-453d298ad83c",
+      "profile": "socket",
+      "faultScenario": null,
+      "requestedClients": 1000,
+      "allocatedClients": 1000,
+      "observedSingleWorkerPeak": 252,
+      "elapsedSeconds": 40.521681493,
+      "httpRequests": 0,
+      "httpErrors": 0,
+      "httpResponseBytes": 0,
+      "httpP50Ms": null,
+      "httpP95Ms": null,
+      "httpP99Ms": null,
+      "connections": 252,
+      "connectionFailures": 11117,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "deadline",
+      "finalAuditConfirmed": true
+    }
+  ],
+  "faultLoadStages": [
+    {
+      "runId": "126884f0-486c-4b35-980f-26443c56d539",
+      "profile": "api",
+      "faultScenario": "crash-api",
+      "requestedClients": 20,
+      "allocatedClients": 20,
+      "observedSingleWorkerPeak": 6,
+      "elapsedSeconds": 25.226692578999998,
+      "httpRequests": 944,
+      "httpErrors": 0,
+      "httpResponseBytes": 1185349,
+      "httpP50Ms": 8,
+      "httpP95Ms": 32,
+      "httpP99Ms": 64,
+      "connections": 0,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "signal",
+      "finalAuditConfirmed": true
+    },
+    {
+      "runId": "7148f371-99b3-443c-88a1-a2653fb79d4b",
+      "profile": "api",
+      "faultScenario": "crash-edge",
+      "requestedClients": 20,
+      "allocatedClients": 20,
+      "observedSingleWorkerPeak": 6,
+      "elapsedSeconds": 23.867543111,
+      "httpRequests": 890,
+      "httpErrors": 0,
+      "httpResponseBytes": 1117345,
+      "httpP50Ms": 8,
+      "httpP95Ms": 32,
+      "httpP99Ms": 64,
+      "connections": 0,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "signal",
+      "finalAuditConfirmed": true
+    },
+    {
+      "runId": "1ac8d81d-467a-4824-88cc-04a83b15087a",
+      "profile": "api",
+      "faultScenario": "crash-primary",
+      "requestedClients": 20,
+      "allocatedClients": 20,
+      "observedSingleWorkerPeak": 20,
+      "elapsedSeconds": 29.732859988,
+      "httpRequests": 986,
+      "httpErrors": 0,
+      "httpResponseBytes": 1236366,
+      "httpP50Ms": 8,
+      "httpP95Ms": 1000,
+      "httpP99Ms": 2000,
+      "connections": 0,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "signal",
+      "finalAuditConfirmed": true
+    },
+    {
+      "runId": "d51aa45f-4275-4f0b-be67-fbfd7436bcd4",
+      "profile": "api",
+      "faultScenario": "crash-redis",
+      "requestedClients": 20,
+      "allocatedClients": 20,
+      "observedSingleWorkerPeak": 4,
+      "elapsedSeconds": 11.144839282,
+      "httpRequests": 286,
+      "httpErrors": 120,
+      "httpResponseBytes": 224179,
+      "httpP50Ms": 8,
+      "httpP95Ms": 32,
+      "httpP99Ms": 64,
+      "connections": 0,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "error-budget",
+      "finalAuditConfirmed": true
+    },
+    {
+      "runId": "0f81bbd8-c05d-4ecd-b9e5-effd086783b6",
+      "profile": "api",
+      "faultScenario": "network-timeout",
+      "requestedClients": 20,
+      "allocatedClients": 20,
+      "observedSingleWorkerPeak": 4,
+      "elapsedSeconds": 39.32808964,
+      "httpRequests": 1496,
+      "httpErrors": 0,
+      "httpResponseBytes": 1880501,
+      "httpP50Ms": 8,
+      "httpP95Ms": 32,
+      "httpP99Ms": 32,
+      "connections": 0,
+      "connectionFailures": 0,
+      "joinFailures": 0,
+      "reconnects": 0,
+      "messagesAttempted": 0,
+      "messagesConfirmedByOtherClient": 0,
+      "deliveryFailures": 0,
+      "deliveryP95Ms": null,
+      "verifiedDecodedBrowsers": null,
+      "startupMs": null,
+      "stalls": 0,
+      "stopReason": "signal",
+      "finalAuditConfirmed": true
+    }
+  ],
+  "faults": [
+    {
+      "id": "9f5ee55a-36e6-4121-bc39-7ef8c464b0c0",
+      "actor": "10000000-0000-4000-8000-000000000099",
+      "scenario": "crash-api",
+      "target": "api-1",
+      "state": "COMPLETED",
+      "createdAt": "2026-10-21T08:20:06.127Z",
+      "updatedAt": "2026-10-21T08:20:26.517Z",
+      "injectedAt": "2026-10-21T08:20:07.515Z",
+      "faultConfirmedAt": "2026-10-21T08:20:07.841Z",
+      "incidentDetectedAt": "2026-10-21T08:20:11.030Z",
+      "actionStartedAt": "2026-10-21T08:20:11.900Z",
+      "actionFinishedAt": "2026-10-21T08:20:12.161Z",
+      "verifiedAt": "2026-10-21T08:20:26.513Z",
+      "finishedAt": "2026-10-21T08:20:26.517Z",
+      "deadline": 1792570986127,
+      "faultExpiresAt": null,
+      "incidentId": "90f3789c-7525-4382-b39c-292fc8bfb77b",
+      "recoveryIds": ["32f4ce03-e004-4777-80c3-cff81909fe14"],
+      "priorRecoveryIds": [],
+      "reason": "Restoration independently verified",
+      "mechanism": "Independent Healer allowlisted service start; Phase 4 routing continuity is separate",
+      "cleanup": "NOT_REQUIRED",
+      "cancelRequestedBy": null,
+      "databasePersisted": true,
+      "evidence": {
+        "containerId": "840be5dfc5474c853d659a733ef45cc6e915e3afe8bcec1d678862991184815a",
+        "signal": "SIGKILL",
+        "killAccepted": true,
+        "stoppedObserved": true,
+        "recoveryAction": "start_stopped_service",
+        "recoveryPlaybook": "api-start",
+        "incidentPredatesFault": false,
+        "healerVerifiedAt": "2026-10-21T08:20:23.414Z",
+        "healerReceipt": "docker_start_accepted",
+        "independentBehaviorVerified": true,
+        "browserPlaybackVerified": false
+      },
+      "events": [
+        {
+          "kind": "CREATED",
+          "at": "2026-10-21T08:20:06.127Z",
+          "detail": "Administrator confirmed api-1"
+        },
+        {
+          "kind": "VALIDATING",
+          "detail": "Checking fresh health, independent Healer and deployment policy",
+          "at": "2026-10-21T08:20:06.453Z"
+        },
+        {
+          "kind": "INJECTING",
+          "detail": "Durable intent recorded before restricted fault injection",
+          "at": "2026-10-21T08:20:07.466Z"
+        },
+        {
+          "kind": "FAULT_CONFIRMED",
+          "detail": "Actual infrastructure fault confirmed by restricted adapter",
+          "at": "2026-10-21T08:20:07.843Z"
+        },
+        {
+          "kind": "AWAITING_DETECTION",
+          "detail": "Awaiting a confirmed Phase 5 incident",
+          "at": "2026-10-21T08:20:08.850Z"
+        },
+        {
+          "kind": "INCIDENT_CORRELATED",
+          "detail": "Independent recovery attempt 32f4ce03-e004-4777-80c3-cff81909fe14",
+          "at": "2026-10-21T08:20:11.910Z"
+        },
+        {
+          "kind": "INCIDENT_DETECTED",
+          "detail": "Confirmed Phase 5 detection",
+          "at": "2026-10-21T08:20:11.030Z"
+        },
+        {
+          "kind": "HEALING_OBSERVED",
+          "detail": "Independent Healer action observed: start stopped service",
+          "at": "2026-10-21T08:20:11.916Z"
+        },
+        {
+          "kind": "VERIFYING",
+          "detail": "Independent Healer verification observed",
+          "at": "2026-10-21T08:20:12.938Z"
+        },
+        {
+          "kind": "SERVICE_VERIFIED",
+          "detail": "Experiment independently verified actual service behavior",
+          "at": "2026-10-21T08:20:26.513Z"
+        },
+        {
+          "kind": "COMPLETED",
+          "detail": "Restoration independently verified",
+          "at": "2026-10-21T08:20:26.517Z"
+        }
+      ],
+      "measurements": {
+        "detectionMs": 3515,
+        "healingStartMs": 4385,
+        "actionMs": 261,
+        "restorationMs": 18998,
+        "playbackInterruptionMs": null
+      }
+    },
+    {
+      "id": "e8456d4a-3af0-468d-9802-8be1e523fac1",
+      "actor": "10000000-0000-4000-8000-000000000099",
+      "scenario": "crash-edge",
+      "target": "edge-1",
+      "state": "COMPLETED",
+      "createdAt": "2026-10-21T08:20:33.774Z",
+      "updatedAt": "2026-10-21T08:20:52.399Z",
+      "injectedAt": "2026-10-21T08:20:37.726Z",
+      "faultConfirmedAt": "2026-10-21T08:20:37.884Z",
+      "incidentDetectedAt": "2026-10-21T08:20:40.153Z",
+      "actionStartedAt": "2026-10-21T08:20:40.605Z",
+      "actionFinishedAt": "2026-10-21T08:20:40.865Z",
+      "verifiedAt": "2026-10-21T08:20:52.333Z",
+      "finishedAt": "2026-10-21T08:20:52.352Z",
+      "deadline": 1792571013774,
+      "faultExpiresAt": null,
+      "incidentId": "76f07dfd-a180-4e60-a164-20fdf3398edc",
+      "recoveryIds": ["076a7e15-3196-4cde-a8f9-626964c11035"],
+      "priorRecoveryIds": ["32f4ce03-e004-4777-80c3-cff81909fe14"],
+      "reason": "Restoration independently verified",
+      "mechanism": "Independent Healer allowlisted service start; Phase 4 routing continuity is separate",
+      "cleanup": "NOT_REQUIRED",
+      "cancelRequestedBy": null,
+      "databasePersisted": true,
+      "evidence": {
+        "containerId": "63c6f679fa9f322160075b640ef2ce0caa7a4290e42e3d7f680c120e1b9e6453",
+        "signal": "SIGKILL",
+        "killAccepted": true,
+        "stoppedObserved": true,
+        "recoveryAction": "start_stopped_service",
+        "recoveryPlaybook": "edge-start",
+        "incidentPredatesFault": false,
+        "healerVerifiedAt": "2026-10-21T08:20:47.247Z",
+        "healerReceipt": "docker_start_accepted",
+        "independentBehaviorVerified": true,
+        "browserPlaybackVerified": false
+      },
+      "events": [
+        {
+          "kind": "CREATED",
+          "at": "2026-10-21T08:20:33.774Z",
+          "detail": "Administrator confirmed edge-1"
+        },
+        {
+          "kind": "VALIDATING",
+          "detail": "Checking fresh health, independent Healer and deployment policy",
+          "at": "2026-10-21T08:20:34.565Z"
+        },
+        {
+          "kind": "STANDBY_VALIDATING",
+          "detail": "Waiting for independently observed standby segment progression; no fault injected",
+          "at": "2026-10-21T08:20:35.616Z"
+        },
+        {
+          "kind": "INJECTING",
+          "detail": "Durable intent recorded before restricted fault injection",
+          "at": "2026-10-21T08:20:37.719Z"
+        },
+        {
+          "kind": "FAULT_CONFIRMED",
+          "detail": "Actual infrastructure fault confirmed by restricted adapter",
+          "at": "2026-10-21T08:20:37.893Z"
+        },
+        {
+          "kind": "AWAITING_DETECTION",
+          "detail": "Awaiting a confirmed Phase 5 incident",
+          "at": "2026-10-21T08:20:38.917Z"
+        },
+        {
+          "kind": "INCIDENT_CORRELATED",
+          "detail": "Independent recovery attempt 076a7e15-3196-4cde-a8f9-626964c11035",
+          "at": "2026-10-21T08:20:40.939Z"
+        },
+        {
+          "kind": "INCIDENT_DETECTED",
+          "detail": "Confirmed Phase 5 detection",
+          "at": "2026-10-21T08:20:40.153Z"
+        },
+        {
+          "kind": "HEALING_OBSERVED",
+          "detail": "Independent Healer action observed: start stopped service",
+          "at": "2026-10-21T08:20:40.943Z"
+        },
+        {
+          "kind": "VERIFYING",
+          "detail": "Independent Healer verification observed",
+          "at": "2026-10-21T08:20:40.944Z"
+        },
+        {
+          "kind": "SERVICE_VERIFIED",
+          "detail": "Experiment independently verified actual service behavior",
+          "at": "2026-10-21T08:20:52.333Z"
+        },
+        {
+          "kind": "COMPLETED",
+          "detail": "Restoration independently verified",
+          "at": "2026-10-21T08:20:52.352Z"
+        }
+      ],
+      "measurements": {
+        "detectionMs": 2427,
+        "healingStartMs": 2879,
+        "actionMs": 260,
+        "restorationMs": 14607,
+        "playbackInterruptionMs": null
+      }
+    },
+    {
+      "id": "c24e9f42-701c-420b-b7d0-0b0dcf08aec1",
+      "actor": "10000000-0000-4000-8000-000000000099",
+      "scenario": "crash-primary",
+      "target": "origin-primary",
+      "state": "COMPLETED",
+      "createdAt": "2026-10-21T08:20:59.040Z",
+      "updatedAt": "2026-10-21T08:21:24.003Z",
+      "injectedAt": "2026-10-21T08:21:00.500Z",
+      "faultConfirmedAt": "2026-10-21T08:21:00.634Z",
+      "incidentDetectedAt": "2026-10-21T08:21:03.426Z",
+      "actionStartedAt": "2026-10-21T08:21:05.675Z",
+      "actionFinishedAt": "2026-10-21T08:21:05.895Z",
+      "verifiedAt": "2026-10-21T08:21:23.997Z",
+      "finishedAt": "2026-10-21T08:21:24.002Z",
+      "deadline": 1792571039040,
+      "faultExpiresAt": null,
+      "incidentId": "e947b0a4-9aaa-4871-ad9a-c4de294d2e20",
+      "recoveryIds": ["698cd89f-8b48-47ff-a10e-d7af5c4f1d9d"],
+      "priorRecoveryIds": [
+        "076a7e15-3196-4cde-a8f9-626964c11035",
+        "32f4ce03-e004-4777-80c3-cff81909fe14"
+      ],
+      "reason": "Restoration independently verified",
+      "mechanism": "Independent Healer allowlisted service start; Phase 4 routing continuity is separate",
+      "cleanup": "NOT_REQUIRED",
+      "cancelRequestedBy": null,
+      "databasePersisted": true,
+      "evidence": {
+        "containerId": "349c850edef0befe45a8e87b558c159b2d5aaf24fce8ff75b130a54ed0401574",
+        "signal": "SIGKILL",
+        "killAccepted": true,
+        "stoppedObserved": true,
+        "recoveryAction": "start_stopped_service",
+        "recoveryPlaybook": "primary-start",
+        "incidentPredatesFault": false,
+        "healerVerifiedAt": "2026-10-21T08:21:20.526Z",
+        "healerReceipt": "docker_start_accepted",
+        "independentBehaviorVerified": true,
+        "browserPlaybackVerified": false
+      },
+      "events": [
+        {
+          "kind": "CREATED",
+          "at": "2026-10-21T08:20:59.040Z",
+          "detail": "Administrator confirmed origin-primary"
+        },
+        {
+          "kind": "VALIDATING",
+          "detail": "Checking fresh health, independent Healer and deployment policy",
+          "at": "2026-10-21T08:20:59.451Z"
+        },
+        {
+          "kind": "INJECTING",
+          "detail": "Durable intent recorded before restricted fault injection",
+          "at": "2026-10-21T08:21:00.494Z"
+        },
+        {
+          "kind": "FAULT_CONFIRMED",
+          "detail": "Actual infrastructure fault confirmed by restricted adapter",
+          "at": "2026-10-21T08:21:00.635Z"
+        },
+        {
+          "kind": "AWAITING_DETECTION",
+          "detail": "Awaiting a confirmed Phase 5 incident",
+          "at": "2026-10-21T08:21:01.643Z"
+        },
+        {
+          "kind": "INCIDENT_CORRELATED",
+          "detail": "Independent recovery attempt 698cd89f-8b48-47ff-a10e-d7af5c4f1d9d",
+          "at": "2026-10-21T08:21:03.661Z"
+        },
+        {
+          "kind": "INCIDENT_DETECTED",
+          "detail": "Confirmed Phase 5 detection",
+          "at": "2026-10-21T08:21:03.426Z"
+        },
+        {
+          "kind": "HEALING_OBSERVED",
+          "detail": "Independent Healer action observed: start stopped service",
+          "at": "2026-10-21T08:21:05.689Z"
+        },
+        {
+          "kind": "VERIFYING",
+          "detail": "Independent Healer verification observed",
+          "at": "2026-10-21T08:21:06.701Z"
+        },
+        {
+          "kind": "SERVICE_VERIFIED",
+          "detail": "Experiment independently verified actual service behavior",
+          "at": "2026-10-21T08:21:23.997Z"
+        },
+        {
+          "kind": "COMPLETED",
+          "detail": "Restoration independently verified",
+          "at": "2026-10-21T08:21:24.002Z"
+        }
+      ],
+      "measurements": {
+        "detectionMs": 2926,
+        "healingStartMs": 5175,
+        "actionMs": 220,
+        "restorationMs": 23497,
+        "playbackInterruptionMs": null
+      }
+    },
+    {
+      "id": "73893361-dd08-49d9-8084-3dc5ee9a3630",
+      "actor": "10000000-0000-4000-8000-000000000099",
+      "scenario": "crash-redis",
+      "target": "redis",
+      "state": "COMPLETED",
+      "createdAt": "2026-10-21T08:21:30.539Z",
+      "updatedAt": "2026-10-21T08:21:47.395Z",
+      "injectedAt": "2026-10-21T08:21:32.053Z",
+      "faultConfirmedAt": "2026-10-21T08:21:32.239Z",
+      "incidentDetectedAt": "2026-10-21T08:21:34.717Z",
+      "actionStartedAt": "2026-10-21T08:21:35.705Z",
+      "actionFinishedAt": "2026-10-21T08:21:35.936Z",
+      "verifiedAt": "2026-10-21T08:21:47.392Z",
+      "finishedAt": "2026-10-21T08:21:47.395Z",
+      "deadline": 1792571070539,
+      "faultExpiresAt": null,
+      "incidentId": "1f2ae7df-fb77-485b-9fc5-3bf8c8483745",
+      "recoveryIds": ["8f6d090e-2a00-4b61-acb5-d616107f6875"],
+      "priorRecoveryIds": [
+        "698cd89f-8b48-47ff-a10e-d7af5c4f1d9d",
+        "076a7e15-3196-4cde-a8f9-626964c11035",
+        "32f4ce03-e004-4777-80c3-cff81909fe14"
+      ],
+      "reason": "Restoration independently verified",
+      "mechanism": "Independent Healer allowlisted service start; Phase 4 routing continuity is separate",
+      "cleanup": "NOT_REQUIRED",
+      "cancelRequestedBy": null,
+      "databasePersisted": true,
+      "evidence": {
+        "containerId": "b1d991d6334adbf3b0611afb54a7a3ef2a19e97103943daad80b5a8b10dead6f",
+        "signal": "SIGKILL",
+        "killAccepted": true,
+        "stoppedObserved": true,
+        "recoveryAction": "start_stopped_service",
+        "recoveryPlaybook": "redis-start",
+        "incidentPredatesFault": false,
+        "healerVerifiedAt": "2026-10-21T08:21:44.399Z",
+        "healerReceipt": "docker_start_accepted",
+        "independentBehaviorVerified": true,
+        "browserPlaybackVerified": false
+      },
+      "events": [
+        {
+          "kind": "CREATED",
+          "at": "2026-10-21T08:21:30.539Z",
+          "detail": "Administrator confirmed redis"
+        },
+        {
+          "kind": "VALIDATING",
+          "detail": "Checking fresh health, independent Healer and deployment policy",
+          "at": "2026-10-21T08:21:31.041Z"
+        },
+        {
+          "kind": "INJECTING",
+          "detail": "Durable intent recorded before restricted fault injection",
+          "at": "2026-10-21T08:21:32.048Z"
+        },
+        {
+          "kind": "FAULT_CONFIRMED",
+          "detail": "Actual infrastructure fault confirmed by restricted adapter",
+          "at": "2026-10-21T08:21:32.243Z"
+        },
+        {
+          "kind": "AWAITING_DETECTION",
+          "detail": "Awaiting a confirmed Phase 5 incident",
+          "at": "2026-10-21T08:21:33.255Z"
+        },
+        {
+          "kind": "INCIDENT_CORRELATED",
+          "detail": "Independent recovery attempt 8f6d090e-2a00-4b61-acb5-d616107f6875",
+          "at": "2026-10-21T08:21:36.277Z"
+        },
+        {
+          "kind": "INCIDENT_DETECTED",
+          "detail": "Confirmed Phase 5 detection",
+          "at": "2026-10-21T08:21:34.717Z"
+        },
+        {
+          "kind": "HEALING_OBSERVED",
+          "detail": "Independent Healer action observed: start stopped service",
+          "at": "2026-10-21T08:21:36.279Z"
+        },
+        {
+          "kind": "VERIFYING",
+          "detail": "Independent Healer verification observed",
+          "at": "2026-10-21T08:21:36.280Z"
+        },
+        {
+          "kind": "SERVICE_VERIFIED",
+          "detail": "Experiment independently verified actual service behavior",
+          "at": "2026-10-21T08:21:47.392Z"
+        },
+        {
+          "kind": "COMPLETED",
+          "detail": "Restoration independently verified",
+          "at": "2026-10-21T08:21:47.395Z"
+        }
+      ],
+      "measurements": {
+        "detectionMs": 2664,
+        "healingStartMs": 3652,
+        "actionMs": 231,
+        "restorationMs": 15339,
+        "playbackInterruptionMs": null
+      }
+    },
+    {
+      "id": "ba27b49c-6d02-44e2-8937-7bdde5f78d3e",
+      "actor": "10000000-0000-4000-8000-000000000099",
+      "scenario": "network-timeout",
+      "target": "demo-dependency",
+      "state": "COMPLETED",
+      "createdAt": "2026-10-21T08:21:52.625Z",
+      "updatedAt": "2026-10-21T08:22:26.809Z",
+      "injectedAt": "2026-10-21T08:21:54.460Z",
+      "faultConfirmedAt": "2026-10-21T08:21:54.498Z",
+      "incidentDetectedAt": "2026-10-21T08:21:58.822Z",
+      "actionStartedAt": "2026-10-21T08:22:01.531Z",
+      "actionFinishedAt": "2026-10-21T08:22:01.536Z",
+      "verifiedAt": "2026-10-21T08:22:26.806Z",
+      "finishedAt": "2026-10-21T08:22:26.808Z",
+      "deadline": 1792571092625,
+      "faultExpiresAt": 1792570929460,
+      "incidentId": "cfef9730-8b7c-4edd-b849-9577fb5ae006",
+      "recoveryIds": ["d712f376-b87a-4e0d-9b3a-60e54e3744bc"],
+      "priorRecoveryIds": [
+        "8f6d090e-2a00-4b61-acb5-d616107f6875",
+        "3e25d48e-5e04-4fb3-8d01-dbd20a7dbebf",
+        "4cb8fa46-f250-4797-94ff-f51d89dd77ac",
+        "698cd89f-8b48-47ff-a10e-d7af5c4f1d9d",
+        "076a7e15-3196-4cde-a8f9-626964c11035",
+        "32f4ce03-e004-4777-80c3-cff81909fe14"
+      ],
+      "reason": "Restoration independently verified",
+      "mechanism": "Timed fault cleanup + autonomous safe-read/circuit reconnection",
+      "cleanup": "COMPLETED",
+      "cancelRequestedBy": null,
+      "databasePersisted": true,
+      "evidence": {
+        "toxicCreated": true,
+        "simulatedDependency": true,
+        "faultDurationMs": 15000,
+        "lastCircuitState": "CLOSED",
+        "recoveryAction": "safe_read_retry",
+        "recoveryPlaybook": "dependency-reconnect",
+        "incidentPredatesFault": false,
+        "healerVerifiedAt": "2026-10-21T08:22:23.891Z",
+        "healerReceipt": "safe_read",
+        "independentBehaviorVerified": true,
+        "browserPlaybackVerified": false
+      },
+      "events": [
+        {
+          "kind": "CREATED",
+          "at": "2026-10-21T08:21:52.625Z",
+          "detail": "Administrator confirmed demo-dependency"
+        },
+        {
+          "kind": "VALIDATING",
+          "detail": "Checking fresh health, independent Healer and deployment policy",
+          "at": "2026-10-21T08:21:53.433Z"
+        },
+        {
+          "kind": "INJECTING",
+          "detail": "Durable intent recorded before restricted fault injection",
+          "at": "2026-10-21T08:21:54.444Z"
+        },
+        {
+          "kind": "FAULT_CONFIRMED",
+          "detail": "Actual infrastructure fault confirmed by restricted adapter",
+          "at": "2026-10-21T08:21:54.500Z"
+        },
+        {
+          "kind": "AWAITING_DETECTION",
+          "detail": "Awaiting a confirmed Phase 5 incident",
+          "at": "2026-10-21T08:21:55.507Z"
+        },
+        {
+          "kind": "CIRCUIT_CLOSED",
+          "detail": "Observed recommendation circuit CLOSED",
+          "at": "2026-10-21T08:21:56.516Z"
+        },
+        {
+          "kind": "CIRCUIT_OPEN",
+          "detail": "Observed recommendation circuit OPEN",
+          "at": "2026-10-21T08:22:01.553Z"
+        },
+        {
+          "kind": "INCIDENT_CORRELATED",
+          "detail": "Independent recovery attempt d712f376-b87a-4e0d-9b3a-60e54e3744bc",
+          "at": "2026-10-21T08:22:01.554Z"
+        },
+        {
+          "kind": "INCIDENT_DETECTED",
+          "detail": "Confirmed Phase 5 detection",
+          "at": "2026-10-21T08:21:58.822Z"
+        },
+        {
+          "kind": "HEALING_OBSERVED",
+          "detail": "Independent Healer action observed: safe read retry",
+          "at": "2026-10-21T08:22:01.555Z"
+        },
+        {
+          "kind": "VERIFYING",
+          "detail": "Independent Healer verification observed",
+          "at": "2026-10-21T08:22:01.557Z"
+        },
+        {
+          "kind": "CIRCUIT_HALF_OPEN",
+          "detail": "Observed recommendation circuit HALF_OPEN",
+          "at": "2026-10-21T08:22:07.615Z"
+        },
+        {
+          "kind": "CIRCUIT_OPEN",
+          "detail": "Observed recommendation circuit OPEN",
+          "at": "2026-10-21T08:22:08.623Z"
+        },
+        {
+          "kind": "CLEANUP_COMPLETED",
+          "detail": "Timed toxic removal is fault cleanup, not Healer service repair",
+          "at": "2026-10-21T08:22:09.539Z"
+        },
+        {
+          "kind": "CIRCUIT_HALF_OPEN",
+          "detail": "Observed recommendation circuit HALF_OPEN",
+          "at": "2026-10-21T08:22:19.736Z"
+        },
+        {
+          "kind": "CIRCUIT_CLOSED",
+          "detail": "Observed recommendation circuit CLOSED",
+          "at": "2026-10-21T08:22:21.751Z"
+        },
+        {
+          "kind": "SERVICE_VERIFIED",
+          "detail": "Experiment independently verified actual service behavior",
+          "at": "2026-10-21T08:22:26.806Z"
+        },
+        {
+          "kind": "COMPLETED",
+          "detail": "Restoration independently verified",
+          "at": "2026-10-21T08:22:26.808Z"
+        }
+      ],
+      "measurements": {
+        "detectionMs": 4362,
+        "healingStartMs": 7071,
+        "actionMs": 5,
+        "restorationMs": 32346,
+        "playbackInterruptionMs": null
+      }
+    }
+  ],
+  "faultPlayback": [
+    {
+      "scenario": "crash-api",
+      "viewers": [
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 88,
+          "windowMs": 22140.899999999965,
+          "maxDecodedProgressGapMs": 500.0999999999767,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        },
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 88,
+          "windowMs": 22159.79999999999,
+          "maxDecodedProgressGapMs": 500.0999999999767,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        },
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 88,
+          "windowMs": 22160.20000000001,
+          "maxDecodedProgressGapMs": 500.29999999998836,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        }
+      ]
+    },
+    {
+      "scenario": "crash-edge",
+      "viewers": [
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 80,
+          "windowMs": 20048.399999999965,
+          "maxDecodedProgressGapMs": 500.19999999995343,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        },
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 80,
+          "windowMs": 20048.100000000035,
+          "maxDecodedProgressGapMs": 500.20000000001164,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        },
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 80,
+          "windowMs": 20047.900000000023,
+          "maxDecodedProgressGapMs": 500.1000000000349,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        }
+      ]
+    },
+    {
+      "scenario": "crash-primary",
+      "viewers": [
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 104,
+          "windowMs": 26206.79999999999,
+          "maxDecodedProgressGapMs": 1500.399999999965,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        },
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 104,
+          "windowMs": 26206.79999999999,
+          "maxDecodedProgressGapMs": 1500.0999999999767,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        },
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 104,
+          "windowMs": 26206.70000000001,
+          "maxDecodedProgressGapMs": 1501.2000000000116,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        }
+      ]
+    },
+    {
+      "scenario": "crash-redis",
+      "viewers": [
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 71,
+          "windowMs": 17997.79999999999,
+          "maxDecodedProgressGapMs": 500.29999999998836,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        },
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 71,
+          "windowMs": 17998.20000000001,
+          "maxDecodedProgressGapMs": 500.29999999998836,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        },
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 71,
+          "windowMs": 17998,
+          "maxDecodedProgressGapMs": 500.1000000000349,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        }
+      ]
+    },
+    {
+      "scenario": "network-timeout",
+      "viewers": [
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 144,
+          "windowMs": 36099.69999999995,
+          "maxDecodedProgressGapMs": 500.19999999995343,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        },
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 144,
+          "windowMs": 36099.69999999995,
+          "maxDecodedProgressGapMs": 500,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        },
+        {
+          "sampleIntervalMs": 250,
+          "stallThresholdMs": 2000,
+          "samples": 144,
+          "windowMs": 36099.899999999965,
+          "maxDecodedProgressGapMs": 500.20000000001164,
+          "playbackInterruptionMs": 0,
+          "stallCount": 0
+        }
+      ]
+    }
+  ],
+  "checks": {
+    "privateLocalAccess": {
+      "oneUse": true,
+      "expiredDenied": true,
+      "csrfDenied": true,
+      "guestAdminDenied": true,
+      "publicSignupDenied": true
+    },
+    "crossApiGuestDelivery": {
+      "sender": "api-2",
+      "receiver": "api-1",
+      "delivered": true
+    },
+    "threeChannels": {
+      "idempotent": true,
+      "uniquePaths": true,
+      "uniqueCredentials": true,
+      "guestContinuity": true,
+      "wrongPublishingKeyDenied": true,
+      "decodedWidths": [640, 480, 320],
+      "roomIsolation": true,
+      "guestChatDurable": true,
+      "plainTextEncoding": true,
+      "guestThrottling": true,
+      "noPublicLogin": true
+    },
+    "capacitySecurity": {
+      "allocationCap": true,
+      "reportIdentity": true,
+      "duplicateReportIdempotent": true,
+      "conflictingSequenceDenied": true,
+      "grantCannotAdminister": true,
+      "stoppedGrantRejected": true,
+      "syntheticNotPersisted": true
+    },
+    "guestRedisReconnection": true,
+    "actualContainerRestarts": [
+      {
+        "service": "api",
+        "before": "2026-10-21T08:17:12.969808387Z",
+        "after": "2026-10-21T08:20:11.940111448Z"
+      },
+      {
+        "service": "edge-1",
+        "before": "2026-10-21T08:17:05.179753337Z",
+        "after": "2026-10-21T08:20:40.624072209Z"
+      },
+      {
+        "service": "origin-primary",
+        "before": "2026-10-21T08:17:05.180360214Z",
+        "after": "2026-10-21T08:21:05.700984615Z"
+      },
+      {
+        "service": "redis",
+        "before": "2026-10-21T08:17:05.177028342Z",
+        "after": "2026-10-21T08:21:35.733154044Z"
+      }
+    ],
+    "faultPlayback": [
+      {
+        "scenario": "crash-api",
+        "viewers": [
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 88,
+            "windowMs": 22140.899999999965,
+            "maxDecodedProgressGapMs": 500.0999999999767,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          },
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 88,
+            "windowMs": 22159.79999999999,
+            "maxDecodedProgressGapMs": 500.0999999999767,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          },
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 88,
+            "windowMs": 22160.20000000001,
+            "maxDecodedProgressGapMs": 500.29999999998836,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          }
+        ]
+      },
+      {
+        "scenario": "crash-edge",
+        "viewers": [
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 80,
+            "windowMs": 20048.399999999965,
+            "maxDecodedProgressGapMs": 500.19999999995343,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          },
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 80,
+            "windowMs": 20048.100000000035,
+            "maxDecodedProgressGapMs": 500.20000000001164,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          },
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 80,
+            "windowMs": 20047.900000000023,
+            "maxDecodedProgressGapMs": 500.1000000000349,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          }
+        ]
+      },
+      {
+        "scenario": "crash-primary",
+        "viewers": [
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 104,
+            "windowMs": 26206.79999999999,
+            "maxDecodedProgressGapMs": 1500.399999999965,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          },
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 104,
+            "windowMs": 26206.79999999999,
+            "maxDecodedProgressGapMs": 1500.0999999999767,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          },
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 104,
+            "windowMs": 26206.70000000001,
+            "maxDecodedProgressGapMs": 1501.2000000000116,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          }
+        ]
+      },
+      {
+        "scenario": "crash-redis",
+        "viewers": [
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 71,
+            "windowMs": 17997.79999999999,
+            "maxDecodedProgressGapMs": 500.29999999998836,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          },
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 71,
+            "windowMs": 17998.20000000001,
+            "maxDecodedProgressGapMs": 500.29999999998836,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          },
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 71,
+            "windowMs": 17998,
+            "maxDecodedProgressGapMs": 500.1000000000349,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          }
+        ]
+      },
+      {
+        "scenario": "network-timeout",
+        "viewers": [
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 144,
+            "windowMs": 36099.69999999995,
+            "maxDecodedProgressGapMs": 500.19999999995343,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          },
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 144,
+            "windowMs": 36099.69999999995,
+            "maxDecodedProgressGapMs": 500,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          },
+          {
+            "sampleIntervalMs": 250,
+            "stallThresholdMs": 2000,
+            "samples": 144,
+            "windowMs": 36099.899999999965,
+            "maxDecodedProgressGapMs": 500.20000000001164,
+            "playbackInterruptionMs": 0,
+            "stallCount": 0
+          }
+        ]
+      }
+    ],
+    "independentSourceStop": true,
+    "keyRotation": {
+      "previousKeyRevoked": true,
+      "otherChannelsUnaffected": true
+    },
+    "history": [
+      {
+        "slot": 1,
+        "observations": 3
+      },
+      {
+        "slot": 2,
+        "observations": 3
+      },
+      {
+        "slot": 3,
+        "observations": 6
+      }
+    ],
+    "preservedRows": [
+      {
+        "demo_channels": 3,
+        "retained_users": 4,
+        "actual_guest_messages": 11
+      }
+    ],
+    "physicalDevices": "Three independent genuine FFmpeg publishers verified on Linux; three separate physical laptops/Windows firewall were not available for execution."
+  },
+  "rawGeneratorRuns": [
+    {
+      "runId": "0b40e55d-f43f-4654-8c39-9cf3d3a94f71",
+      "workerId": "412b01f5-c465-4c68-8650-a3b6e3a5e2f5",
+      "profile": "api",
+      "targetClients": 20,
+      "allocatedClients": 20,
+      "startedAt": "2026-10-21T08:18:48.284Z",
+      "finishedAt": "2026-10-21T08:19:00.494Z",
+      "elapsedSeconds": 12.210068494,
+      "resources": {
+        "availableMemoryBytes": 12910948352,
+        "estimatedRequiredBytes": 273678336,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 7,
+        "active": 0,
+        "peak": 14,
+        "requests": 1060,
+        "errors": 0,
+        "bytes": 1335470,
+        "connections": 0,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 0,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [
+          0, 0, 155, 451, 305, 119, 23, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 3.6917257762245193,
+        "generatorRssBytes": 157908992,
+        "finished": true,
+        "stopReason": "deadline"
+      },
+      "capacity50000": "UNVERIFIED"
+    },
+    {
+      "runId": "c9005522-0feb-438c-90f7-406862195f0c",
+      "workerId": "ca7dda1f-397d-4fa6-b8e4-37b80763d6fb",
+      "profile": "socket",
+      "targetClients": 100,
+      "allocatedClients": 100,
+      "startedAt": "2026-10-21T08:19:02.240Z",
+      "finishedAt": "2026-10-21T08:19:14.495Z",
+      "elapsedSeconds": 12.255193799,
+      "resources": {
+        "availableMemoryBytes": 12765085696,
+        "estimatedRequiredBytes": 294649856,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 7,
+        "active": 0,
+        "peak": 100,
+        "requests": 0,
+        "errors": 0,
+        "bytes": 0,
+        "connections": 100,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 100,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 30.705672635570455,
+        "generatorRssBytes": 112168960,
+        "finished": true,
+        "stopReason": "deadline"
+      },
+      "capacity50000": "UNVERIFIED"
+    },
+    {
+      "runId": "e5fb57b1-c849-46ae-934e-6fcbeae95a39",
+      "workerId": "f1c03c9b-f6d4-4cb5-8d37-ed0e4e4aa878",
+      "profile": "chat",
+      "targetClients": 12,
+      "allocatedClients": 12,
+      "startedAt": "2026-10-21T08:19:15.944Z",
+      "finishedAt": "2026-10-21T08:19:28.175Z",
+      "elapsedSeconds": 12.230969445000001,
+      "resources": {
+        "availableMemoryBytes": 12743458816,
+        "estimatedRequiredBytes": 271581184,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 7,
+        "active": 0,
+        "peak": 12,
+        "requests": 0,
+        "errors": 0,
+        "bytes": 0,
+        "connections": 12,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 12,
+        "reconnects": 0,
+        "messages": 21,
+        "delivered": 21,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "deliveryHistogram": [
+          0, 1, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 8.133144750609546,
+        "generatorRssBytes": 106958848,
+        "finished": true,
+        "stopReason": "deadline"
+      },
+      "capacity50000": "UNVERIFIED"
+    },
+    {
+      "runId": "ab80fabb-2ea2-4c7a-a991-ce120319b627",
+      "workerId": "ba08bcd1-6acd-43f4-aacc-52cbf0688746",
+      "profile": "hls",
+      "targetClients": 6,
+      "allocatedClients": 6,
+      "startedAt": "2026-10-21T08:19:29.897Z",
+      "finishedAt": "2026-10-21T08:19:42.072Z",
+      "elapsedSeconds": 12.174413735,
+      "resources": {
+        "availableMemoryBytes": 12661346304,
+        "estimatedRequiredBytes": 274726912,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 7,
+        "active": 0,
+        "peak": 2,
+        "requests": 1283,
+        "errors": 0,
+        "bytes": 111579101,
+        "connections": 0,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 0,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [
+          140, 601, 333, 164, 38, 4, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 31.617018541763464,
+        "generatorRssBytes": 139251712,
+        "finished": true,
+        "stopReason": "deadline"
+      },
+      "capacity50000": "UNVERIFIED"
+    },
+    {
+      "runId": "81666844-da77-4636-9a86-bcb2aba204a8",
+      "workerId": "27dd3d13-b896-47bc-86d9-e0bc31b5da11",
+      "profile": "browser",
+      "targetClients": 3,
+      "allocatedClients": 3,
+      "startedAt": "2026-10-21T08:19:43.649Z",
+      "finishedAt": "2026-10-21T08:19:57.975Z",
+      "elapsedSeconds": 14.325387194000001,
+      "resources": {
+        "availableMemoryBytes": 12582518784,
+        "estimatedRequiredBytes": 872415232,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 8,
+        "active": 0,
+        "peak": 3,
+        "requests": 0,
+        "errors": 0,
+        "bytes": 0,
+        "connections": 0,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 0,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 3,
+        "stalls": 0,
+        "startupMs": 1260.0846580000002,
+        "requestHistogram": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 15.142109434434968,
+        "generatorRssBytes": 198529024,
+        "finished": true,
+        "stopReason": "deadline"
+      },
+      "capacity50000": "UNVERIFIED"
+    },
+    {
+      "runId": "126884f0-486c-4b35-980f-26443c56d539",
+      "workerId": "49a5651b-8487-4c06-8994-6c5de6a5480c",
+      "profile": "api",
+      "targetClients": 20,
+      "allocatedClients": 20,
+      "startedAt": "2026-10-21T08:20:03.516Z",
+      "finishedAt": "2026-10-21T08:20:28.743Z",
+      "elapsedSeconds": 25.226692578999998,
+      "resources": {
+        "availableMemoryBytes": 12369805312,
+        "estimatedRequiredBytes": 273678336,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 13,
+        "active": 0,
+        "peak": 6,
+        "requests": 944,
+        "errors": 0,
+        "bytes": 1185349,
+        "connections": 0,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 0,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [
+          0, 0, 187, 441, 231, 71, 11, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 3.4833901615238885,
+        "generatorRssBytes": 134623232,
+        "finished": true,
+        "stopReason": "signal"
+      },
+      "capacity50000": "UNVERIFIED",
+      "faultScenario": "crash-api"
+    },
+    {
+      "runId": "7148f371-99b3-443c-88a1-a2653fb79d4b",
+      "workerId": "81421231-42e4-4ba2-adf8-68a3cbb0611b",
+      "profile": "api",
+      "targetClients": 20,
+      "allocatedClients": 20,
+      "startedAt": "2026-10-21T08:20:30.444Z",
+      "finishedAt": "2026-10-21T08:20:54.312Z",
+      "elapsedSeconds": 23.867543111,
+      "resources": {
+        "availableMemoryBytes": 12410073088,
+        "estimatedRequiredBytes": 273678336,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 12,
+        "active": 0,
+        "peak": 6,
+        "requests": 890,
+        "errors": 0,
+        "bytes": 1117345,
+        "connections": 0,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 0,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [
+          0, 0, 190, 428, 205, 57, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 3.09531372072393,
+        "generatorRssBytes": 135602176,
+        "finished": true,
+        "stopReason": "signal"
+      },
+      "capacity50000": "UNVERIFIED",
+      "faultScenario": "crash-edge"
+    },
+    {
+      "runId": "1ac8d81d-467a-4824-88cc-04a83b15087a",
+      "workerId": "daaaa02d-1e5e-4ecd-8117-1e378ee4c2dc",
+      "profile": "api",
+      "targetClients": 20,
+      "allocatedClients": 20,
+      "startedAt": "2026-10-21T08:20:55.991Z",
+      "finishedAt": "2026-10-21T08:21:25.724Z",
+      "elapsedSeconds": 29.732859988,
+      "resources": {
+        "availableMemoryBytes": 12167913472,
+        "estimatedRequiredBytes": 273678336,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 15,
+        "active": 0,
+        "peak": 20,
+        "requests": 986,
+        "errors": 0,
+        "bytes": 1236366,
+        "connections": 0,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 0,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [
+          0, 0, 181, 419, 200, 84, 28, 7, 9, 8, 10, 40, 0, 0, 0, 0, 0
+        ],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 5.592097326978523,
+        "generatorRssBytes": 137519104,
+        "finished": true,
+        "stopReason": "signal"
+      },
+      "capacity50000": "UNVERIFIED",
+      "faultScenario": "crash-primary"
+    },
+    {
+      "runId": "d51aa45f-4275-4f0b-be67-fbfd7436bcd4",
+      "workerId": "a8b80066-5e14-4703-8a6a-7676f752e0f6",
+      "profile": "api",
+      "targetClients": 20,
+      "allocatedClients": 20,
+      "startedAt": "2026-10-21T08:21:27.518Z",
+      "finishedAt": "2026-10-21T08:21:38.663Z",
+      "elapsedSeconds": 11.144839282,
+      "resources": {
+        "availableMemoryBytes": 12177084416,
+        "estimatedRequiredBytes": 273678336,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 5,
+        "active": 0,
+        "peak": 4,
+        "requests": 286,
+        "errors": 120,
+        "bytes": 224179,
+        "connections": 0,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 0,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [
+          20, 71, 46, 89, 42, 12, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 2.140088959973527,
+        "generatorRssBytes": 114569216,
+        "finished": true,
+        "stopReason": "error-budget"
+      },
+      "capacity50000": "UNVERIFIED",
+      "faultScenario": "crash-redis"
+    },
+    {
+      "runId": "0f81bbd8-c05d-4ecd-b9e5-effd086783b6",
+      "workerId": "eda0c526-e81d-4124-8327-345aba503fcb",
+      "profile": "api",
+      "targetClients": 20,
+      "allocatedClients": 20,
+      "startedAt": "2026-10-21T08:21:49.884Z",
+      "finishedAt": "2026-10-21T08:22:29.212Z",
+      "elapsedSeconds": 39.32808964,
+      "resources": {
+        "availableMemoryBytes": 12077391872,
+        "estimatedRequiredBytes": 273678336,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 20,
+        "active": 0,
+        "peak": 4,
+        "requests": 1496,
+        "errors": 0,
+        "bytes": 1880501,
+        "connections": 0,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 0,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [
+          0, 0, 367, 745, 286, 86, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 4.1455517380253095,
+        "generatorRssBytes": 153260032,
+        "finished": true,
+        "stopReason": "signal"
+      },
+      "capacity50000": "UNVERIFIED",
+      "faultScenario": "network-timeout"
+    }
+  ],
+  "rawSocketCapacityRuns": [
+    {
+      "runId": "7ec64573-ffe6-495a-8982-453d298ad83c",
+      "workerId": "beb5752a-d66c-4128-990d-2e0a406fe41d",
+      "profile": "socket",
+      "targetClients": 1000,
+      "allocatedClients": 1000,
+      "startedAt": "2026-10-21T08:17:55.285Z",
+      "finishedAt": "2026-10-21T08:18:35.807Z",
+      "elapsedSeconds": 40.521681493,
+      "resources": {
+        "availableMemoryBytes": 14226706432,
+        "estimatedRequiredBytes": 530579456,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 21,
+        "active": 0,
+        "peak": 252,
+        "requests": 0,
+        "errors": 0,
+        "bytes": 0,
+        "connections": 252,
+        "connectionFailures": 11117,
+        "joinFailures": 0,
+        "disconnects": 252,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 39.0914840547819,
+        "generatorRssBytes": 315408384,
+        "finished": true,
+        "stopReason": "deadline"
+      },
+      "capacity50000": "UNVERIFIED"
+    },
+    {
+      "runId": "92958295-8d1d-4a12-bea5-19935295d328",
+      "workerId": "d97ab094-8a8e-4693-a2ea-03eeff03dda6",
+      "profile": "socket",
+      "targetClients": 100,
+      "allocatedClients": 100,
+      "startedAt": "2026-10-21T08:17:39.100Z",
+      "finishedAt": "2026-10-21T08:17:54.512Z",
+      "elapsedSeconds": 15.411389239999998,
+      "resources": {
+        "availableMemoryBytes": 14247010304,
+        "estimatedRequiredBytes": 294649856,
+        "cpuCount": 4
+      },
+      "finalReportConfirmed": true,
+      "measurements": {
+        "seq": 8,
+        "active": 0,
+        "peak": 100,
+        "requests": 0,
+        "errors": 0,
+        "bytes": 0,
+        "connections": 100,
+        "connectionFailures": 0,
+        "joinFailures": 0,
+        "disconnects": 100,
+        "reconnects": 0,
+        "messages": 0,
+        "delivered": 0,
+        "deliveryFailures": 0,
+        "verifiedBrowsers": 0,
+        "stalls": 0,
+        "startupMs": null,
+        "requestHistogram": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "deliveryHistogram": [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        "generatorCpuPercent": 4.228038754054786,
+        "generatorRssBytes": 128389120,
+        "finished": true,
+        "stopReason": "deadline"
+      },
+      "capacity50000": "UNVERIFIED"
+    }
+  ],
+  "visualReview": {
+    "status": "PASS",
+    "sourceCommit": "60ff491ad9470d97008396d9cd4e64ed37f94b72",
+    "reviewedAt": "2026-10-21T08:29:58.822700+00:00",
+    "widths": [375, 768, 1280, 1440, 1920],
+    "reviewedScreenshots": [
+      "capacity-1280.png",
+      "capacity-1440.png",
+      "capacity-1920.png",
+      "capacity-375.png",
+      "capacity-768.png",
+      "home-1280.png",
+      "home-1440.png",
+      "home-1920.png",
+      "home-375.png",
+      "home-768.png",
+      "presentation-1280.png",
+      "presentation-1440.png",
+      "presentation-1920.png",
+      "presentation-375.png",
+      "presentation-768.png",
+      "watch-1440.png",
+      "watch-375.png"
+    ],
+    "notes": [
+      "Visually reviewed all 17 actual CI captures. Public home presents exactly three channels without public account controls.",
+      "Presentation shows all three genuine decoded streams playing; mobile stacks players, desktop aligns all three.",
+      "Capacity dashboard labels the 50K target unverified and distinguishes requested allocation, actual activity and historical results.",
+      "Watch captures show genuine video and connected guest chat; synthetic messages are explicitly labelled.",
+      "No document-level horizontal overflow in automated checks; mobile resource labels may wrap within cards."
+    ]
+  },
+  "limitations": [
+    "50,000 simulated clients and 50,000 decoded viewers are unverified; no distributed generators were provisioned.",
+    "The isolated socket stage does not establish combined three-stream capacity at its observed peak.",
+    "Redis interruption caused actual HTTP errors and the unchanged generator error budget stopped that stage; independent healing and final audit still completed.",
+    "Single-host gateways/relay/database/Redis/host and connection/bandwidth limits remain.",
+    "Windows/OBS/LAN commands follow implemented scripts; no Windows VM or three physical laptops were available.",
+    "Trusted Docker adapters retain host-equivalent authority; production deployment and internet ingress need separate engineering."
+  ]
+}

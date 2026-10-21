@@ -1,3 +1,4 @@
+import { capacitySummaries } from "../demo/capacity.js";
 import type { Router } from "express";
 import { z } from "zod";
 import type { Resources } from "../platform/resources.js";
@@ -94,6 +95,28 @@ export function chaosRoutes(
           "CHAOS_DISABLED",
           "Chaos mutations require an explicitly enabled local development deployment.",
         );
+      if (c.DEMO_ENABLED) {
+        const runs = (await capacitySummaries(r)).filter((run) =>
+          ["CREATED", "RUNNING"].includes(run.state),
+        );
+        if (
+          runs.some(
+            (run) =>
+              run.distributed ||
+              run.targetClients > 1000 ||
+              run.staleWorkers > 0 ||
+              run.actualActive === null ||
+              run.freshWorkers < 1 ||
+              run.requests + run.connections < 1 ||
+              (run.requests > 20 && run.errors / run.requests > 0.02),
+          )
+        )
+          throw new PlatformError(
+            409,
+            "CAPACITY_FAULT_UNSAFE",
+            "Fault injection requires a healthy, current bounded local load stage (<=1000 clients); distributed/high or stale/erroring stages are denied.",
+          );
+      }
       const b = z
         .object({
           id: z.uuid(),
