@@ -102,13 +102,13 @@ const publish = (p: Publishing, size: string) =>
     },
     stdio: ["ignore", "ignore", "ignore", "ipc"],
   });
-async function stop(child: ChildProcess) {
+async function stop(child: ChildProcess, waitMs = 20000) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   if (child.connected) child.send("stop");
   else child.kill("SIGTERM");
   await expect
     .poll(() => child.exitCode !== null || child.signalCode !== null, {
-      timeout: 20000,
+      timeout: waitMs,
     })
     .toBe(true);
 }
@@ -143,6 +143,70 @@ async function advances(page: Page, width: number) {
       { timeout, intervals: [250, 500, 1000] },
     )
     .toBe(true);
+}
+async function sampleFaultPlayback(page: Page) {
+  await page.evaluate(() => {
+    const started = performance.now();
+    let lastProgress = started,
+      maxGapMs = 0,
+      interruptionMs = 0,
+      stalls = 0,
+      samples = 0;
+    let previous: {
+      video: HTMLVideoElement;
+      time: number;
+      frames: number;
+    } | null = null;
+    const handle = setInterval(() => {
+      samples++;
+      const video = document.querySelector("video"),
+        now = performance.now();
+      if (!video || video.paused || video.readyState < 2) {
+        previous = null;
+        return;
+      }
+      const time = video.currentTime,
+        frames = video.getVideoPlaybackQuality().totalVideoFrames;
+      if (
+        previous &&
+        previous.video === video &&
+        time > previous.time &&
+        frames > previous.frames
+      ) {
+        const gap = now - lastProgress;
+        maxGapMs = Math.max(maxGapMs, gap);
+        if (gap >= 2000) {
+          stalls++;
+          interruptionMs += gap;
+        }
+        lastProgress = now;
+      }
+      previous = { video, time, frames };
+    }, 250);
+    (window as unknown as { stopDemoSample: () => unknown }).stopDemoSample =
+      () => {
+        clearInterval(handle);
+        const tail = performance.now() - lastProgress;
+        maxGapMs = Math.max(maxGapMs, tail);
+        if (tail >= 2000) {
+          stalls++;
+          interruptionMs += tail;
+        }
+        return {
+          sampleIntervalMs: 250,
+          stallThresholdMs: 2000,
+          samples,
+          windowMs: performance.now() - started,
+          maxDecodedProgressGapMs: maxGapMs,
+          playbackInterruptionMs: interruptionMs,
+          stallCount: stalls,
+        };
+      };
+  });
+  return () =>
+    page.evaluate(() =>
+      (window as unknown as { stopDemoSample: () => unknown }).stopDemoSample(),
+    );
 }
 async function rawSocket(ctx: BrowserContext, streamId?: string) {
   const me = await (await ctx.request.get("/api/v1/auth/me")).json();
@@ -218,19 +282,39 @@ function capacity(
   );
   child.stdout!.on("data", (x) => (stdout += x));
   child.stderr!.on("data", (x) => (stderr += x));
+  child.once("exit", () => {
+    const name = `test-results/demo/generator-${profile}-${randomUUID().slice(0, 8)}.json`;
+    const summary = stdout
+      .trim()
+      .split("\n")
+      .filter((x) => x.startsWith("{"))
+      .map((x) => JSON.parse(x))
+      .findLast((x) => x.resultFile);
+    writeFileSync(
+      name,
+      JSON.stringify(
+        {
+          stdout,
+          stderr,
+          result:
+            summary && existsSync(summary.resultFile)
+              ? JSON.parse(readFileSync(summary.resultFile, "utf8"))
+              : null,
+        },
+        null,
+        2,
+      ),
+    );
+  });
   return {
     child,
     output: () => ({ stdout, stderr }),
-    result: async () => {
+    result: async (allowSafetyStop = false) => {
       await expect
         .poll(() => child.exitCode !== null || child.signalCode !== null, {
           timeout: Math.max(120000, (duration + 20) * 1000),
         })
         .toBe(true);
-      if (child.exitCode !== 0)
-        throw Error(
-          `Capacity ${profile} failed: ${stderr.slice(-2000)} ${stdout.slice(-1000)}`,
-        );
       const rows = stdout
         .trim()
         .split("\n")
@@ -238,7 +322,15 @@ function capacity(
         .map((x) => JSON.parse(x));
       const final = rows.findLast((x) => x.resultFile);
       expect(final).toBeTruthy();
-      return JSON.parse(readFileSync(final.resultFile, "utf8"));
+      const result = JSON.parse(readFileSync(final.resultFile, "utf8"));
+      if (
+        child.exitCode !== 0 &&
+        !(allowSafetyStop && result.measurements.stopReason === "error-budget")
+      )
+        throw Error(
+          `Capacity ${profile} failed: ${stderr.slice(-2000)} ${stdout.slice(-1000)}`,
+        );
+      return result;
     },
   };
 }
@@ -576,6 +668,36 @@ test("three real channels, guest isolation, measured capacity and independent he
       expect(server.requests).toBe(result.measurements.requests);
       expect(server.targetClients).toBe(clients);
       expect(server.state).toBe("COMPLETED");
+      expect(result.finalReportConfirmed).toBe(true);
+      const savedGrant = JSON.parse(
+        readFileSync(`.local/demo/capacity-${result.runId}.json`, "utf8"),
+      );
+      const receiptHeaders = {
+        Origin: origin,
+        Authorization: "Bearer " + savedGrant.token,
+      };
+      expect(
+        (
+          await request.post(
+            `/api/v1/capacity/agent/${result.workerId}/report`,
+            { headers: receiptHeaders, data: result.measurements },
+          )
+        ).status(),
+      ).toBe(200);
+      expect(
+        (
+          await request.post(
+            `/api/v1/capacity/agent/${result.workerId}/report`,
+            {
+              headers: receiptHeaders,
+              data: {
+                ...result.measurements,
+                seq: result.measurements.seq + 1,
+              },
+            },
+          )
+        ).status(),
+      ).toBe(403);
     }
     expect(
       db(
@@ -697,32 +819,36 @@ test("three real channels, guest isolation, measured capacity and independent he
       stoppedGrantRejected: true,
       syntheticNotPersisted: true,
     };
-    const continuous = capacity("api", 20, 240, ["--think-ms", "500"]);
-    loadChildren.push(continuous.child);
-    await expect
-      .poll(
-        async () =>
-          (
+    async function startFaultLoad() {
+      const continuous = capacity("api", 20, 240, ["--think-ms", "500"]);
+      loadChildren.push(continuous.child);
+      await expect
+        .poll(
+          async () =>
             (
-              await (
-                await admin.request.get("/api/v1/monitoring/capacity")
-              ).json()
-            ).runs as CapacitySummary[]
-          ).some(
-            (r) =>
-              r.state === "RUNNING" &&
-              r.actualActive !== null &&
-              r.freshWorkers > 0 &&
-              r.requests > 0,
-          ),
-        { timeout: 30000 },
-      )
-      .toBe(true);
+              (
+                await (
+                  await admin.request.get("/api/v1/monitoring/capacity")
+                ).json()
+              ).runs as CapacitySummary[]
+            ).some(
+              (r) =>
+                r.state === "RUNNING" &&
+                r.actualActive !== null &&
+                r.freshWorkers > 0 &&
+                r.requests > 0,
+            ),
+          { timeout: 30000 },
+        )
+        .toBe(true);
+      return continuous;
+    }
     const state = async () => {
       const response = await admin.request.get("/api/v1/monitoring/chaos");
       return response.ok() ? ((await response.json()) as ChaosSnapshot) : null;
     };
     const restarted: Record<string, unknown>[] = [];
+    const faultPlayback: Record<string, unknown>[] = [];
     for (const scenario of [
       "crash-api",
       "crash-edge",
@@ -739,6 +865,7 @@ test("three real channels, guest isolation, measured capacity and independent he
           { timeout: 150000, intervals: [1000, 2000] },
         )
         .toBe(true);
+      const continuous = await startFaultLoad();
       const s = (await state())!,
         policy = s.scenarios.find((x) => x.id === scenario)!,
         id = randomUUID();
@@ -761,6 +888,9 @@ test("three real channels, guest isolation, measured capacity and independent he
             { encoding: "utf8" },
           ).trim()
         : null;
+      const stopSampling = await Promise.all(
+        pages.slice(0, 3).map(sampleFaultPlayback),
+      );
       const created = await write(
         admin.request,
         adminMe.csrf,
@@ -817,16 +947,32 @@ test("three real channels, guest isolation, measured capacity and independent he
       }
       for (let i = 0; i < 3; i++)
         await advances(pages[i]!, [640, 480, 320][i]!);
-      const run = (
+      faultPlayback.push({
+        scenario,
+        viewers: await Promise.all(stopSampling.map((stop) => stop())),
+      });
+      await stop(continuous.child, 45000);
+      const impact = await continuous.result(true);
+      expect(["signal", "error-budget"]).toContain(
+        impact.measurements.stopReason,
+      );
+      expect(impact.measurements.requests).toBeGreaterThan(0);
+      if (impact.measurements.stopReason === "error-budget")
+        expect(impact.measurements.errors).toBeGreaterThan(0);
+      expect(
+        impact.finalReportConfirmed,
+        "Fault-stage final counters must be durably confirmed, even after a safety stop",
+      ).toBe(true);
+      const summary = (
         await (await admin.request.get("/api/v1/monitoring/capacity")).json()
-      ).runs.find((r: CapacitySummary) => r.state === "RUNNING");
-      expect(run?.requests).toBeGreaterThan(0);
+      ).runs.find((r: CapacitySummary) => r.id === impact.runId);
+      expect(summary.requests).toBe(impact.measurements.requests);
+      expect(summary.errors).toBe(impact.measurements.errors);
+      expect(summary.state).toBe("STOPPED");
+      evidence.runs.push({ ...impact, faultScenario: scenario });
     }
     evidence.checks.actualContainerRestarts = restarted;
-    await stop(continuous.child);
-    const continuousResult = await continuous.result();
-    evidence.runs.push(continuousResult);
-    expect(continuousResult.measurements.stopReason).toBe("signal");
+    evidence.checks.faultPlayback = faultPlayback;
     // Stop only our test-owned third publisher; the other two sources must remain live.
     await stop(publishers[3]!);
     await expect

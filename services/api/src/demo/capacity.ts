@@ -9,6 +9,7 @@ import {
 import type { Resources } from "../platform/resources.js";
 import type { PlatformConfig } from "../platform/config.js";
 import { digest, PlatformError, rate } from "../platform/security.js";
+import { localAdmission } from "../monitoring/admission.js";
 type Run = {
   id: string;
   profile: CapacitySummary["profile"];
@@ -166,6 +167,7 @@ export async function capacityCredential(
   token: unknown,
   origin: unknown,
   workerId?: unknown,
+  allowFinalReceipt = false,
 ) {
   if (typeof token !== "string" || !/^[\w-]{43}$/.test(token))
     throw new PlatformError(
@@ -175,7 +177,9 @@ export async function capacityCredential(
     );
   const run = (
     await r.db.query(
-      "SELECT * FROM capacity_runs WHERE token_hash=$1 AND state IN ('CREATED','RUNNING') AND expires_at>now()",
+      "SELECT * FROM capacity_runs WHERE token_hash=$1" +
+        (allowFinalReceipt ? "" : " AND state IN ('CREATED','RUNNING')") +
+        " AND expires_at>now()",
       [digest(token)],
     )
   ).rows[0] as Run | undefined;
@@ -210,14 +214,32 @@ export async function capacityCredential(
 }
 export function capacityAgentRoutes(r: Resources, c: PlatformConfig) {
   const router = express.Router();
+  const reportFallback = localAdmission(10000, 60000, 100);
   router.use(async (req, res, next) => {
     try {
       res.setHeader("Cache-Control", "no-store");
       if (!c.DEMO_ENABLED)
         throw new PlatformError(404, "NOT_FOUND", "Demo capacity is disabled.");
       const token = req.headers.authorization?.replace(/^Bearer /, "");
-      const auth = await capacityCredential(r, token, req.headers.origin);
-      await rate(r, "capacity-report:" + auth.run.id, 10000, 60000);
+      const auth = await capacityCredential(
+        r,
+        token,
+        req.headers.origin,
+        undefined,
+        req.method === "POST" && req.path.endsWith("/report"),
+      );
+      try {
+        await rate(r, "capacity-report:" + auth.run.id, 10000, 60000);
+      } catch (error) {
+        // Preserve bounded, authenticated observations during Redis failure; no new allocation or guest authority.
+        if (
+          !(error instanceof PlatformError) ||
+          error.code !== "REDIS_UNAVAILABLE" ||
+          !req.path.endsWith("/report") ||
+          !reportFallback(auth.run.id)
+        )
+          throw error;
+      }
       res.locals.run = auth.run;
       next();
     } catch (e) {
@@ -313,6 +335,21 @@ export function capacityAgentRoutes(r: Resources, c: PlatformConfig) {
       const id = z.uuid().parse(req.params.id),
         body = capacityReport.parse(req.body),
         run = res.locals.run as Run;
+      if (!["CREATED", "RUNNING"].includes(run.state)) {
+        const receipt = await r.db.query(
+          "SELECT id FROM capacity_workers WHERE id=$1 AND run_id=$2 AND finished=true AND report_seq=$3 AND report=$4::jsonb",
+          [id, run.id, body.seq, body],
+        );
+        if (receipt.rowCount) {
+          res.json({ ok: true, receipt: true });
+          return;
+        }
+        throw new PlatformError(
+          403,
+          "LOAD_GRANT_CLOSED",
+          "Only an identical already committed final receipt can be reconciled after run closure.",
+        );
+      }
       const worker = (
         await r.db.query(
           "SELECT * FROM capacity_workers WHERE id=$1 AND run_id=$2",

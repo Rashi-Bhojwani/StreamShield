@@ -162,13 +162,20 @@ async function report(final = false) {
       requestHistogram: [...metrics.requestHistogram],
       deliveryHistogram: [...metrics.deliveryHistogram],
     };
-    for (let attempt = 0; attempt < 3; attempt++) {
+    const until = Date.now() + 30000;
+    for (let attempt = 0; attempt < (final ? 12 : 3); attempt++) {
       try {
         await control(`/${workerId}/report`, body);
         return;
       } catch (e) {
-        if (attempt === 2) throw e;
-        await sleep(500);
+        if (
+          e.status === 403 ||
+          e.status === 409 ||
+          attempt === (final ? 11 : 2) ||
+          Date.now() >= until
+        )
+          throw e;
+        await sleep(final ? 2000 : 500);
       }
     }
   } finally {
@@ -499,8 +506,10 @@ try {
   pending.clear();
   metrics.active = 0;
   await lastReport;
+  let finalReportConfirmed = false;
   try {
     await report(true);
+    finalReportConfirmed = true;
   } catch {
     console.error(
       "Final report unconfirmed; retained local evidence must not be treated as server-confirmed.",
@@ -519,6 +528,7 @@ try {
     finishedAt: new Date().toISOString(),
     elapsedSeconds: (performance.now() - started) / 1000,
     resources,
+    finalReportConfirmed,
     measurements: { ...metrics, seq, finished: true, stopReason: reason },
     capacity50000: "UNVERIFIED",
   };
@@ -535,6 +545,7 @@ try {
       verifiedBrowsers: metrics.verifiedBrowsers,
       stopReason: reason,
       resultFile: path,
+      finalReportConfirmed,
       capacity50000: "UNVERIFIED",
     }),
   );

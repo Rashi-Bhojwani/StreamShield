@@ -344,14 +344,14 @@ export function CapacityPage() {
             note="All API sockets; includes monitoring and synthetic"
           />
           <Kpi
-            label="Generator memory"
+            label="Generator last reported memory"
             value={
               run?.generatorRssBytes == null
                 ? "—"
                 : number(run.generatorRssBytes / 1048576, 1) + " MiB"
             }
             note={
-              "Reported generator CPU " +
+              "Selected run; last reported generator CPU " +
               number(run?.generatorCpuPercent, 1) +
               "%"
             }
