@@ -7,7 +7,7 @@ import { operator, savePrivate } from "../demo-cli.mjs";
 import { initialMetrics, observe, validateOwnedTarget } from "./metrics.mjs";
 const args = process.argv.slice(2),
   get = (key, fallback) => {
-    const i = args.indexOf("--" + key);
+    const i = args.lastIndexOf("--" + key);
     return i < 0 ? fallback : args[i + 1];
   },
   has = (key) => args.includes("--" + key);
@@ -104,6 +104,8 @@ async function control(path, body) {
   return r.json();
 }
 const registration = await control("/register", { id: workerId, clients });
+if (registration.runId !== grant.id || registration.profile !== grant.profile)
+  throw Error("Private grant metadata disagrees with the authoritative run");
 const metrics = initialMetrics(),
   started = performance.now(),
   deadline = Math.min(
@@ -197,6 +199,7 @@ function endpoint(value) {
   return u;
 }
 async function http(value) {
+  if (stopped) throw abort.signal.reason;
   const url = endpoint(value),
     at = performance.now();
   metrics.active++;
@@ -213,7 +216,10 @@ async function http(value) {
     if (!r.ok) throw Error("HTTP " + r.status);
     return bytes;
   } catch (e) {
-    shutdownAbort = stopped && abort.signal.aborted;
+    shutdownAbort =
+      stopped &&
+      abort.signal.aborted &&
+      (e.name === "AbortError" || e === abort.signal.reason);
     if (!shutdownAbort) metrics.errors++;
     throw e;
   } finally {
@@ -465,7 +471,7 @@ try {
             },
           );
         },
-        Math.max(20, 1000 / perWorker),
+        Math.max(20, 1100 / perWorker),
       );
   }
   await Promise.all(

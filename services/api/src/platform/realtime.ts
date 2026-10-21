@@ -1,11 +1,17 @@
 import { findGuest } from "../demo/guests.js";
+import type { ApiMetrics } from "../monitoring/metrics.js";
 import { capacityCredential } from "../demo/capacity.js";
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { randomUUID } from "node:crypto";
 import type { Server as HttpServer } from "node:http";
 import { z } from "zod";
-import { messageInput, type RealtimeReply } from "@streamshield/shared";
+import {
+  messageInput,
+  demoIdentity,
+  demoSlots,
+  type RealtimeReply,
+} from "@streamshield/shared";
 import type { Resources } from "./resources.js";
 import type { Platform } from "./routes.js";
 import type { PlatformConfig } from "./config.js";
@@ -61,6 +67,7 @@ export function createRealtime(
   c: PlatformConfig,
   media: Config,
   platform: Platform,
+  metrics?: ApiMetrics,
 ) {
   const io = new Server(server, {
     transports: ["websocket"],
@@ -410,6 +417,13 @@ export function createRealtime(
               createdAt: new Date().toISOString(),
               synthetic: true,
             };
+            metrics?.chat.inc({
+              kind: "synthetic",
+              channel: String(
+                demoSlots.find((n) => demoIdentity(n).streamId === streamId) ||
+                  "legacy",
+              ),
+            });
             io.to("stream:" + streamId).emit("message", message);
             if (typeof ack === "function") ack({ ok: true, data: message });
             return;
@@ -459,6 +473,13 @@ export function createRealtime(
             content: body.content,
             createdAt: row.created_at.toISOString(),
           };
+          metrics?.chat.inc({
+            kind: guest ? "guest" : "account",
+            channel: String(
+              demoSlots.find((n) => demoIdentity(n).streamId === streamId) ||
+                "legacy",
+            ),
+          });
           io.to("stream:" + streamId).emit("message", message);
           if (typeof ack === "function") ack({ ok: true, data: message });
         } catch (error) {

@@ -483,9 +483,13 @@ export async function createPlatform(
   });
   route("get", "/streams/:id/presence", async (req, res) => {
     const streamId = id(req.params.id);
-    const row = await r.db.query("SELECT id FROM streams WHERE id=$1", [
-      streamId,
-    ]);
+    const row = await r.db.query(
+      "SELECT id FROM streams WHERE id=$1" +
+        (c.DEMO_ENABLED
+          ? " AND id IN (SELECT stream_id FROM demo_channels)"
+          : ""),
+      [streamId],
+    );
     if (!row.rowCount)
       throw new PlatformError(404, "STREAM_NOT_FOUND", "Stream not found.");
     res.json({

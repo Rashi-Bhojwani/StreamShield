@@ -144,7 +144,7 @@ async function advances(page: Page, width: number) {
     )
     .toBe(true);
 }
-async function rawSocket(ctx: BrowserContext) {
+async function rawSocket(ctx: BrowserContext, streamId?: string) {
   const me = await (await ctx.request.get("/api/v1/auth/me")).json();
   const cookie = (await ctx.cookies())
     .map((c) => c.name + "=" + c.value)
@@ -157,6 +157,10 @@ async function rawSocket(ctx: BrowserContext) {
     extraHeaders: { Origin: origin, Cookie: cookie },
     auth: { csrf: me.csrf },
   });
+  if (streamId)
+    client.on("connect", () => {
+      client.timeout(6000).emit("join", { streamId }, () => {});
+    });
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(
       () => reject(Error("Guest socket connection timeout")),
@@ -422,9 +426,9 @@ test("three real channels, guest isolation, measured capacity and independent he
     expect(
       durable.messages.some((m: { content: string }) => m.content === message),
     ).toBe(true);
-    const crossSender = await rawSocket(contexts[1]!);
+    const crossSender = await rawSocket(contexts[1]!, keys[0]!.user);
     sockets.push(crossSender);
-    let crossReceiver = await rawSocket(contexts[4]!);
+    let crossReceiver = await rawSocket(contexts[4]!, keys[0]!.user);
     sockets.push(crossReceiver);
     const owner = (socket: Socket) =>
       inside(
@@ -438,7 +442,7 @@ test("three real channels, guest isolation, measured capacity and independent he
     ) {
       crossReceiver.disconnect();
       await request.get("/api/v1/health/live");
-      crossReceiver = await rawSocket(contexts[4]!);
+      crossReceiver = await rawSocket(contexts[4]!, keys[0]!.user);
       sockets.push(crossReceiver);
     }
     expect(owner(crossSender)).toBeTruthy();
@@ -800,6 +804,12 @@ test("three real channels, guest isolation, measured capacity and independent he
             timeout: 30000,
           })
           .toBe(true);
+        expect(
+          (await ack(crossSender, "join", { streamId: keys[0]!.user })).ok,
+        ).toBe(true);
+        expect(
+          (await ack(crossReceiver, "join", { streamId: keys[0]!.user })).ok,
+        ).toBe(true);
         await sendAcross(
           "Guest delivery after Redis recovery " + randomUUID().slice(0, 8),
         );

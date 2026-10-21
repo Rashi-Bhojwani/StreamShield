@@ -12,6 +12,7 @@ import { useAuth } from "../platform/auth-context";
 import { useDemoChannels, type DemoChannel } from "../demo/useDemoChannels";
 import { LivePlayer } from "../streaming/LivePlayer";
 import { CompactChaos } from "./Chaos";
+import { useRecovery } from "./useRecovery";
 import { Icon } from "../ui/Icon";
 import "../demo/demo.css";
 const number = (n: number | null | undefined, digits = 0) =>
@@ -144,6 +145,7 @@ function WorkloadKpis({ run }: { run: CapacitySummary | undefined }) {
   );
 }
 export function CapacityPage() {
+  const recovery = useRecovery();
   const q = useCapacity(),
     [selected, setSelected] = useState(""),
     runs = q.data?.runs || [],
@@ -353,6 +355,36 @@ export function CapacityPage() {
               number(run?.generatorCpuPercent, 1) +
               "%"
             }
+          />
+          <Kpi
+            label="Durable chat writes / second"
+            value={number(metric("chat"), 2)}
+            note="Prometheus accepted guest/account writes; excludes synthetic"
+          />
+          <Kpi
+            label="Accepted synthetic events / second"
+            value={number(metric("synthetic-chat"), 2)}
+            note="Server acceptance; generator delivery confirmation is separate"
+          />
+          <Kpi
+            label="Observed media availability"
+            value={
+              snapshot.data && !snapshot.data.stale
+                ? snapshot.data.mediaAvailable
+                  ? "AVAILABLE"
+                  : "UNAVAILABLE"
+                : "UNKNOWN"
+            }
+            note="Independent origin/segment probes; decoding is a separate measure"
+          />
+          <Kpi
+            label="Independent verified repairs"
+            value={
+              recovery.data?.available
+                ? number(recovery.data.counts.verified)
+                : "—"
+            }
+            note="Actual Healer audit; no repair is performed by a generator"
           />
         </div>
         <p>
