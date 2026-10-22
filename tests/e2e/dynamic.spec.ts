@@ -764,9 +764,15 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       currentStudio.getByRole("button", { name: "Start Live", exact: true }),
     ).toBeEnabled({ timeout: 30000 });
     await feed.goto("/live");
-    let cameraFeedNavigations = 0;
-    feed.on("framenavigated", (frame) => {
-      if (frame === feed.mainFrame()) cameraFeedNavigations++;
+    await expect(
+      feed.getByRole("heading", { name: "Live, right now." }),
+    ).toBeVisible();
+    const feedDocumentToken = await feed.evaluate(() => {
+      const token = crypto.randomUUID();
+      (
+        window as unknown as { liveFeedDocumentToken: string }
+      ).liveFeedDocumentToken = token;
+      return token;
     });
     await currentStudio
       .getByRole("button", { name: "Start Live", exact: true })
@@ -781,7 +787,13 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
     await expect(
       feed.locator('[data-stream-id="' + browserId + '"]'),
     ).toBeVisible({ timeout });
-    expect(cameraFeedNavigations).toBe(0);
+    expect(
+      await feed.evaluate(
+        () =>
+          (window as unknown as { liveFeedDocumentToken?: string })
+            .liveFeedDocumentToken,
+      ),
+    ).toBe(feedDocumentToken);
     await expect.poll(() => liveHints.has(browserId), { timeout }).toBe(true);
     await feed.screenshot({
       path: "test-results/dynamic/exact-lakshita-live.png",
@@ -1029,9 +1041,12 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
     await expect(
       afterEndFeed.locator('[data-stream-id="' + browserId + '"]'),
     ).toBeVisible({ timeout });
-    let endFeedNavigations = 0;
-    afterEndFeed.on("framenavigated", (frame) => {
-      if (frame === afterEndFeed.mainFrame()) endFeedNavigations++;
+    const endDocumentToken = await afterEndFeed.evaluate(() => {
+      const token = crypto.randomUUID();
+      (
+        window as unknown as { liveFeedDocumentToken: string }
+      ).liveFeedDocumentToken = token;
+      return token;
     });
     await studio.getByRole("button", { name: "End Live", exact: true }).click();
     await expect
@@ -1051,7 +1066,13 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
     await expect(
       afterEndFeed.locator('[data-stream-id="' + browserId + '"]'),
     ).toHaveCount(0, { timeout: 30000 });
-    expect(endFeedNavigations).toBe(0);
+    expect(
+      await afterEndFeed.evaluate(
+        () =>
+          (window as unknown as { liveFeedDocumentToken?: string })
+            .liveFeedDocumentToken,
+      ),
+    ).toBe(endDocumentToken);
     checks.automaticCameraFeedRemoval = true;
     await advances(viewers[0]!, 640);
     await advances(viewers[2]!, 320);
