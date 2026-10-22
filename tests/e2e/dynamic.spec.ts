@@ -705,7 +705,9 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       .getByRole("button", { name: "Start Live", exact: true })
       .click();
     await expect(
-      studio.getByText(/Publishing authorization rejected/),
+      studio
+        .locator(".form-notice")
+        .filter({ hasText: /Publishing authorization rejected/ }),
     ).toBeVisible({ timeout: 30000 });
     await expect
       .poll(
@@ -757,7 +759,9 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       .getByRole("button", { name: "Start Live", exact: true })
       .click();
     await expect(
-      studio.getByText(/Media connection (timed out|failed)/),
+      studio
+        .locator(".form-notice")
+        .filter({ hasText: /Media connection (timed out|failed)/ }),
     ).toBeVisible({ timeout: 40000 });
     await expect
       .poll(
