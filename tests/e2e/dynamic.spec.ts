@@ -115,21 +115,37 @@ async function crossReplicaChat(
     (await context.cookies()).map((c) => c.name + "=" + c.value).join("; ");
   // Trusted test terminal only: pass session material via stdin, never command arguments or evidence.
   const program = `
-    import { io } from "socket.io-client";
+    import WebSocket from "ws";
     let input = ""; for await (const chunk of process.stdin) input += chunk;
     const p = JSON.parse(input), clients = [];
     const timer = setTimeout(() => process.exit(2), 30000);
-    const emit = (s, event, data) => new Promise((resolve, reject) => s.timeout(10000).emit(event, data, (e, r) => e ? reject(e) : resolve(r)));
+    const connect = (host, index) => new Promise((resolve, reject) => {
+      const ws = new WebSocket("ws://" + host + ":" + p.port + "/socket.io/?EIO=4&transport=websocket", { headers: { Origin: p.origin, Cookie: p.cookies[index] } });
+      const pending = new Map(); let seq = 0;
+      const client = { disconnect: () => ws.close(), onMessage: () => {}, emit: (event, data) => new Promise((done, fail) => {
+        const id = ++seq;
+        const timeout = setTimeout(() => { pending.delete(id); fail(Error("Acknowledgement timeout")); }, 10000);
+        pending.set(id, reply => { clearTimeout(timeout); done(reply); });
+        ws.send("42" + id + JSON.stringify([event, data]));
+      }) };
+      clients.push(client);
+      ws.on("error", reject);
+      ws.on("message", raw => {
+        const packet = raw.toString();
+        if (packet.startsWith("0")) ws.send("40" + JSON.stringify({ csrf: p.csrf[index] }));
+        else if (packet === "2") ws.send("3");
+        else if (packet.startsWith("40")) resolve(client);
+        else if (packet.startsWith("44")) reject(Error("Socket authorization rejected"));
+        else if (packet.startsWith("42")) { const [event, value] = JSON.parse(packet.slice(2)); if (event === "message") client.onMessage(value); }
+        else if (packet.startsWith("43")) { const match = /^43(\\d+)(\\[.*)$/.exec(packet); if (match) { pending.get(Number(match[1]))?.(JSON.parse(match[2])[0]); pending.delete(Number(match[1])); } }
+      });
+    });
     try {
-      for (let i = 0; i < 2; i++) {
-        const s = io(i ? "http://api-2:4000" : "http://api:4000", { transports: ["websocket"], autoConnect: false, auth: { csrf: p.csrf[i] }, extraHeaders: { Origin: p.origin, Cookie: p.cookies[i] } });
-        clients.push(s);
-        await new Promise((resolve, reject) => { s.once("connect", resolve); s.once("connect_error", reject); s.connect(); });
-        if (!(await emit(s, "join", { streamId: p.streamId })).ok) throw Error("Join denied");
-      }
+      const a = await connect("api", 0), b = await connect("api-2", 1);
+      for (const s of [a, b]) if (!(await s.emit("join", { streamId: p.streamId })).ok) throw Error("Join denied");
       let deliveries = 0;
-      clients[0].on("message", m => { if (m.content === p.content && m.streamId === p.streamId) deliveries++; });
-      const ack = await emit(clients[1], "message", { streamId: p.streamId, content: p.content });
+      a.onMessage = m => { if (m.content === p.content && m.streamId === p.streamId) deliveries++; };
+      const ack = await b.emit("message", { streamId: p.streamId, content: p.content });
       for (let i=0; i<50 && !deliveries; i++) await new Promise(r => setTimeout(r, 100));
       await new Promise(r => setTimeout(r, 500));
       if (!ack.ok || deliveries !== 1) throw Error("Cross-replica delivery failed");
@@ -152,6 +168,7 @@ async function crossReplicaChat(
       {
         input: JSON.stringify({
           origin,
+          port: Number(process.env.API_PORT),
           cookies: [await cookie(a), await cookie(b)],
           csrf: [csrfA, csrfB],
           streamId,
