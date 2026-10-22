@@ -307,6 +307,24 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       expect(key.status()).toBe(200);
       keys.push(await key.json());
     }
+    const obsoleteKey = keys[0]!.key;
+    const replacement = await write(
+      contexts[0]!.request,
+      users[0]!.csrf,
+      "/studio/streams/" + ids[0] + "/publishing",
+    );
+    expect(replacement.status()).toBe(200);
+    keys[0] = await replacement.json();
+    expect(
+      (
+        await write(
+          contexts[1]!.request,
+          users[1]!.csrf,
+          "/studio/streams/" + ids[0] + "/publishing/cancel",
+          { key: keys[0]!.key },
+        )
+      ).status(),
+    ).toBe(404);
     expect(new Set(keys.map((k) => k.path)).size).toBe(3);
     expect(new Set(keys.map((k) => k.key)).size).toBe(3);
     expect(
@@ -378,6 +396,19 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       await page.goto("/watch/" + ids[i]);
       await advances(page, widths[i]);
     }
+    const obsoleteCleanup = await write(
+      contexts[0]!.request,
+      users[0]!.csrf,
+      "/studio/streams/" + ids[0] + "/publishing/cancel",
+      { key: obsoleteKey },
+    );
+    expect(obsoleteCleanup.status()).toBe(200);
+    expect((await obsoleteCleanup.json()).stopped).toBe(false);
+    await advances(viewers[0]!, 640);
+    expect(
+      (await (await request.get("/api/v1/streams/" + ids[0])).json()).status,
+    ).toBe("live");
+    checks.obsoleteAttemptCannotStopReplacement = true;
     checks.threeIndependentDecodedWidths = widths;
     const filtered = await (
       await request.get("/api/v1/live?category=Music&q=" + suffix)

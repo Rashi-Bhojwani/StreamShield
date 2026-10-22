@@ -105,3 +105,8 @@ export const publishingSchema = z.object({
   streamKey: z.string(),
 });
 export type Publishing = z.infer<typeof publishingSchema>;
+export const cancelPublishingSchema = z
+  .object({
+    key: z.string().regex(/^[\w-]{43}$/),
+  })
+  .strict();

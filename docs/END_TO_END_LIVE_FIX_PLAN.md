@@ -12,7 +12,7 @@ Inspection found that `publishWhip` resolves after applying the SDP answer, with
 
 1. Require a connected WebRTC peer with a bounded connection deadline; preserve exact authenticated WHIP resource cleanup and provide actionable HTTP/ICE errors.
 2. Give server-authoritative LIVE verification a bounded deadline, cancellation, retry and explicit cleanup of the owned publishing session. Keep local preview distinct from network publishing. Handle permanent peer failure and capture termination without leaving an owned source running.
-3. Preserve the existing globally scoped `/live`, Redis-distributed discovery and per-stream HLS/chat isolation; change only failures demonstrated by tests.
+3. Bind automatic failure cleanup to the allocated credential using an atomic conditional update; obsolete browser attempts must not revoke or kick a replacement publisher. Preserve the existing globally scoped `/live`, Redis-distributed discovery and per-stream HLS/chat isolation; change only failures demonstrated by tests.
 4. Add an exact Rashi/Lakshita/third-viewer browser-camera scenario, an independent concurrent publisher, negative negotiation/connectivity checks, actual decoded video/audio, global discovery, acknowledged cross-account chat, explicit End and API/edge failure recovery.
 5. Capture redacted console/network status, ICE state, media/control evidence and screenshots. Do not log credentials, SDP, cookies or authorization headers.
 6. Document Windows CMD/PowerShell startup, loopback ICE ports and the limits of remote LAN/browser access. Preserve administrative security and named volumes.

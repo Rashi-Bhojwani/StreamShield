@@ -169,7 +169,7 @@ export function BrowserStudio({
     const current = ++attempt.current;
     const controller = new AbortController();
     pending.current = controller;
-    let allocated = false;
+    let allocatedKey: string | undefined;
     setBusy(true);
     setError("");
     setState("Preparing publishing connection…");
@@ -186,7 +186,7 @@ export function BrowserStudio({
           method: "POST",
         }),
       );
-      allocated = true;
+      allocatedKey = key.key;
       controller.signal.throwIfAborted();
       setHasSession(true);
       const connection = await publishWhip(
@@ -206,7 +206,8 @@ export function BrowserStudio({
           if (s === "failed" && connected.current) {
             connected.current = false;
             void end(
-              "Media connection failed. The broadcast was stopped. Create a new livestream and check the ICE port/firewall before retrying.",
+              "Media connection failed. This publishing attempt was stopped. Check the ICE port/firewall before retrying.",
+              key.key,
             );
           }
         },
@@ -232,13 +233,19 @@ export function BrowserStudio({
       publisher.current = null;
       setPublishing(false);
       let message = e instanceof Error ? e.message : "Publishing failed.";
-      if (allocated) {
+      if (allocatedKey) {
         try {
-          await auth.call("/studio/streams/" + streamId + "/end", {
-            method: "POST",
-          });
+          const result = await auth.call<{ stopped: boolean }>(
+            "/studio/streams/" + streamId + "/publishing/cancel",
+            {
+              method: "POST",
+              body: JSON.stringify({ key: allocatedKey }),
+            },
+          );
           setHasSession(false);
-          message += " Publishing stopped. Create a new livestream to retry.";
+          message += result.stopped
+            ? " Publishing stopped. Create a new livestream to retry."
+            : " This attempt was replaced; the newer publisher was left running.";
         } catch {
           message +=
             " Server cleanup could not be confirmed. Use End Live or End stream once services recover.";
@@ -253,7 +260,7 @@ export function BrowserStudio({
       setBusy(false);
     }
   };
-  const end = async (notice = "Broadcast ended.") => {
+  const end = async (notice = "Broadcast ended.", expectedKey?: string) => {
     setBusy(true);
     setError("");
     attempt.current++;
@@ -263,9 +270,19 @@ export function BrowserStudio({
       await publisher.current?.close();
       publisher.current = null;
       setPublishing(false);
-      await auth.call("/studio/streams/" + streamId + "/end", {
-        method: "POST",
-      });
+      const result = await auth.call<{ stopped?: boolean }>(
+        "/studio/streams/" +
+          streamId +
+          (expectedKey ? "/publishing/cancel" : "/end"),
+        {
+          method: "POST",
+          ...(expectedKey
+            ? { body: JSON.stringify({ key: expectedKey }) }
+            : {}),
+        },
+      );
+      if (result.stopped === false)
+        notice += " A newer publishing attempt was left running.";
       setHasSession(false);
       release();
       setReady(false);

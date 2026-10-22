@@ -15,6 +15,7 @@ No evidence established a global discovery SQL, UUID routing or Redis room-isola
 
 - `apps/web/src/platform/whip.ts`: require actual peer connectivity, 20-second ICE connection deadline, cancellation, actionable negotiation/network errors and exact same-origin authenticated WHIP DELETE cleanup.
 - `apps/web/src/platform/verify-broadcast.ts`: require typed server status LIVE after media progress/delivery; 45-second deadline tolerates brief API failover. Camera preview/peer connectivity alone never supplies LIVE.
+- `packages/shared/src/platform.ts`, `services/api/src/platform/routes.ts`: typed owner/CSRF-protected attempt cancellation; atomic credential comparison prevents obsolete tabs from revoking/kicking replacement publishers. Explicit End retains its existing behavior.
 - `BrowserStudio.tsx`: distinguish preview/connecting/publishing/verified state, stop and revoke failed allocated attempts, persistent parent notice if the ended editor disappears, cancel during pending setup, close on device termination/permanent peer failure, unload warning.
 - `Studio.tsx`: separate-tab Watch links and Copy Watch Link for stable UUID URLs.
 - Unit tests cover acceptance without ICE, permanent ICE failure, timeout, cancellation, server progress verification, authoritative failure and transient API outage.
