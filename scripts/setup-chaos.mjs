@@ -192,7 +192,7 @@ services["chaos-controller"] = {
     ...selected,
     HEALER_ALLOWED_SERVICES:
       env.HEALER_ALLOWED_SERVICES ||
-      "api-1,api-2,edge-1,edge-2,origin-primary,redis",
+      "api-1,api-2,edge-1,edge-2,origin-primary,redis,video-gateway,relay",
     HEALER_DISABLED_PLAYBOOKS: env.HEALER_DISABLED_PLAYBOOKS || "",
     HEALER_URL: "http://healer:" + signals.HEALER_PORT,
     HEALER_SECRET: env.HEALER_SECRET,

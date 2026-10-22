@@ -37,6 +37,17 @@ for (const [key, value] of Object.entries({
 }))
   set(key, value);
 const initial = parseEnv(text);
+// Final build: the gateway and ingest relay are Healer-managed. Upgrade only the
+// previous default allowlist; an operator-narrowed list is left untouched.
+if (
+  !initial.HEALER_ALLOWED_SERVICES ||
+  initial.HEALER_ALLOWED_SERVICES ===
+    "api-1,api-2,edge-1,edge-2,origin-primary,redis"
+)
+  set(
+    "HEALER_ALLOWED_SERVICES",
+    "api-1,api-2,edge-1,edge-2,origin-primary,redis,video-gateway,relay",
+  );
 set(
   "MEDIA_RTMP_PUBLIC_URL",
   `rtmp://${ingestHost.includes(":") ? "[" + ingestHost + "]" : ingestHost}:${initial.MEDIA_RTMP_PORT || 1935}`,
@@ -123,6 +134,19 @@ const overlay = {
       ],
     },
     web: { volumes: ["./.local/dynamic/web.conf:/etc/nginx/nginx.conf:ro"] },
+    // Relay verification checks that browser WHIP ingest is listening again.
+    healer: {
+      environment: {
+        RELAY_WHIP_PORT: String(port),
+        MEDIA_RTMP_PORT: env.MEDIA_RTMP_PORT,
+      },
+    },
+    "chaos-controller": {
+      environment: {
+        RELAY_WHIP_PORT: String(port),
+        MEDIA_RTMP_PORT: env.MEDIA_RTMP_PORT,
+      },
+    },
   },
 };
 const doc = new Document(overlay);

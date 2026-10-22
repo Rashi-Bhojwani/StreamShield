@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { connect } from "node:net";
 import { z } from "zod";
 import type {
   ComponentObservation,
@@ -166,13 +167,16 @@ export class Verifier {
   async hls(component: string, paths: string[], source = "primary") {
     let good = 0;
     for (const path of paths) {
+      // Edges and the video gateway serve /primary|standby/<path>/ publicly;
+      // origins need the private HLS bearer on their HLS port.
+      const delivery =
+        component.startsWith("edge-") || component === "video-gateway";
       const root = new URL(this.url(component));
-      root.pathname = component.startsWith("edge-")
+      root.pathname = delivery
         ? "/" + source + "/" + path + "/"
         : "/" + path + "/";
-      if (!component.startsWith("edge-"))
-        root.port = process.env.MEDIA_HLS_PORT!;
-      const headers: Record<string, string> = component.startsWith("edge-")
+      if (!delivery) root.port = process.env.MEDIA_HLS_PORT!;
+      const headers: Record<string, string> = delivery
         ? {}
         : { Authorization: "Bearer " + process.env.RESILIENCE_HLS_SECRET };
       const master = await this.text(new URL("index.m3u8", root).href, headers);
@@ -218,6 +222,19 @@ export class Verifier {
     )
       throw new Error("unsafe_media_reference");
   }
+  /** TCP accept check only; nothing is sent to the listener. */
+  listening(host: string, port: number) {
+    return new Promise<boolean>((resolve) => {
+      const socket = connect({ host, port });
+      const done = (ok: boolean) => {
+        socket.destroy();
+        resolve(ok);
+      };
+      socket.setTimeout(this.c.HEALER_PROBE_TIMEOUT_MS, () => done(false));
+      socket.once("connect", () => done(true));
+      socket.once("error", () => done(false));
+    });
+  }
   async standbySafe() {
     const paths = await this.paths();
     return (await this.hls("origin-standby", paths, "standby")).ok;
@@ -227,8 +244,16 @@ export class Verifier {
       browserPlaybackVerified: false,
     };
     if (a.component.startsWith("api-")) {
+      const started = performance.now();
       const ready = JSON.parse(await this.text(this.url(a.component)));
+      evidence.readinessResponseMs = Math.round(performance.now() - started);
       if (ready.status !== "ready") return { ok: false, evidence };
+      // A restarted hung process must answer promptly, not merely answer.
+      if (
+        a.action === "restart_unresponsive_service" &&
+        evidence.readinessResponseMs > 500
+      )
+        return { ok: false, evidence };
       const streams = JSON.parse(
         await this.text(this.url(a.component, "/api/v1/streams")),
       );
@@ -283,6 +308,39 @@ export class Verifier {
         ? "authorized_segment_progression"
         : "idle_no_playback_claim";
       return { ok: result.ok, evidence };
+    }
+    if (a.component === "video-gateway") {
+      // Health alone is not enough: media must flow THROUGH the gateway.
+      const r = await this.response(this.url(a.component));
+      await r.body?.cancel();
+      const paths = await this.paths();
+      const result = await this.hls("video-gateway", paths);
+      evidence.gatewayHealth = true;
+      evidence.livePaths = paths.length;
+      evidence.progressingPaths = result.progressing;
+      evidence.mediaVerification = paths.length
+        ? "authorized_segment_progression_through_gateway"
+        : "idle_no_playback_claim";
+      return { ok: result.ok, evidence };
+    }
+    if (a.component === "relay") {
+      const paths = await this.paths(); // relay API answers with authentication
+      const rtmp = await this.listening(
+        new URL(this.url("relay")).hostname,
+        Number(process.env.MEDIA_RTMP_PORT || 1935),
+      );
+      const whipPort = Number(process.env.RELAY_WHIP_PORT || 0);
+      const whip = whipPort
+        ? await this.listening(new URL(this.url("relay")).hostname, whipPort)
+        : null;
+      evidence.relayApi = true;
+      evidence.rtmpListener = rtmp;
+      evidence.whipListener = whip;
+      evidence.livePathsAtVerification = paths.length;
+      // Never a broadcast-restoration claim: sources return only when the
+      // broadcaster client reconnects, which is recorded separately.
+      evidence.broadcastRestoredByHealer = false;
+      return { ok: rtmp && whip !== false, evidence };
     }
     if (a.component === "redis") {
       const good = ["redis", "api-1", "api-2"].every(

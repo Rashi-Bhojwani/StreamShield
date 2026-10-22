@@ -70,9 +70,13 @@ describe("recovery policy", () => {
       }),
     ).toThrow();
   });
-  it("has one versioned explicit playbook per managed identity", () => {
-    for (const id of managed)
-      expect(playbooks.filter((p) => p.services.includes(id))).toHaveLength(1);
+  it("has exactly one default playbook per managed identity and no overlapping symptom playbooks", () => {
+    for (const id of managed) {
+      const own = playbooks.filter((p) => p.services.includes(id));
+      expect(own.filter((p) => !p.symptoms)).toHaveLength(1);
+      const symptoms = own.flatMap((p) => p.symptoms || []);
+      expect(new Set(symptoms).size).toBe(symptoms.length);
+    }
     expect(selectPlaybook("arbitrary")).toBeUndefined();
   });
   it("permits independently failed APIs with healthy dependencies", () => {
@@ -370,4 +374,120 @@ it("keeps active and unsynchronized work visible beyond the latest-100 UI", () =
   } finally {
     j.db.close();
   }
+});
+
+describe("symptom-aware diagnosis", () => {
+  const healthyPeer = (id: string) => component(id, { state: "HEALTHY" });
+  it("selects restart for a timeout and start for an unreachable API", () => {
+    expect(selectPlaybook("api-2", "probe_timeout")?.id).toBe(
+      "api-restart-unresponsive",
+    );
+    expect(selectPlaybook("api-2", "probe_timeout")?.action).toBe(
+      "restart_unresponsive_service",
+    );
+    expect(selectPlaybook("api-2", "probe_unreachable")?.id).toBe("api-start");
+    expect(selectPlaybook("api-2", "http_502")?.id).toBe("api-start");
+    expect(selectPlaybook("api-2")?.id).toBe("api-start");
+  });
+  it("selects gateway and relay start playbooks for the new managed services", () => {
+    expect(selectPlaybook("video-gateway", "probe_unreachable")?.id).toBe(
+      "gateway-start",
+    );
+    expect(selectPlaybook("relay", "probe_unreachable")?.id).toBe(
+      "relay-start",
+    );
+  });
+  it("allows a restart only while the peer API is serving", () => {
+    const hung = component("api-2", {
+      code: "probe_timeout",
+      failureCode: "probe_timeout",
+    });
+    const ok = eligibility(hung, [...deps(), healthyPeer("api-1")], config());
+    expect(ok).toMatchObject({ allowed: true });
+    expect(ok.playbook?.id).toBe("api-restart-unresponsive");
+    const peerDown = eligibility(
+      hung,
+      [...deps(), component("api-1", { state: "UNHEALTHY" })],
+      config(),
+    );
+    expect(peerDown).toEqual({
+      allowed: false,
+      reason: "peer_not_healthy:api-1",
+    });
+    expect(eligibility(hung, deps(), config()).reason).toBe(
+      "peer_not_healthy:api-1",
+    );
+  });
+  it("refuses dependency-unhealthy and stale restarts", () => {
+    const hung = component("api-2", { failureCode: "probe_timeout" });
+    expect(
+      eligibility(
+        hung,
+        [
+          component("postgres", { state: "HEALTHY" }),
+          component("redis", { state: "UNHEALTHY" }),
+          healthyPeer("api-1"),
+        ],
+        config(),
+      ).reason,
+    ).toBe("dependency_unhealthy:redis");
+    const stale = component("api-2", {
+      failureCode: "probe_timeout",
+      observedAt: new Date(Date.now() - 60000).toISOString(),
+    });
+    expect(
+      eligibility(stale, [...deps(), healthyPeer("api-1")], config()).reason,
+    ).toBe("unconfirmed_or_stale");
+  });
+  it("never answers a timeout with a start of a running container", () => {
+    const frozenRedis = component("redis", { failureCode: "probe_timeout" });
+    expect(
+      eligibility(
+        frozenRedis,
+        [component("postgres", { state: "HEALTHY" })],
+        config(),
+      ),
+    ).toEqual({
+      allowed: false,
+      reason: "unresponsive_without_restart_playbook",
+    });
+  });
+  it("honours a revised playbook kept on the attempt", () => {
+    const hung = component("api-2", { failureCode: "probe_timeout" });
+    expect(
+      eligibility(hung, deps(), config(), Date.now(), "api-start").playbook?.id,
+    ).toBe("api-start");
+  });
+});
+describe("control adapter journal shares one budget across starts and restarts", () => {
+  it("applies cooldown and the rolling budget per service regardless of operation", () => {
+    const j = new ControlJournal(database(":memory:"));
+    const t = 1_000_000;
+    expect(j.claim(randomUUID(), "api-2", 30000, 2, 600000, t)).toBe(
+      "accepted",
+    );
+    // A restart 10 s after a start hits the shared cooldown.
+    expect(j.claim(randomUUID(), "api-2", 30000, 2, 600000, t + 10000)).toBe(
+      "cooldown",
+    );
+    expect(j.claim(randomUUID(), "api-2", 30000, 2, 600000, t + 40000)).toBe(
+      "accepted",
+    );
+    // A third operation inside the window is refused: no endless restarts.
+    expect(j.claim(randomUUID(), "api-2", 30000, 2, 600000, t + 90000)).toBe(
+      "budget_exhausted",
+    );
+    // Other services keep their own budget.
+    expect(j.claim(randomUUID(), "api-1", 30000, 2, 600000, t + 90000)).toBe(
+      "accepted",
+    );
+  });
+  it("never replays an attempt identity, including an ambiguous restart", () => {
+    const j = new ControlJournal(database(":memory:"));
+    const id = randomUUID();
+    expect(j.claim(id, "api-2", 30000, 2, 600000, 1)).toBe("accepted");
+    j.finish(id, "AMBIGUOUS", "restart_unconfirmed_or_unsafe");
+    expect(j.claim(id, "api-2", 30000, 2, 600000, 999999)).toBe("duplicate");
+    expect(j.get(id)?.state).toBe("AMBIGUOUS");
+  });
 });

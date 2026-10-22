@@ -8,6 +8,8 @@ export const managed = [
   "edge-2",
   "origin-primary",
   "redis",
+  "video-gateway",
+  "relay",
 ] as const;
 export const serviceNames: Record<(typeof managed)[number], string> = {
   "api-1": "api",
@@ -16,7 +18,11 @@ export const serviceNames: Record<(typeof managed)[number], string> = {
   "edge-2": "edge-2",
   "origin-primary": "origin-primary",
   redis: "redis",
+  "video-gateway": "video-gateway",
+  relay: "mediamtx",
 };
+/** Only these may be restarted while running; everything else is start-only. */
+export const restartable: readonly string[] = ["api-1", "api-2"];
 export function healingConfig(env: Record<string, string | undefined>) {
   const c = z
     .object({
@@ -33,6 +39,7 @@ export function healingConfig(env: Record<string, string | undefined>) {
       HEALER_COOLDOWN_MS: integer(5000, 600000, 30000),
       HEALER_BUDGET_WINDOW_MS: integer(30000, 3600000, 600000),
       HEALER_MAX_STARTS: integer(1, 3, 2),
+      HEALER_RESTART_STOP_SECONDS: integer(1, 10, 3),
       HEALER_MAX_ATTEMPTS: integer(1, 3, 2),
       HEALER_BACKOFF_MS: integer(500, 10000, 1000),
       HEALER_LEASE_MS: integer(20000, 60000, 30000),

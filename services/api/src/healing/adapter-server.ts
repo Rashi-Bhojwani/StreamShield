@@ -2,7 +2,7 @@ import express from "express";
 import pino from "pino";
 import { z } from "zod";
 import { equal } from "./authority.js";
-import { healingConfig, managed } from "./config.js";
+import { healingConfig, managed, restartable } from "./config.js";
 import { database } from "./journal.js";
 import { ControlJournal } from "./control.js";
 import { DockerControl } from "./docker.js";
@@ -49,82 +49,133 @@ app.get("/v1/actions/:id", (req, res) => {
   const row = journal.get(req.params.id);
   res.status(row ? 200 : 404).json(row || { code: "not_accepted" });
 });
-let busy = false;
-app.post("/v1/start", async (req, res) => {
-  const parsed = z
-    .object({
-      service: z.enum(managed),
-      attemptId: z.uuid(),
-      owner: z.uuid(),
-      epoch: z.number().int().positive(),
-    })
-    .strict()
-    .safeParse(req.body);
-  if (!parsed.success) {
+app.get("/v1/inspect/:service", async (req, res) => {
+  const service = z.enum(managed).safeParse(req.params.service);
+  if (!service.success) {
     res.status(400).json({ code: "unsupported_operation" });
     return;
   }
-  const b = parsed.data;
-  if (!c.enabled || !c.allowed.includes(b.service)) {
-    res.status(403).json({ code: "policy_disabled" });
-    return;
-  }
-  if (!journal.valid(b.owner, b.epoch)) {
-    res.status(409).json({ code: "stale_leader" });
-    return;
-  }
-  const previous = journal.get(b.attemptId);
-  if (previous) {
-    res
-      .status(previous.service === b.service ? 200 : 409)
-      .json(
-        previous.service === b.service
-          ? previous
-          : { code: "identity_conflict" },
-      );
-    return;
-  }
-  if (busy) {
-    res.status(409).json({ code: "action_busy" });
-    return;
-  }
-  busy = true;
   try {
-    const status = journal.claim(
-      b.attemptId,
-      b.service,
-      c.HEALER_COOLDOWN_MS,
-      c.HEALER_MAX_STARTS,
-      c.HEALER_BUDGET_WINDOW_MS,
-    );
-    if (status !== "accepted") {
-      res.status(429).json({ code: status });
+    // Read-only evidence for diagnosis; the container id is not disclosed.
+    const { state, oom, exitCode, startedAt, finishedAt } =
+      await docker.inspect(service.data, AbortSignal.timeout(3000));
+    res.json({ state, oom, exitCode, startedAt, finishedAt });
+  } catch {
+    res.status(503).json({ code: "inspection_unavailable" });
+  }
+});
+let busy = false;
+// Start and restart share the lease/epoch/attempt identity, the one-operation rule
+// and the rolling per-service budget, so a service cannot be restarted endlessly.
+const operation =
+  (kind: "start" | "restart") =>
+  async (req: express.Request, res: express.Response) => {
+    const parsed = z
+      .object({
+        service: z.enum(managed),
+        attemptId: z.uuid(),
+        owner: z.uuid(),
+        epoch: z.number().int().positive(),
+      })
+      .strict()
+      .safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ code: "unsupported_operation" });
+      return;
+    }
+    const b = parsed.data;
+    if (!c.enabled || !c.allowed.includes(b.service)) {
+      res.status(403).json({ code: "policy_disabled" });
+      return;
+    }
+    if (kind === "restart" && !restartable.includes(b.service)) {
+      res.status(403).json({ code: "restart_not_permitted" });
       return;
     }
     if (!journal.valid(b.owner, b.epoch)) {
-      journal.finish(b.attemptId, "REJECTED", "stale_leader");
       res.status(409).json({ code: "stale_leader" });
       return;
     }
-    try {
-      const code = await docker.start(b.service);
-      journal.finish(b.attemptId, "ACCEPTED", code);
-      log.info(
-        { attemptId: b.attemptId, component: b.service, code },
-        "Allowlisted operation completed",
-      );
-    } catch {
-      journal.finish(b.attemptId, "AMBIGUOUS", "start_unconfirmed_or_unsafe");
-      log.warn(
-        { attemptId: b.attemptId, component: b.service },
-        "No confirmed safe start outcome; inspection required",
-      );
+    const previous = journal.get(b.attemptId);
+    if (previous) {
+      res
+        .status(previous.service === b.service ? 200 : 409)
+        .json(
+          previous.service === b.service
+            ? previous
+            : { code: "identity_conflict" },
+        );
+      return;
     }
-    res.json(journal.get(b.attemptId));
-  } finally {
-    busy = false;
-  }
-});
+    if (busy) {
+      res.status(409).json({ code: "action_busy" });
+      return;
+    }
+    busy = true;
+    try {
+      const status = journal.claim(
+        b.attemptId,
+        b.service,
+        c.HEALER_COOLDOWN_MS,
+        c.HEALER_MAX_STARTS,
+        c.HEALER_BUDGET_WINDOW_MS,
+      );
+      if (status !== "accepted") {
+        res.status(429).json({ code: status });
+        return;
+      }
+      if (!journal.valid(b.owner, b.epoch)) {
+        journal.finish(b.attemptId, "REJECTED", "stale_leader");
+        res.status(409).json({ code: "stale_leader" });
+        return;
+      }
+      try {
+        const code =
+          kind === "start"
+            ? await docker.start(b.service)
+            : await docker.restart(b.service, c.HEALER_RESTART_STOP_SECONDS);
+        journal.finish(b.attemptId, "ACCEPTED", code);
+        log.info(
+          {
+            attemptId: b.attemptId,
+            component: b.service,
+            operation: kind,
+            code,
+          },
+          "Allowlisted operation completed",
+        );
+      } catch (error) {
+        const reason =
+          error instanceof Error &&
+          [
+            "unsafe_container_state",
+            "resource_exhaustion_requires_review",
+          ].includes(error.message)
+            ? error.message
+            : kind + "_unconfirmed_or_unsafe";
+        // A precondition refusal happened before any Docker mutation.
+        journal.finish(
+          b.attemptId,
+          reason === kind + "_unconfirmed_or_unsafe" ? "AMBIGUOUS" : "REJECTED",
+          reason,
+        );
+        log.warn(
+          {
+            attemptId: b.attemptId,
+            component: b.service,
+            operation: kind,
+            reason,
+          },
+          "No confirmed safe outcome; inspection required",
+        );
+      }
+      res.json(journal.get(b.attemptId));
+    } finally {
+      busy = false;
+    }
+  };
+app.post("/v1/start", operation("start"));
+app.post("/v1/restart", operation("restart"));
 app.use((_req, res) => res.sendStatus(404));
 app.use(
   (

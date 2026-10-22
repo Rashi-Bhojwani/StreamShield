@@ -21,6 +21,9 @@ export interface RecoveryAttempt {
   diagnosis: string;
   action:
     | "start_stopped_service"
+    | "restart_unresponsive_service"
+    | "start_spare_capacity"
+    | "stop_spare_capacity"
     | "safe_read_retry"
     | "observe_source"
     | "operator_review";

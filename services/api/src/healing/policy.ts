@@ -11,10 +11,16 @@ export interface Playbook {
   dependencies: string[];
   verification: string;
   compensation: string;
+  /** Failure codes this playbook answers; absent = any code except a timeout. */
+  symptoms?: string[];
+  /** Plain-language diagnosis recorded on the attempt. */
+  diagnosis: string;
 }
 export const playbooks: Playbook[] = [
   {
     id: "api-start",
+    diagnosis:
+      "API process is gone (connection refused or name unresolvable): start the stopped container",
     version: 1,
     services: ["api-1", "api-2"],
     action: "start_stopped_service",
@@ -24,6 +30,7 @@ export const playbooks: Playbook[] = [
   },
   {
     id: "edge-start",
+    diagnosis: "HLS edge process is gone: start the stopped container",
     version: 1,
     services: ["edge-1", "edge-2"],
     action: "start_stopped_service",
@@ -33,6 +40,8 @@ export const playbooks: Playbook[] = [
   },
   {
     id: "primary-start",
+    diagnosis:
+      "Primary media origin is gone: start it once standby media is verified",
     version: 1,
     services: ["origin-primary"],
     action: "start_stopped_service",
@@ -42,7 +51,47 @@ export const playbooks: Playbook[] = [
     compensation: "Sticky standby; no automatic failback",
   },
   {
+    id: "api-restart-unresponsive",
+    diagnosis:
+      "API process alive but unresponsive (probe timeout, container running): bounded restart",
+    version: 1,
+    services: ["api-1", "api-2"],
+    action: "restart_unresponsive_service",
+    symptoms: ["probe_timeout"],
+    dependencies: ["postgres", "redis"],
+    verification:
+      "Direct ready + stream metadata + gateway routing + bounded response time",
+    compensation:
+      "Never restart the last serving API; no repeat of an ambiguous restart",
+  },
+  {
+    id: "gateway-start",
+    diagnosis:
+      "Video gateway process is gone (single HLS entry): start the stopped container",
+    version: 1,
+    services: ["video-gateway"],
+    action: "start_stopped_service",
+    dependencies: [],
+    verification:
+      "Gateway /health + authorized HLS playlist and advancing segment fetched through the gateway",
+    compensation: "No edge or origin mutation",
+  },
+  {
+    id: "relay-start",
+    diagnosis:
+      "Ingest relay process is gone: start it; broadcasters must reconnect themselves",
+    version: 1,
+    services: ["relay"],
+    action: "start_stopped_service",
+    dependencies: [],
+    verification:
+      "Relay API answers + RTMP and WHIP listeners accept connections; broadcaster return recorded separately",
+    compensation:
+      "Never claims the broadcast was restored; source return is the broadcaster client's own reconnection",
+  },
+  {
     id: "redis-start",
+    diagnosis: "Redis is gone: start the stopped container",
     version: 1,
     services: ["redis"],
     action: "start_stopped_service",
@@ -52,6 +101,8 @@ export const playbooks: Playbook[] = [
   },
   {
     id: "dependency-reconnect",
+    diagnosis:
+      "External read-only dependency failing: let the circuit probe and reconnect",
     version: 1,
     services: ["demo-dependency"],
     action: "safe_read_retry",
@@ -61,6 +112,8 @@ export const playbooks: Playbook[] = [
   },
   {
     id: "database-review",
+    diagnosis:
+      "Database failure: storage needs operator review, never automatic action",
     version: 1,
     services: ["postgres"],
     action: "operator_review",
@@ -70,6 +123,7 @@ export const playbooks: Playbook[] = [
   },
   {
     id: "source-wait",
+    diagnosis: "Broadcaster source missing: only the broadcaster can return it",
     version: 1,
     services: ["publisher-source"],
     action: "observe_source",
@@ -78,16 +132,35 @@ export const playbooks: Playbook[] = [
     compensation: "Offline/source interrupted; cannot reconstruct live video",
   },
 ];
-export function selectPlaybook(component: string) {
-  return playbooks.find((p) => p.services.includes(component));
+/**
+ * Chooses by component AND symptom. A timeout means the process is alive but not
+ * answering, so a start (which only acts on an exited container) cannot help; only a
+ * symptom-matched restart playbook may answer it. Without one, the start playbook is
+ * still returned so the attempt is recorded, and eligibility() refuses it.
+ */
+export function selectPlaybook(component: string, failureCode?: string | null) {
+  const candidates = playbooks.filter((p) => p.services.includes(component));
+  return (
+    candidates.find((p) => p.symptoms?.includes(failureCode || "")) ||
+    candidates.find((p) => !p.symptoms)
+  );
 }
+export const failureCodeOf = (c: ComponentObservation) =>
+  c.failureCode || c.code;
+const peers: Record<string, string> = { "api-1": "api-2", "api-2": "api-1" };
 export function eligibility(
   component: ComponentObservation,
   components: ComponentObservation[],
   c: HealingConfig,
   now = Date.now(),
+  playbookId?: string,
 ) {
-  const p = selectPlaybook(component.id);
+  // An attempt keeps the playbook it was diagnosed with (or revised to).
+  const p = playbookId
+    ? playbooks.find(
+        (x) => x.id === playbookId && x.services.includes(component.id),
+      )
+    : selectPlaybook(component.id, failureCodeOf(component));
   if (!p) return { allowed: false, reason: "unsupported_component" };
   if (
     !component.confirmedAt ||
@@ -97,12 +170,29 @@ export function eligibility(
     return { allowed: false, reason: "unconfirmed_or_stale" };
   if (component.code === "probe_denied" || component.state === "DEGRADED")
     return { allowed: false, reason: "authority_or_dependency_symptom" };
+  if (
+    !playbookId &&
+    p.action === "start_stopped_service" &&
+    failureCodeOf(component) === "probe_timeout"
+  )
+    return { allowed: false, reason: "unresponsive_without_restart_playbook" };
+  if (p.action === "restart_unresponsive_service") {
+    // Never restart the last serving instance: the peer must be serving now.
+    const peer = peers[component.id];
+    if (!peer || components.find((x) => x.id === peer)?.state !== "HEALTHY")
+      return { allowed: false, reason: "peer_not_healthy:" + (peer || "none") };
+  }
   for (const dependency of p.dependencies)
     if (components.find((x) => x.id === dependency)?.state !== "HEALTHY")
       return { allowed: false, reason: "dependency_unhealthy:" + dependency };
   if (!c.enabled || c.HEALER_DISABLED_PLAYBOOKS.split(",").includes(p.id))
     return { allowed: false, reason: "policy_disabled" };
-  if (p.action === "start_stopped_service" && !c.allowed.includes(component.id))
+  if (
+    ["start_stopped_service", "restart_unresponsive_service"].includes(
+      p.action,
+    ) &&
+    !c.allowed.includes(component.id)
+  )
     return { allowed: false, reason: "service_not_allowed" };
   return {
     allowed: true,

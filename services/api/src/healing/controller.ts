@@ -6,7 +6,15 @@ import type {
   RecoveryState,
   HealingSnapshot,
 } from "@streamshield/shared";
-import { eligibility, selectPlaybook, terminal, backoff } from "./policy.js";
+import {
+  eligibility,
+  selectPlaybook,
+  terminal,
+  backoff,
+  failureCodeOf,
+  playbooks,
+} from "./policy.js";
+import { probeFailureCode } from "../monitoring/policy.js";
 import { type HealingConfig } from "./config.js";
 import { Journal } from "./journal.js";
 import { RecoveryStore } from "./store.js";
@@ -115,7 +123,10 @@ export class Healer {
     incidentId: string | null = null,
     episode?: string,
   ) {
-    const p = selectPlaybook(component.id);
+    const failureCode = component.id.includes("-source")
+      ? null
+      : failureCodeOf(component);
+    const p = selectPlaybook(component.id, failureCode);
     if (!p) return;
     const now = new Date().toISOString(),
       detectedAt = component.firstFailureAt || component.confirmedAt || now;
@@ -127,7 +138,7 @@ export class Healer {
       playbook: p.id,
       version: 1,
       actor: "streamshield-healer",
-      diagnosis: reason,
+      diagnosis: p.diagnosis,
       action: p.action,
       state: "SCHEDULED",
       number: 1,
@@ -141,7 +152,12 @@ export class Healer {
       nextAt: 0,
       deadline: Date.now() + this.c.HEALER_VERIFY_MS,
       reason,
-      evidence: { browserPlaybackVerified: false },
+      evidence: {
+        browserPlaybackVerified: false,
+        failureCode: failureCode ?? null,
+        consecutiveFailures: component.failures ?? null,
+        observerConfirmedAt: component.confirmedAt ?? null,
+      },
       events: [{ state: "SCHEDULED", at: now, reason }],
       databasePersisted: false,
     };
@@ -297,6 +313,7 @@ export class Healer {
           "policy_disabled",
           "service_not_allowed",
           "authority_or_dependency_symptom",
+          "unresponsive_without_restart_playbook",
         ].includes(decision.reason)
       )
         this.transition(a, "ESCALATED", decision.reason);
@@ -413,7 +430,13 @@ export class Healer {
         });
         return true;
       }
-      const eligible = eligibility(c, frame.components, this.c);
+      const eligible = eligibility(
+        c,
+        frame.components,
+        this.c,
+        Date.now(),
+        a.playbook,
+      );
       if (!eligible.allowed) {
         if (Date.now() > a.deadline)
           this.transition(
@@ -436,6 +459,50 @@ export class Healer {
           this.transition(a, "ESCALATED", "audit_database_unavailable");
         return false;
       }
+      if (a.action !== "safe_read_retry") await this.containerEvidence(a);
+      if (a.action === "restart_unresponsive_service") {
+        // The Healer's own direct probe must also time out before any restart.
+        const outcome = await this.corroborate(a);
+        a.evidence.corroboration = outcome;
+        if (outcome === "answered") {
+          a.verificationStartedAt = new Date().toISOString();
+          a.deadline = Date.now() + this.c.HEALER_VERIFY_MS;
+          this.transition(
+            a,
+            "VERIFYING",
+            "corroborating_probe_answered_no_restart",
+            { actionOrigin: "none", actionPerformed: false },
+          );
+          return true;
+        }
+        if (outcome === "probe_unreachable") {
+          // Process is gone, not hung: the start playbook is the correct repair.
+          const start = playbooks.find(
+            (p) =>
+              p.action === "start_stopped_service" &&
+              p.services.includes(a.component),
+          )!;
+          a.playbook = start.id;
+          a.action = start.action;
+          a.diagnosis =
+            start.diagnosis + " (revised: corroborating probe unreachable)";
+          a.evidence.diagnosisRevised = true;
+          this.transition(
+            a,
+            "SCHEDULED",
+            "diagnosis_revised_to_start_playbook",
+          );
+          return true;
+        }
+        if (outcome !== "probe_timeout") {
+          this.transition(
+            a,
+            "ESCALATED",
+            "corroboration_contradicts_timeout:" + outcome,
+          );
+          return true;
+        }
+      }
       a.actionStartedAt = new Date().toISOString();
       this.transition(a, "EXECUTING", "allowlisted_playbook_selected");
       // Durable intent before side effect; SQLite also survives controller restart.
@@ -445,9 +512,14 @@ export class Healer {
         { playbook: a.playbook },
         Math.max(0, Date.now() - Date.parse(a.detectedAt)) / 1000,
       );
-      if (a.action === "start_stopped_service") {
+      if (
+        a.action === "start_stopped_service" ||
+        a.action === "restart_unresponsive_service"
+      ) {
         try {
-          const r = await this.control("/v1/start", {
+          const operation =
+            a.action === "start_stopped_service" ? "/v1/start" : "/v1/restart";
+          const r = await this.control(operation, {
             service: a.component,
             attemptId: a.id,
             owner: this.owner,
@@ -463,16 +535,22 @@ export class Healer {
             return true;
           }
           if (r.body.state !== "ACCEPTED") {
+            a.evidence.controlReceipt = r.body.code || null;
             this.transition(
               a,
               "ESCALATED",
-              "ambiguous_or_unsafe_start_no_replay",
+              r.body.state === "REJECTED"
+                ? "control_precondition_rejected:" + r.body.code
+                : "ambiguous_or_unsafe_action_no_replay",
             );
             return true;
           }
           a.evidence.controlReceipt = r.body.code;
           a.evidence.actionOrigin = "healer_control_adapter";
-          a.evidence.actionPerformed = r.body.code === "docker_start_accepted";
+          a.evidence.actionPerformed = [
+            "docker_start_accepted",
+            "docker_restart_accepted",
+          ].includes(r.body.code);
         } catch {
           return true; /* Reconcile receipt next cycle; never repeat POST. */
         }
@@ -491,7 +569,10 @@ export class Healer {
       return true;
     }
     if (a.state === "EXECUTING") {
-      if (a.action === "start_stopped_service") {
+      if (
+        a.action === "start_stopped_service" ||
+        a.action === "restart_unresponsive_service"
+      ) {
         try {
           const r = await this.control("/v1/actions/" + a.id);
           if (!r.ok || r.body.state !== "ACCEPTED") {
@@ -564,6 +645,31 @@ export class Healer {
       return true;
     }
     return false;
+  }
+  /** Read-only container facts from the adapter, recorded as diagnosis evidence. */
+  private async containerEvidence(a: RecoveryAttempt) {
+    try {
+      const r = await this.control("/v1/inspect/" + a.component);
+      if (!r.ok) return;
+      a.evidence.containerState = String(r.body.state);
+      a.evidence.containerExitCode =
+        typeof r.body.exitCode === "number" ? r.body.exitCode : null;
+      a.evidence.containerStartedAtBefore = r.body.startedAt || null;
+    } catch {
+      /* Evidence only; the adapter still enforces its own preconditions. */
+    }
+  }
+  private async corroborate(a: RecoveryAttempt) {
+    try {
+      const r = await fetch(this.verifier.url(a.component), {
+        redirect: "error",
+        signal: AbortSignal.timeout(this.c.HEALER_PROBE_TIMEOUT_MS),
+      });
+      await r.body?.cancel();
+      return r.ok ? "answered" : "http_" + r.status;
+    } catch (error) {
+      return probeFailureCode(error);
+    }
   }
   private async verifyAttempt(a: RecoveryAttempt, frame: Frame) {
     if (a.component === "demo-dependency")

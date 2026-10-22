@@ -7,6 +7,7 @@ export class DockerControl {
     private socket = "/var/run/docker.sock",
     private timeoutMs = 5000,
   ) {}
+
   private call(
     method: "GET" | "POST",
     path: string,
@@ -80,8 +81,16 @@ export class DockerControl {
     );
     if (inspected.status !== 200) throw new Error("inspect_failed");
     const container = inspected.body as {
-      State: { Status: string; OOMKilled: boolean };
+      State: {
+        Status: string;
+        OOMKilled: boolean;
+        ExitCode?: number;
+        StartedAt?: string;
+        FinishedAt?: string;
+        Paused?: boolean;
+      };
       Config: { Labels: Record<string, string> };
+      RestartCount?: number;
     };
     if (
       container.Config.Labels["io.streamshield.healer.service"] !== service ||
@@ -92,7 +101,33 @@ export class DockerControl {
       id,
       state: container.State.Status,
       oom: container.State.OOMKilled,
+      exitCode: container.State.ExitCode ?? null,
+      startedAt: container.State.StartedAt ?? null,
+      finishedAt: container.State.FinishedAt ?? null,
     };
+  }
+  /**
+   * Bounded restart of an alive-but-unresponsive container: Docker sends SIGTERM,
+   * waits stopTimeoutSeconds, then SIGKILL, then starts it. Only a `running`, non-OOM
+   * container qualifies; anything else is rejected rather than blindly restarted.
+   */
+  async restart(service: (typeof managed)[number], stopTimeoutSeconds = 3) {
+    const signal = AbortSignal.timeout(
+      this.timeoutMs + stopTimeoutSeconds * 1000,
+    );
+    const value = await this.inspect(service, signal);
+    if (value.oom) throw new Error("resource_exhaustion_requires_review");
+    if (value.state !== "running") throw new Error("unsafe_container_state");
+    const r = await this.call(
+      "POST",
+      "/containers/" + value.id + "/restart?t=" + stopTimeoutSeconds,
+      signal,
+    );
+    if (r.status !== 204) throw new Error("docker_restart_rejected");
+    const after = await this.inspect(service, signal);
+    if (after.state !== "running" || after.startedAt === value.startedAt)
+      throw new Error("restart_unconfirmed");
+    return "docker_restart_accepted";
   }
   async start(service: (typeof managed)[number]) {
     const signal = AbortSignal.timeout(this.timeoutMs);
