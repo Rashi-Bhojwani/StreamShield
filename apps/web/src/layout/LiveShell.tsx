@@ -84,6 +84,11 @@ export function LiveShell() {
           <NavLink to="/live">Live</NavLink>
           <NavLink to="/explore">Explore</NavLink>
           {config.VITE_DYNAMIC_MODE && (
+            <NavLink className="mobile-go-live" to="/studio">
+              Go Live
+            </NavLink>
+          )}
+          {config.VITE_DYNAMIC_MODE && (
             <NavLink className="my-channel-nav" to="/my-channel">
               My Channel
             </NavLink>

@@ -105,18 +105,32 @@ const emit = (s: Socket, event: string, body: object) =>
   );
 async function sample(page: Page) {
   await page.evaluate(() => {
-    let previous = 0,
+    let previous: {
+        video: HTMLVideoElement;
+        time: number;
+        frames: number;
+      } | null = null,
       last = performance.now(),
       gap = 0,
       count = 0;
     const start = last;
     const timer = setInterval(() => {
       const v = document.querySelector("video");
-      if (v && !v.paused && v.currentTime > previous) {
-        gap = Math.max(gap, performance.now() - last);
-        last = performance.now();
-        previous = v.currentTime;
-      }
+      if (v && !v.paused && v.readyState >= 2) {
+        const frames = v.getVideoPlaybackQuality().totalVideoFrames;
+        if (
+          previous &&
+          previous.video === v &&
+          v.currentTime > previous.time &&
+          frames > previous.frames
+        ) {
+          gap = Math.max(gap, performance.now() - last);
+          last = performance.now();
+        }
+        // Compare adjacent samples: a new origin may reset media time/counters.
+        // Keep the last actual progress clock so a real interruption is retained.
+        previous = { video: v, time: v.currentTime, frames };
+      } else previous = null;
       count++;
     }, 250);
     (
@@ -429,6 +443,7 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
           ),
         )
         .toBe(true);
+      await advances(feed, widths[2]);
       await feed.screenshot({
         path: "test-results/dynamic/home-" + width + ".png",
         fullPage: true,
@@ -578,6 +593,7 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       tracks: meta.tracks,
       remoteAudioRms: audioRms,
     };
+    await studio.setViewportSize({ width: 1440, height: 1000 });
     await studio.screenshot({
       path: "test-results/dynamic/studio-1440.png",
       fullPage: true,

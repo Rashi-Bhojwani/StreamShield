@@ -5,6 +5,7 @@
   display: none;
 }
 .dynamic-app .topbar {
+  display: flex;
   gap: 24px;
   padding-inline: clamp(16px, 3vw, 64px);
 }
@@ -16,6 +17,15 @@
 }
 .dynamic-app main {
   min-width: 0;
+}
+.dynamic-app #main {
+  padding: 0;
+}
+.dynamic-app .auth-layout {
+  padding: 32px 20px;
+}
+.dynamic-app .mobile-go-live {
+  display: none;
 }
 .dynamic-app .app-footer {
   margin-left: 0;
@@ -425,6 +435,15 @@
   }
 }
 @media (max-width: 550px) {
+  .dynamic-app .topbar > .button.primary {
+    display: none;
+  }
+  .dynamic-app .top-navigation .mobile-go-live {
+    display: inline-flex;
+  }
+  .dynamic-app .account-menu summary > span:last-child {
+    display: none;
+  }
   .dynamic-discovery {
     padding-top: 24px;
   }
