@@ -94,6 +94,30 @@ export class ControlJournal {
       throw e;
     }
   }
+  /** Read-only view of the same rule claim() enforces. */
+  budget(
+    service: string,
+    cooldown: number,
+    max: number,
+    window: number,
+    now = Date.now(),
+  ) {
+    const recent = (
+      this.db
+        .prepare(
+          "SELECT at FROM operations WHERE service=? AND at>? ORDER BY at ASC",
+        )
+        .all(service, now - window) as { at: number }[]
+    ).map((r) => r.at);
+    let next = 0;
+    if (recent.length >= max) next = recent[recent.length - max]! + window;
+    if (recent.length) next = Math.max(next, recent.at(-1)! + cooldown);
+    return {
+      used: recent.length,
+      max,
+      availableAt: next > now ? new Date(next).toISOString() : null,
+    };
+  }
   finish(id: string, state: string, code: string) {
     this.db
       .prepare("UPDATE operations SET state=?,code=? WHERE id=?")

@@ -83,7 +83,9 @@ export const playbooks: Playbook[] = [
     version: 1,
     services: ["relay"],
     action: "start_stopped_service",
-    dependencies: [],
+    // MediaMTX authenticates its control API through the API tier, so an API
+    // outage makes a healthy relay look failed: never act on it then.
+    dependencies: ["api-1", "api-2"],
     verification:
       "Relay API answers + RTMP and WHIP listeners accept connections; broadcaster return recorded separately",
     compensation:
@@ -170,12 +172,7 @@ export function eligibility(
     return { allowed: false, reason: "unconfirmed_or_stale" };
   if (component.code === "probe_denied" || component.state === "DEGRADED")
     return { allowed: false, reason: "authority_or_dependency_symptom" };
-  if (
-    !playbookId &&
-    p.action === "start_stopped_service" &&
-    failureCodeOf(component) === "probe_timeout"
-  )
-    return { allowed: false, reason: "unresponsive_without_restart_playbook" };
+
   if (p.action === "restart_unresponsive_service") {
     // Never restart the last serving instance: the peer must be serving now.
     const peer = peers[component.id];
@@ -185,6 +182,12 @@ export function eligibility(
   for (const dependency of p.dependencies)
     if (components.find((x) => x.id === dependency)?.state !== "HEALTHY")
       return { allowed: false, reason: "dependency_unhealthy:" + dependency };
+  if (
+    !playbookId &&
+    p.action === "start_stopped_service" &&
+    failureCodeOf(component) === "probe_timeout"
+  )
+    return { allowed: false, reason: "unresponsive_without_restart_playbook" };
   if (!c.enabled || c.HEALER_DISABLED_PLAYBOOKS.split(",").includes(p.id))
     return { allowed: false, reason: "policy_disabled" };
   if (

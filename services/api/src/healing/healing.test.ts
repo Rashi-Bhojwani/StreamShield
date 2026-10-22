@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import type {
   ComponentObservation,
   RecoveryAttempt,
@@ -324,9 +324,12 @@ it("verifies a component that returned before execution without inventing an act
     expect(result.evidence.actionOrigin).toBe(
       "external_return_without_healer_action",
     );
-    expect(control.mock.calls.every(([path]) => path === "/v1/lease")).toBe(
-      true,
-    );
+    // Only read-only control paths: no start/restart was ever requested.
+    expect(
+      control.mock.calls.every(([path]) =>
+        ["/v1/lease", "/v1/budgets"].includes(path),
+      ),
+    ).toBe(true);
   } finally {
     await store.db.end();
     journal.db.close();
@@ -490,4 +493,235 @@ describe("control adapter journal shares one budget across starts and restarts",
     expect(j.claim(id, "api-2", 30000, 2, 600000, 999999)).toBe("duplicate");
     expect(j.get(id)?.state).toBe("AMBIGUOUS");
   });
+});
+
+describe("healer scheduling and corroboration", () => {
+  async function harness(components: () => ComponentObservation[]) {
+    const directory = mkdtempSync(join(tmpdir(), "streamshield-healing-unit-")),
+      file = join(directory, "targets.json");
+    writeFileSync(
+      file,
+      JSON.stringify([
+        { id: "api-1", url: "http://api:4000/api/v1/health/ready" },
+        { id: "api-2", url: "http://api-2:4000/api/v1/health/ready" },
+      ]),
+    );
+    const c = config(),
+      journal = new Journal(":memory:"),
+      store = new RecoveryStore(),
+      verifier = new Verifier(c, file),
+      h = new Healer(c, journal, store, verifier, pino({ level: "silent" }));
+    vi.spyOn(store, "check").mockResolvedValue();
+    vi.spyOn(store, "sync").mockResolvedValue(true);
+    vi.spyOn(h, "dependency").mockResolvedValue({
+      status: "available",
+      simulated: true,
+      feature: "recommendation-demo",
+      recommendations: [],
+    });
+    vi.spyOn(verifier, "frame").mockImplementation(
+      async () =>
+        ({
+          components: components(),
+          media: [],
+          mediaAvailable: true,
+          lastCompleted: Date.now(),
+          persistence: true,
+        }) as Frame,
+    );
+    const actions: string[] = [];
+    const control = vi
+      .spyOn(h, "control")
+      .mockImplementation(async (path, body) => {
+        if (path === "/v1/lease")
+          return {
+            ok: true,
+            status: 200,
+            body: { owner: h.owner, epoch: 1, expires: Date.now() + 30000 },
+          };
+        if (path.startsWith("/v1/inspect/"))
+          return {
+            ok: true,
+            status: 200,
+            body: { state: "running", exitCode: 0, startedAt: "t0" },
+          };
+        if (path === "/v1/start" || path === "/v1/restart") {
+          actions.push(path + ":" + (body as { service: string }).service);
+          return {
+            ok: true,
+            status: 200,
+            body: {
+              state: "ACCEPTED",
+              code:
+                path === "/v1/start"
+                  ? "docker_start_accepted"
+                  : "docker_restart_accepted",
+            },
+          };
+        }
+        throw new Error("Unexpected " + path);
+      });
+    const close = async () => {
+      await store.db.end();
+      journal.db.close();
+      rmSync(directory, { recursive: true, force: true });
+    };
+    return { h, journal, verifier, control, actions, close };
+  }
+  afterEach(() => vi.restoreAllMocks());
+  it("repairs every failed API without one verification starving the other", async () => {
+    const t = await harness(() => [
+      component("api-1"),
+      component("api-2"),
+      ...deps(),
+    ]);
+    try {
+      vi.spyOn(t.verifier, "verify").mockResolvedValue({
+        ok: false,
+        evidence: {},
+      });
+      await t.h.tick();
+      expect(t.actions).toEqual(["/v1/start:api-1"]);
+      await t.h.tick();
+      // Still one side effect per cycle, but the second repair is not starved.
+      expect(t.actions).toEqual(["/v1/start:api-1", "/v1/start:api-2"]);
+    } finally {
+      await t.close();
+    }
+  });
+  it("restarts a hung API only after its own direct probe also times out", async () => {
+    const t = await harness(() => [
+      component("api-1", { state: "HEALTHY" }),
+      component("api-2", {
+        code: "probe_timeout",
+        failureCode: "probe_timeout",
+      }),
+      ...deps(),
+    ]);
+    try {
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(
+        new DOMException("timeout", "TimeoutError"),
+      );
+      vi.spyOn(t.verifier, "verify").mockResolvedValue({
+        ok: false,
+        evidence: {},
+      });
+      await t.h.tick();
+      expect(t.actions).toEqual(["/v1/restart:api-2"]);
+      const a = t.journal.all()[0]!;
+      expect(a).toMatchObject({
+        playbook: "api-restart-unresponsive",
+        action: "restart_unresponsive_service",
+        state: "VERIFYING",
+      });
+      expect(a.evidence).toMatchObject({
+        failureCode: "probe_timeout",
+        corroboration: "probe_timeout",
+        containerState: "running",
+        controlReceipt: "docker_restart_accepted",
+        actionPerformed: true,
+      });
+    } finally {
+      await t.close();
+    }
+  });
+  it("does not restart when the corroborating probe answers", async () => {
+    const t = await harness(() => [
+      component("api-1", { state: "HEALTHY" }),
+      component("api-2", { failureCode: "probe_timeout" }),
+      ...deps(),
+    ]);
+    try {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response('{"status":"ready"}'),
+      );
+      vi.spyOn(t.verifier, "verify").mockResolvedValue({
+        ok: false,
+        evidence: {},
+      });
+      await t.h.tick();
+      expect(t.actions).toEqual([]);
+      expect(t.journal.all()[0]).toMatchObject({
+        state: "VERIFYING",
+        reason: "corroborating_probe_answered_no_restart",
+      });
+    } finally {
+      await t.close();
+    }
+  });
+  it("revises a timeout diagnosis to a start when the process is actually gone", async () => {
+    const t = await harness(() => [
+      component("api-1", { state: "HEALTHY" }),
+      component("api-2", { failureCode: "probe_timeout" }),
+      ...deps(),
+    ]);
+    try {
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(
+        new TypeError("fetch failed", { cause: { code: "ENOTFOUND" } }),
+      );
+      vi.spyOn(t.verifier, "verify").mockResolvedValue({
+        ok: false,
+        evidence: {},
+      });
+      await t.h.tick();
+      expect(t.actions).toEqual([]);
+      expect(t.journal.all()[0]).toMatchObject({
+        playbook: "api-start",
+        action: "start_stopped_service",
+        state: "SCHEDULED",
+      });
+      await t.h.tick();
+      expect(t.actions).toEqual(["/v1/start:api-2"]);
+    } finally {
+      await t.close();
+    }
+  });
+});
+
+it("defers a relay symptom caused by the API tier instead of escalating it", () => {
+  const relay = component("relay", { failureCode: "probe_timeout" });
+  expect(
+    eligibility(
+      relay,
+      [component("api-1", { state: "HEALTHY" }), component("api-2")],
+      config(),
+    ).reason,
+  ).toBe("dependency_unhealthy:api-2");
+  expect(
+    eligibility(
+      component("relay"),
+      [
+        component("api-1", { state: "HEALTHY" }),
+        component("api-2", { state: "HEALTHY" }),
+      ],
+      config(),
+    ),
+  ).toMatchObject({ allowed: true });
+});
+
+it("reports the remaining budget with the same rule claim() enforces", () => {
+  const j = new ControlJournal(database(":memory:"));
+  const t = 10_000_000;
+  expect(j.budget("api-2", 30000, 2, 600000, t)).toEqual({
+    used: 0,
+    max: 2,
+    availableAt: null,
+  });
+  j.claim(randomUUID(), "api-2", 30000, 2, 600000, t);
+  expect(j.budget("api-2", 30000, 2, 600000, t + 1000).availableAt).toBe(
+    new Date(t + 30000).toISOString(),
+  );
+  j.claim(randomUUID(), "api-2", 30000, 2, 600000, t + 40000);
+  const b = j.budget("api-2", 30000, 2, 600000, t + 90000);
+  expect(b).toEqual({
+    used: 2,
+    max: 2,
+    availableAt: new Date(t + 600000).toISOString(),
+  });
+  expect(j.claim(randomUUID(), "api-2", 30000, 2, 600000, t + 600000 - 1)).toBe(
+    "budget_exhausted",
+  );
+  expect(j.claim(randomUUID(), "api-2", 30000, 2, 600000, t + 600001)).toBe(
+    "accepted",
+  );
 });

@@ -1,4 +1,5 @@
 import type {
+  RecoveryAttempt,
   ChaosExperiment,
   ChaosSnapshot,
   ChaosScenarioId,
@@ -18,6 +19,22 @@ import { ChaosJournal } from "./journal.js";
 import { ChaosStore } from "./store.js";
 import { Verifier, type Frame } from "../healing/verification.js";
 import { managed } from "../healing/config.js";
+import { probeFailureCode } from "../monitoring/policy.js";
+/** The playbook the Healer must use for each scenario target. */
+export const playbookFor = (id: ChaosScenarioId, target: string) =>
+  id === "hang-api"
+    ? "api-restart-unresponsive"
+    : (
+        {
+          "api-1": "api-start",
+          "api-2": "api-start",
+          "edge-1": "edge-start",
+          "origin-primary": "primary-start",
+          redis: "redis-start",
+          "video-gateway": "gateway-start",
+          relay: "relay-start",
+        } as Record<string, string>
+      )[target]!;
 export class ChaosEngine {
   frame: Frame | undefined;
   healer: HealingSnapshot | undefined;
@@ -82,21 +99,27 @@ export class ChaosEngine {
     const allowed = (
       process.env.HEALER_ALLOWED_SERVICES || managed.join(",")
     ).split(",");
+    const disabled = (process.env.HEALER_DISABLED_PLAYBOOKS || "").split(",");
     if (
       !temporary(id) &&
-      (!allowed.includes(s.target) ||
-        (process.env.HEALER_DISABLED_PLAYBOOKS || "").split(",").includes(
-          (
-            {
-              "api-1": "api-start",
-              "edge-1": "edge-start",
-              "origin-primary": "primary-start",
-              redis: "redis-start",
-            } as Record<string, string>
-          )[s.target]!,
-        ))
+      s.targets.some(
+        (t) => !allowed.includes(t) || disabled.includes(playbookFor(id, t)),
+      )
     )
       return "The required independent Healer playbook is disabled.";
+    if (!temporary(id)) {
+      // Never inject a fault the Healer is not currently permitted to repair.
+      if (!this.healer!.budgets)
+        return "Healer repair budget is not reported yet.";
+      for (const t of s.targets) {
+        const b = this.healer!.budgets[t];
+        if (!b) return "Healer repair budget is not reported for " + t + ".";
+        if (b.availableAt)
+          return `Healer repair budget/cooldown for ${t} is spent until ${b.availableAt.slice(11, 19)} UTC; wait so the Healer can repair it.`;
+        if (b.max - b.used < 1)
+          return "Healer repair budget for " + t + " is exhausted.";
+      }
+    }
     if (
       ["crash-edge", "crash-primary"].includes(id) &&
       (!this.frame!.mediaAvailable ||
@@ -426,7 +449,7 @@ export class ChaosEngine {
           id: e.id,
           scenario: e.scenario,
         });
-        this.receipt(e, f);
+        await this.receipt(e, f);
       } catch {
         this.event(
           e,
@@ -438,7 +461,7 @@ export class ChaosEngine {
     }
     if (e.state === "INJECTING") {
       try {
-        this.receipt(e, await this.control("/v1/faults/" + e.id));
+        await this.receipt(e, await this.control("/v1/faults/" + e.id));
       } catch {
         /* Never repeat an ambiguous destructive operation. */
       }
@@ -475,25 +498,38 @@ export class ChaosEngine {
         "Observed recommendation circuit " + this.healer!.circuit.state,
       );
     }
-    const a = this.healer!.attempts.find(
-      (a) =>
-        a.component === e.target &&
-        !e.priorRecoveryIds.includes(a.id) &&
-        Date.parse(a.createdAt) >= Date.parse(e.injectedAt!),
-    );
-    if (!a) return;
-    if (!e.recoveryIds.includes(a.id)) {
-      e.recoveryIds.push(a.id);
-      e.evidence.recoveryAction = a.action;
-      e.evidence.recoveryPlaybook = a.playbook;
-      e.incidentId = a.incidentId;
-      this.event(
-        e,
-        "INCIDENT_CORRELATED",
-        "Independent recovery attempt " + a.id,
+    const scenario = scenarioFor(e.scenario);
+    // One independent attempt per target; all must verify with the expected receipt.
+    const attempts: RecoveryAttempt[] = [];
+    for (const target of scenario.targets) {
+      const a = this.healer!.attempts.find(
+        (a) =>
+          a.component === target &&
+          !e.priorRecoveryIds.includes(a.id) &&
+          Date.parse(a.createdAt) >= Date.parse(e.injectedAt!),
       );
+      if (a) attempts.push(a);
     }
-    if (!e.incidentId && a.incidentId) e.incidentId = a.incidentId;
+    if (!attempts.length) return;
+    for (const a of attempts) {
+      if (!e.recoveryIds.includes(a.id)) {
+        e.recoveryIds.push(a.id);
+        this.event(
+          e,
+          "INCIDENT_CORRELATED",
+          `Independent recovery attempt ${a.id} for ${a.component} (${a.playbook})`,
+        );
+      }
+      if (!e.incidentId && a.incidentId) e.incidentId = a.incidentId;
+    }
+    e.evidence.recoveryAction = [
+      ...new Set(attempts.map((a) => a.action)),
+    ].join(",");
+    e.evidence.recoveryPlaybook = [
+      ...new Set(attempts.map((a) => a.playbook)),
+    ].join(",");
+    e.evidence.diagnosis = attempts[0]!.diagnosis;
+    e.evidence.failureCode = attempts[0]!.evidence.failureCode ?? null;
     if (e.incidentId) {
       const i = await this.store.incident(e.incidentId);
       if (i && !e.incidentDetectedAt) {
@@ -510,87 +546,178 @@ export class ChaosEngine {
         );
       }
     }
-    if (a.actionStartedAt && !e.actionStartedAt) {
-      e.actionStartedAt = a.actionStartedAt;
-      e.actionFinishedAt = a.actionFinishedAt;
+    const started = attempts
+      .map((a) => a.actionStartedAt)
+      .filter((x): x is string => !!x)
+      .sort();
+    if (started.length && !e.actionStartedAt) {
+      e.actionStartedAt = started[0]!;
       e.measurements.healingStartMs = Math.max(
         0,
-        Date.parse(a.actionStartedAt) - Date.parse(e.injectedAt!),
+        Date.parse(started[0]!) - Date.parse(e.injectedAt!),
       );
       this.transition(
         e,
         "HEALING_OBSERVED",
-        "Independent Healer action observed: " + a.action.replaceAll("_", " "),
+        "Independent Healer action observed: " +
+          attempts
+            .filter((a) => a.actionStartedAt)
+            .map((a) => a.action.replaceAll("_", " ") + " " + a.component)
+            .join(", "),
       );
     }
-    if (a.verificationStartedAt && e.state !== "VERIFYING") {
+    if (
+      attempts.some((a) => a.verificationStartedAt) &&
+      e.state !== "VERIFYING" &&
+      !e.verifiedAt
+    )
       this.transition(
         e,
         "VERIFYING",
         "Independent Healer verification observed",
       );
-    }
-    if (a.state === "ESCALATED") {
+    const escalated = attempts.find((a) => a.state === "ESCALATED");
+    if (escalated) {
       await this.finish(
         e,
         "FAILED",
-        "Independent Healer escalated: " + a.reason,
+        `Independent Healer escalated (${escalated.component}): ${escalated.reason}`,
       );
       return;
     }
-    if (a.state !== "VERIFIED") return;
+    for (const a of attempts)
+      if (a.state === "VERIFIED")
+        this.event(
+          e,
+          "TARGET_VERIFIED",
+          `${a.component} verified by the Healer (${a.evidence.controlReceipt ?? "no receipt"})`,
+          a.finishedAt || undefined,
+        );
     if (
-      !temporary(e.scenario) &&
-      a.evidence.controlReceipt !== "docker_start_accepted"
-    ) {
-      await this.finish(
-        e,
-        "FAILED",
-        "No accepted independent Healer service-start receipt",
+      attempts.length < scenario.targets.length ||
+      attempts.some((a) => a.state !== "VERIFIED")
+    )
+      return;
+    if (!temporary(e.scenario)) {
+      const wrong = attempts.find(
+        (a) =>
+          a.evidence.controlReceipt !== scenario.expectedReceipt ||
+          a.playbook !== playbookFor(e.scenario, a.component),
       );
-      return;
+      if (wrong) {
+        await this.finish(
+          e,
+          "FAILED",
+          `No accepted ${scenario.expectedReceipt} receipt from ${playbookFor(e.scenario, wrong.component)} for ${wrong.component}`,
+        );
+        return;
+      }
     }
-    const verified = temporary(e.scenario)
-      ? this.healer!.circuit.state === "CLOSED" &&
-        e.cleanup === "COMPLETED" &&
-        (await this.verifier.text(process.env.HEALER_DEPENDENCY_URL!)).includes(
-          '"available"',
-        )
-      : (await this.verifier.verify(a, this.frame!)).ok;
-    if (!verified) {
-      this.stable.delete(e.id);
-      return;
+    if (!e.verifiedAt) {
+      let verified = true;
+      if (temporary(e.scenario))
+        verified =
+          this.healer!.circuit.state === "CLOSED" &&
+          e.cleanup === "COMPLETED" &&
+          (
+            await this.verifier.text(process.env.HEALER_DEPENDENCY_URL!)
+          ).includes('"available"');
+      else
+        for (const a of attempts)
+          verified &&= (await this.verifier.verify(a, this.frame!)).ok;
+      if (!verified) {
+        this.stable.delete(e.id);
+        return;
+      }
+      const since = this.stable.get(e.id) || Date.now();
+      this.stable.set(e.id, since);
+      if (Date.now() - since < 2000) return;
+      const finished = attempts
+        .map((a) => a.actionFinishedAt)
+        .filter((x): x is string => !!x)
+        .sort();
+      e.actionFinishedAt = finished.at(-1) || null;
+      e.measurements.actionMs =
+        e.actionStartedAt && e.actionFinishedAt
+          ? Date.parse(e.actionFinishedAt) - Date.parse(e.actionStartedAt)
+          : null;
+      e.verifiedAt = new Date().toISOString();
+      e.measurements.restorationMs =
+        Date.parse(e.verifiedAt) - Date.parse(e.injectedAt!);
+      e.mechanism = temporary(e.scenario)
+        ? "Timed fault cleanup + autonomous safe-read/circuit reconnection"
+        : e.scenario === "hang-api"
+          ? "Independent Healer bounded restart of an unresponsive service"
+          : "Independent Healer allowlisted service start" +
+            (attempts.length > 1 ? " of every failed instance" : "");
+      e.evidence = {
+        ...e.evidence,
+        healerVerifiedAt: attempts
+          .map((a) => a.finishedAt || "")
+          .sort()
+          .at(-1)!,
+        healerReceipt: attempts
+          .map((a) => String(a.evidence.controlReceipt || "safe_read"))
+          .join(","),
+        healerReceipts: attempts.length,
+        independentBehaviorVerified: true,
+        browserPlaybackVerified: false,
+      };
+      this.event(
+        e,
+        "SERVICE_VERIFIED",
+        "Experiment independently verified actual service behavior",
+        e.verifiedAt,
+      );
     }
-    const since = this.stable.get(e.id) || Date.now();
-    this.stable.set(e.id, since);
-    if (Date.now() - since < 2000) return;
-    e.actionFinishedAt = a.actionFinishedAt;
-    e.measurements.actionMs =
-      a.actionStartedAt && a.actionFinishedAt
-        ? Date.parse(a.actionFinishedAt) - Date.parse(a.actionStartedAt)
-        : null;
-    e.verifiedAt = new Date().toISOString();
-    e.measurements.restorationMs =
-      Date.parse(e.verifiedAt) - Date.parse(e.injectedAt!);
-    e.mechanism = temporary(e.scenario)
-      ? "Timed fault cleanup + autonomous safe-read/circuit reconnection"
-      : "Independent Healer allowlisted service start; Phase 4 routing continuity is separate";
-    e.evidence = {
-      ...e.evidence,
-      healerVerifiedAt: a.finishedAt,
-      healerReceipt: String(a.evidence.controlReceipt || "safe_read"),
-      independentBehaviorVerified: true,
-      browserPlaybackVerified: false,
-    };
-    this.event(
-      e,
-      "SERVICE_VERIFIED",
-      "Experiment independently verified actual service behavior",
-      e.verifiedAt,
-    );
+    if (
+      e.scenario === "crash-relay" &&
+      Number(e.evidence.livePathsAtInjection || 0) > 0 &&
+      e.evidence.broadcasterClientReconnected === undefined
+    ) {
+      // The Healer restored the server; the broadcast returns only if the
+      // broadcaster's own client reconnects. Record that separately.
+      if (this.frame!.media.some((p) => p.publisher)) {
+        e.evidence.broadcasterClientReconnected = true;
+        e.evidence.sourceRestoredByHealer = false;
+        e.evidence.broadcasterReconnectedAt = new Date().toISOString();
+        this.event(
+          e,
+          "BROADCASTER_CLIENT_RECONNECTED",
+          "broadcaster_client_reconnected: the publisher returned by itself after the relay repair",
+        );
+      } else if (
+        Date.now() - Date.parse(e.verifiedAt!) >=
+        this.c.CHAOS_BROADCASTER_WAIT_MS
+      ) {
+        e.evidence.broadcasterClientReconnected = false;
+        e.evidence.sourceRestoredByHealer = false;
+        this.event(
+          e,
+          "BROADCASTER_NOT_RETURNED",
+          "Relay verified; no broadcaster reconnected within the observation window",
+        );
+      } else {
+        this.journal.save(e);
+        return;
+      }
+    }
     await this.finish(e, "COMPLETED", "Restoration independently verified");
   }
-  private receipt(
+  /** Direct readiness probe of a frozen target: only a timeout confirms a hang. */
+  async hangProbe(target: string) {
+    try {
+      const r = await fetch(this.verifier.url(target), {
+        redirect: "error",
+        signal: AbortSignal.timeout(this.c.CHAOS_PROBE_TIMEOUT_MS),
+      });
+      await r.body?.cancel();
+      return "answered_" + r.status;
+    } catch (error) {
+      return probeFailureCode(error);
+    }
+  }
+  private async receipt(
     e: ChaosExperiment,
     f: {
       state: string;
@@ -614,10 +741,32 @@ export class ChaosEngine {
       );
       return;
     }
+    if (e.scenario === "hang-api") {
+      const probe = await this.hangProbe(e.target);
+      e.evidence.readinessProbe = probe;
+      if (probe !== "probe_timeout") {
+        // Stay INJECTING; the same accepted fault is re-checked, never re-sent.
+        this.event(
+          e,
+          "FAULT_PROBE_PENDING",
+          "Container running but readiness probe " +
+            probe +
+            "; awaiting timeout",
+        );
+        this.journal.save(e);
+        return;
+      }
+    }
+    if (!e.evidence.livePathsAtInjection && this.frame)
+      e.evidence.livePathsAtInjection = this.frame.media.filter(
+        (p) => p.publisher,
+      ).length;
     this.transition(
       e,
       "FAULT_CONFIRMED",
-      "Actual infrastructure fault confirmed by restricted adapter",
+      e.scenario === "hang-api"
+        ? "Hang confirmed: container running and direct readiness probe timed out"
+        : "Actual infrastructure fault confirmed by restricted adapter",
     );
   }
 }

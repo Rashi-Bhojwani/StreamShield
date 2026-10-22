@@ -1,4 +1,9 @@
 export type ChaosScenarioId =
+  | "crash-redis"
+  | "crash-video-gateway"
+  | "crash-api-tier"
+  | "crash-relay"
+  | "hang-api"
   | "crash-api"
   | "crash-edge"
   | "crash-primary"
@@ -19,10 +24,24 @@ export type ExperimentState =
   | "FAILED"
   | "TIMED_OUT"
   | "CANCELLED";
+/** healer: ends only in a genuine Healer action; resilience: timed fault cleanup. */
+export type ChaosScenarioKind = "healer" | "resilience" | "disabled";
 export interface ChaosScenario {
   id: ChaosScenarioId;
   name: string;
+  /** The confirmation word an administrator must type. */
   target: string;
+  /** Every Healer-managed component the fault touches (one receipt each). */
+  targets: string[];
+  kind: ChaosScenarioKind;
+  /** Core five first; lower sorts earlier in the console. */
+  order: number;
+  /** One line: what the audience sees in the real product. */
+  audienceSees: string;
+  /** One line: the real-world causes that produce the same end state. */
+  realWorldCause: string;
+  /** Receipt the Healer must produce for each target. */
+  expectedReceipt: "docker_start_accepted" | "docker_restart_accepted" | null;
   risk: "moderate" | "high";
   failure: string;
   recovery: string;
@@ -43,6 +62,11 @@ export type ExperimentEventKind =
   | "RECEIPT_PENDING"
   | "SERVICE_VERIFIED"
   | "NO_ACCEPTED_FAULT"
+  | "FAULT_PROBE_PENDING"
+  | "TARGET_VERIFIED"
+  | "BROADCASTER_CLIENT_RECONNECTED"
+  | "BROADCASTER_NOT_RETURNED"
+  | "BROWSER_EVIDENCE"
   | `CIRCUIT_${"CLOSED" | "OPEN" | "HALF_OPEN"}`;
 export interface ExperimentEvent {
   kind: ExperimentEventKind;

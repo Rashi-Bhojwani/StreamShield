@@ -258,9 +258,18 @@ export class Verifier {
         await this.text(this.url(a.component, "/api/v1/streams")),
       );
       if (!Array.isArray(streams.streams)) return { ok: false, evidence };
+      // The repaired API must serve through the gateway, and so must its peer
+      // whenever the peer is currently healthy (both serving = full tier restored).
+      const peer = a.component === "api-1" ? "api-2" : "api-1";
+      const serving = [
+        a.component,
+        ...(frame.components.find((x) => x.id === peer)?.state === "HEALTHY"
+          ? [peer]
+          : []),
+      ];
       const counts = async () =>
         Promise.all(
-          ["api-1", "api-2"].map(async (id) => {
+          serving.map(async (id) => {
             const u = new URL(this.url(id));
             u.port = process.env.API_INTERNAL_PORT!;
             u.pathname = "/metrics";
@@ -290,9 +299,12 @@ export class Verifier {
         if (!Array.isArray(b.streams)) return { ok: false, evidence };
       }
       const after = await counts();
-      evidence.gatewayBothAPIs = after.every((n, i) => n > before[i]!);
+      const all = after.every((n, i) => n > before[i]!);
+      evidence.gatewayServingAPIs = serving.join(",");
+      evidence.gatewayBothAPIs = all && serving.length === 2;
+      evidence.gatewayRepairedAPIServing = after[0]! > before[0]!;
       evidence.applicationReadVerified = true;
-      return { ok: evidence.gatewayBothAPIs === true, evidence };
+      return { ok: all, evidence };
     }
     if (a.component.startsWith("edge-") || a.component === "origin-primary") {
       const r = await this.response(

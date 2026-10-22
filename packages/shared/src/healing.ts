@@ -43,8 +43,16 @@ export interface RecoveryAttempt {
   events: RecoveryEvent[];
   databasePersisted?: boolean;
 }
+/** Remaining Healer repair authority for one managed service (rolling window). */
+export interface RepairBudget {
+  used: number;
+  max: number;
+  /** When the next operation is permitted (cooldown or budget), null = now. */
+  availableAt: string | null;
+}
 export interface HealingSnapshot {
   version: 1;
+  budgets?: Record<string, RepairBudget>;
   available: boolean;
   enabled: boolean;
   leader: boolean;

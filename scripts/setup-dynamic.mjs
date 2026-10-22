@@ -48,6 +48,15 @@ if (
     "HEALER_ALLOWED_SERVICES",
     "api-1,api-2,edge-1,edge-2,origin-primary,redis,video-gateway,relay",
   );
+if (
+  !initial.CHAOS_ALLOWED_SCENARIOS ||
+  initial.CHAOS_ALLOWED_SCENARIOS ===
+    "crash-api,crash-edge,crash-primary,crash-redis,network-timeout,external-api"
+)
+  set(
+    "CHAOS_ALLOWED_SCENARIOS",
+    "crash-redis,crash-video-gateway,crash-api-tier,crash-relay,hang-api,crash-api,crash-edge,crash-primary,network-timeout,external-api",
+  );
 set(
   "MEDIA_RTMP_PUBLIC_URL",
   `rtmp://${ingestHost.includes(":") ? "[" + ingestHost + "]" : ingestHost}:${initial.MEDIA_RTMP_PORT || 1935}`,

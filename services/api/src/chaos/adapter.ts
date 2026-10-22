@@ -4,7 +4,7 @@ import { z } from "zod";
 import { database } from "../healing/journal.js";
 import { equal } from "../healing/authority.js";
 import { chaosConfig, supported, scenarioFor, temporary } from "./config.js";
-import { FaultDocker } from "./docker.js";
+import { FaultDocker, freezable, killable } from "./docker.js";
 import type { ChaosScenarioId } from "@streamshield/shared";
 const c = chaosConfig(process.env),
   log = pino({ base: { service: "chaos-fault-adapter" } });
@@ -178,12 +178,28 @@ app.post("/v1/inject", async (q, r) => {
         simulatedDependency: true,
         faultDurationMs: c.CHAOS_FAULT_DURATION_MS,
       };
+    } else if (b.scenario === "hang-api") {
+      const target = scenarioFor(b.scenario)
+        .target as (typeof freezable)[number];
+      f.evidence = await docker.freeze(target);
+      // Frozen means alive: the container must still be running, never restarted.
+      if (!f.evidence.runningObserved || !f.evidence.startedAtUnchanged)
+        throw Error("frozen_state_unconfirmed");
     } else {
-      f.evidence = await docker.kill(
-        scenarioFor(b.scenario).target as
-          "api-1" | "edge-1" | "origin-primary" | "redis",
-      );
-      if (!f.evidence.stoppedObserved) throw Error("stopped_state_unconfirmed");
+      // One experiment may kill several allowlisted targets (the whole API tier).
+      const evidence: Fault["evidence"] = { signal: "SIGKILL" };
+      for (const target of scenarioFor(b.scenario).targets) {
+        const r = await docker.kill(target as (typeof killable)[number]);
+        evidence[target + ":stoppedObserved"] = r.stoppedObserved;
+        evidence[target + ":exitCode"] = r.exitCode;
+        if (!r.stoppedObserved) {
+          f.evidence = evidence;
+          throw Error("stopped_state_unconfirmed");
+        }
+      }
+      evidence.killAccepted = true;
+      evidence.stoppedObserved = true;
+      f.evidence = evidence;
     }
     f.state = "CONFIRMED";
     f.confirmedAt = new Date().toISOString();

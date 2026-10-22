@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HealingSnapshot, RecoveryAttempt } from "@streamshield/shared";
 import { chaosConfig, scenarios } from "./config.js";
+import { killable, freezable } from "./docker.js";
 import { ChaosJournal } from "./journal.js";
 import { ChaosEngine } from "./engine.js";
 import type { ChaosStore } from "./store.js";
@@ -59,6 +60,18 @@ function fixture() {
     observedAt: new Date().toISOString(),
     attempts: [],
     circuit: { state: "CLOSED" },
+    budgets: Object.fromEntries(
+      [
+        "api-1",
+        "api-2",
+        "edge-1",
+        "edge-2",
+        "origin-primary",
+        "redis",
+        "video-gateway",
+        "relay",
+      ].map((s) => [s, { used: 0, max: 2, availableAt: null }]),
+    ),
   } as unknown as HealingSnapshot;
   engine.controlAvailable = true;
   return { engine, j, store };
@@ -103,7 +116,7 @@ describe("chaos authority and admission", () => {
       expect(() => chaosConfig({ ...env, ...overrides })).toThrow();
   });
   it("shows unsafe/unowned scenarios as disabled with explicit reasons", () => {
-    expect(scenarios.filter((s) => s.supported)).toHaveLength(6);
+    expect(scenarios.filter((s) => s.supported)).toHaveLength(10);
     expect(
       scenarios
         .filter((s) => !s.supported)
@@ -383,5 +396,226 @@ describe("durable chaos lifecycle", () => {
     expect(
       e.events.filter((x) => x.kind.startsWith("CIRCUIT_")).map((x) => x.kind),
     ).toEqual(["CIRCUIT_OPEN", "CIRCUIT_HALF_OPEN", "CIRCUIT_OPEN"]);
+  });
+});
+
+const attempt = (
+  component: string,
+  overrides: Partial<RecoveryAttempt> = {},
+): RecoveryAttempt =>
+  ({
+    id: randomUUID(),
+    incidentId: null,
+    component,
+    playbook: component.startsWith("api") ? "api-start" : component + "-start",
+    action: "start_stopped_service",
+    diagnosis: "test",
+    state: "VERIFIED",
+    createdAt: new Date(Date.now() + 5).toISOString(),
+    actionStartedAt: new Date(Date.now() + 10).toISOString(),
+    actionFinishedAt: new Date(Date.now() + 20).toISOString(),
+    verificationStartedAt: new Date(Date.now() + 30).toISOString(),
+    finishedAt: new Date(Date.now() + 40).toISOString(),
+    reason: "independent_behavior_verified",
+    evidence: { controlReceipt: "docker_start_accepted" },
+    events: [],
+    ...overrides,
+  }) as RecoveryAttempt;
+async function injected(
+  scenario: "hang-api" | "crash-api-tier" | "crash-relay",
+  target: string,
+) {
+  const f = fixture();
+  const e = await f.engine.submit(randomUUID(), randomUUID(), scenario, target);
+  e.state = "AWAITING_DETECTION";
+  e.injectedAt = new Date().toISOString();
+  f.j.save(e);
+  vi.spyOn(f.engine, "control").mockResolvedValue({
+    cleanup: "NOT_REQUIRED",
+  });
+  f.engine.verifier.verify = vi
+    .fn()
+    .mockResolvedValue({ ok: true, evidence: {} });
+  return { ...f, e };
+}
+async function settle(engine: ChaosEngine, id: string, j: ChaosJournal) {
+  // Two observations 2 s apart satisfy the stability window.
+  const now = Date.now();
+  vi.spyOn(Date, "now").mockReturnValue(now);
+  await engine["advance"](j.get(id)!);
+  vi.spyOn(Date, "now").mockReturnValue(now + 2500);
+  await engine["advance"](j.get(id)!);
+}
+describe("final self-healing scenarios", () => {
+  it("lists the core five first, each with a real-world cause and expected receipt", () => {
+    expect(scenarios.slice(0, 5).map((s) => s.id)).toEqual([
+      "crash-redis",
+      "crash-video-gateway",
+      "crash-api-tier",
+      "crash-relay",
+      "hang-api",
+    ]);
+    for (const s of scenarios.filter((s) => s.kind === "healer")) {
+      expect(s.realWorldCause.length).toBeGreaterThan(10);
+      expect(s.audienceSees.length).toBeGreaterThan(10);
+      expect(s.expectedReceipt).toMatch(/^docker_(start|restart)_accepted$/);
+    }
+    expect(scenarios.find((s) => s.id === "hang-api")?.expectedReceipt).toBe(
+      "docker_restart_accepted",
+    );
+    expect(
+      scenarios
+        .filter((s) => s.kind === "resilience")
+        .every((s) => s.expectedReceipt === null),
+    ).toBe(true);
+  });
+  it("never allowlists postgres or unrelated targets for faults", () => {
+    expect(killable).not.toContain("postgres" as never);
+    expect(freezable).toEqual(["api-2"]);
+    for (const s of scenarios.filter((s) => s.kind === "healer"))
+      for (const t of s.targets)
+        expect([...killable, ...freezable]).toContain(t as never);
+  });
+  it("requires the typed api-tier confirmation for the whole tier", async () => {
+    const { engine } = fixture();
+    await expect(
+      engine.submit(randomUUID(), randomUUID(), "crash-api-tier", "api-1"),
+    ).rejects.toThrow("confirmation");
+  });
+  it("refuses a hang experiment unless the Healer restart playbook is enabled", () => {
+    const { engine } = fixture();
+    process.env.HEALER_DISABLED_PLAYBOOKS = "api-restart-unresponsive";
+    try {
+      expect(engine.reason("hang-api")).toContain("playbook is disabled");
+      expect(engine.reason("crash-api")).toBeNull();
+    } finally {
+      delete process.env.HEALER_DISABLED_PLAYBOOKS;
+    }
+  });
+  it("confirms a hang only when the direct readiness probe times out", async () => {
+    const { engine, j } = fixture();
+    const e = await engine.submit(
+      randomUUID(),
+      randomUUID(),
+      "hang-api",
+      "api-2",
+    );
+    e.state = "INJECTING";
+    j.save(e);
+    const receipt = {
+      state: "CONFIRMED",
+      injectedAt: new Date().toISOString(),
+      confirmedAt: new Date().toISOString(),
+      expiresAt: Date.now() + 180000,
+      cleanup: "NOT_REQUIRED",
+      evidence: { runningObserved: true },
+    };
+    const control = vi.spyOn(engine, "control").mockResolvedValue(receipt);
+    const probe = vi
+      .spyOn(engine, "hangProbe")
+      .mockResolvedValueOnce("answered_200")
+      .mockResolvedValue("probe_timeout");
+    await engine["advance"](j.get(e.id)!);
+    expect(j.get(e.id)?.state).toBe("INJECTING");
+    await engine["advance"](j.get(e.id)!);
+    expect(j.get(e.id)).toMatchObject({ state: "FAULT_CONFIRMED" });
+    expect(j.get(e.id)?.evidence.readinessProbe).toBe("probe_timeout");
+    // The accepted fault is re-read, never re-injected.
+    expect(control.mock.calls.every((c) => c[0] !== "/v1/inject")).toBe(true);
+    expect(probe).toHaveBeenCalledTimes(2);
+  });
+  it("completes a hang only with a docker_restart_accepted receipt from the restart playbook", async () => {
+    const ok = await injected("hang-api", "api-2");
+    ok.engine.healer!.attempts = [
+      attempt("api-2", {
+        playbook: "api-restart-unresponsive",
+        action: "restart_unresponsive_service",
+        evidence: { controlReceipt: "docker_restart_accepted" },
+      }),
+    ];
+    await settle(ok.engine, ok.e.id, ok.j);
+    expect(ok.j.get(ok.e.id)).toMatchObject({ state: "COMPLETED" });
+    vi.restoreAllMocks();
+    const wrong = await injected("hang-api", "api-2");
+    wrong.engine.healer!.attempts = [attempt("api-2")];
+    await settle(wrong.engine, wrong.e.id, wrong.j);
+    expect(wrong.j.get(wrong.e.id)?.state).toBe("FAILED");
+    expect(wrong.j.get(wrong.e.id)?.reason).toContain(
+      "docker_restart_accepted",
+    );
+  });
+  it("requires two accepted Healer receipts before the API tier completes", async () => {
+    const { engine, e, j } = await injected("crash-api-tier", "api-tier");
+    const one = attempt("api-1"),
+      two = attempt("api-2", { state: "VERIFYING", finishedAt: null });
+    engine.healer!.attempts = [one];
+    await settle(engine, e.id, j);
+    expect(j.get(e.id)?.state).not.toBe("COMPLETED");
+    engine.healer!.attempts = [one, two];
+    await settle(engine, e.id, j);
+    expect(j.get(e.id)?.state).not.toBe("COMPLETED");
+    engine.healer!.attempts = [
+      one,
+      { ...two, state: "VERIFIED", finishedAt: new Date().toISOString() },
+    ];
+    await settle(engine, e.id, j);
+    expect(j.get(e.id)).toMatchObject({ state: "COMPLETED" });
+    expect(j.get(e.id)?.recoveryIds).toHaveLength(2);
+    expect(j.get(e.id)?.evidence.healerReceipts).toBe(2);
+  });
+  it("fails the API tier when either instance escalates", async () => {
+    const { engine, e, j } = await injected("crash-api-tier", "api-tier");
+    engine.healer!.attempts = [
+      attempt("api-1"),
+      attempt("api-2", { state: "ESCALATED", reason: "budget_exhausted" }),
+    ];
+    await engine["advance"](j.get(e.id)!);
+    expect(j.get(e.id)?.state).toBe("FAILED");
+    expect(j.get(e.id)?.reason).toContain("api-2");
+  });
+  it("records the broadcaster's own reconnection separately from the relay repair", async () => {
+    const { engine, e, j } = await injected("crash-relay", "relay");
+    e.evidence.livePathsAtInjection = 1;
+    j.save(e);
+    engine.healer!.attempts = [attempt("relay", { playbook: "relay-start" })];
+    engine.frame!.media = [];
+    await settle(engine, e.id, j);
+    expect(j.get(e.id)?.state).not.toBe("COMPLETED");
+    expect(j.get(e.id)?.verifiedAt).not.toBeNull();
+    engine.frame!.media = [
+      {
+        path: "s-" + "a".repeat(32),
+        publisher: true,
+        checkedAt: new Date().toISOString(),
+        sources: [],
+      },
+    ];
+    await engine["advance"](j.get(e.id)!);
+    const done = j.get(e.id)!;
+    expect(done.state).toBe("COMPLETED");
+    expect(done.evidence).toMatchObject({
+      broadcasterClientReconnected: true,
+      sourceRestoredByHealer: false,
+    });
+    expect(done.events.map((x) => x.kind)).toContain(
+      "BROADCASTER_CLIENT_RECONNECTED",
+    );
+  });
+});
+
+describe("repair-budget admission", () => {
+  it("never injects a fault the Healer cannot currently repair", () => {
+    const { engine } = fixture();
+    engine.healer!.budgets!["api-2"] = {
+      used: 2,
+      max: 2,
+      availableAt: "2026-10-22T20:02:03.000Z",
+    };
+    expect(engine.reason("crash-api-tier")).toContain("api-2");
+    expect(engine.reason("hang-api")).toContain("20:02:03");
+    expect(engine.reason("crash-api")).toBeNull();
+    expect(engine.reason("network-timeout")).toBeNull();
+    delete engine.healer!.budgets;
+    expect(engine.reason("crash-redis")).toContain("not reported");
   });
 });

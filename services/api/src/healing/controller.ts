@@ -27,6 +27,7 @@ export class Healer {
   readonly metrics = healingMetrics();
   readonly circuit: Circuit;
   lease: Lease | null = null;
+  budgets: HealingSnapshot["budgets"];
   observedAt: string | null = null;
   available = false;
   private lastFrame: Frame | undefined;
@@ -73,6 +74,7 @@ export class Healer {
         Date.now() - this.lastFrame.lastCompleted <
           Number(process.env.OBS_STALE_MS || 12000),
       enabled: this.c.enabled,
+      budgets: this.budgets,
       leader: !!this.lease && this.lease.expires > Date.now(),
       observedAt: this.observedAt,
       databaseAvailable: this.store.available,
@@ -263,6 +265,12 @@ export class Healer {
       this.available = false;
       return;
     }
+    try {
+      const b = await this.control("/v1/budgets");
+      this.budgets = b.ok ? b.body : undefined;
+    } catch {
+      this.budgets = undefined;
+    }
     if (
       Date.now() >= this.nextDatabaseRetry &&
       Date.now() - this.lastDatabaseCheck > 5000
@@ -389,7 +397,11 @@ export class Healer {
         }
       }
     }
-    // One staged operation per cycle. Dependency-suppressed work cannot starve roots.
+    // At most one side-effecting operation per cycle. Read-only verification of
+    // other attempts continues every cycle, so one attempt's verification window
+    // cannot starve the repair of another failed instance (e.g. the whole API tier).
+    // Dependency-suppressed work cannot starve roots.
+    let acted = false;
     for (const a of this.journal
       .work()
       .filter((a) => !terminal(a))
@@ -398,7 +410,9 @@ export class Healer {
           Number(a.component.startsWith("api")) -
           Number(b.component.startsWith("api")),
       )) {
-      if (await this.advance(a, frame)) break;
+      if (acted && a.state === "SCHEDULED") continue;
+      const scheduled = a.state === "SCHEDULED";
+      if ((await this.advance(a, frame)) && scheduled) acted = true;
     }
     const snapshot = this.snapshot();
     this.metrics.active.set(snapshot.counts.active);

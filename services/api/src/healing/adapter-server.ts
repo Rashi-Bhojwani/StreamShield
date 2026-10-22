@@ -49,6 +49,21 @@ app.get("/v1/actions/:id", (req, res) => {
   const row = journal.get(req.params.id);
   res.status(row ? 200 : 404).json(row || { code: "not_accepted" });
 });
+app.get("/v1/budgets", (_req, res) =>
+  res.json(
+    Object.fromEntries(
+      managed.map((service) => [
+        service,
+        journal.budget(
+          service,
+          c.HEALER_COOLDOWN_MS,
+          c.HEALER_MAX_STARTS,
+          c.HEALER_BUDGET_WINDOW_MS,
+        ),
+      ]),
+    ),
+  ),
+);
 app.get("/v1/inspect/:service", async (req, res) => {
   const service = z.enum(managed).safeParse(req.params.service);
   if (!service.success) {
