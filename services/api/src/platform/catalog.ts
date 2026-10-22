@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { observeBroadcast } from "./dynamic.js";
 import type { Config } from "../config.js";
 import { createMediaService } from "../media.js";
 import type { Resources } from "./resources.js";
@@ -20,12 +21,22 @@ const rowSchema = z
   })
   .passthrough();
 export const streamSelect =
-  "SELECT s.*,c.slug AS channel_slug,c.display_name AS channel_name,c.owner_id,u.username AS owner_username FROM streams s JOIN channels c ON c.id=s.channel_id JOIN users u ON u.id=c.owner_id";
+  "SELECT s.*,c.slug AS channel_slug,c.display_name AS channel_name,c.owner_id,u.avatar_color,u.username AS owner_username FROM streams s JOIN channels c ON c.id=s.channel_id JOIN users u ON u.id=c.owner_id";
 export function createCatalog(
   r: Resources,
   c: PlatformConfig,
   mediaConfig: Config,
 ) {
+  let notify = (_event: {
+    version: 1;
+    streamId: string;
+    state: string;
+    at: string;
+  }) => {};
+  let moderationNotify = (_event: {
+    streamId: string;
+    messageId?: string;
+  }) => {};
   const observers = new Map<string, ReturnType<typeof createMediaService>>();
   const legacy = createMediaService(mediaConfig);
   const observe = async (input: unknown) => {
@@ -42,6 +53,23 @@ export function createCatalog(
       observers.set(row.media_path, source);
     }
     const evidence = await source.getStream();
+    const dynamic = c.DYNAMIC_ENABLED
+      ? await observeBroadcast(
+          r,
+          c,
+          mediaConfig,
+          row.id,
+          row.media_path,
+          evidence,
+        )
+      : null;
+    if (dynamic?.changed)
+      notify({
+        version: 1,
+        streamId: row.id,
+        state: dynamic.state,
+        at: new Date().toISOString(),
+      });
     if (c.DEMO_ENABLED)
       await r.db.query(
         `WITH changed AS (
@@ -49,12 +77,17 @@ export function createCatalog(
     ) INSERT INTO demo_broadcast_history(stream_id,status) SELECT stream_id,$2 FROM changed`,
         [row.id, evidence.status],
       );
-    if (row.lifecycle === "ready" && evidence.status === "live") {
+    if (
+      !c.DYNAMIC_ENABLED &&
+      row.lifecycle === "ready" &&
+      evidence.status === "live"
+    ) {
       await r.db.query(
         "UPDATE streams SET started_at=COALESCE(started_at,now()),last_live_at=now(),ended_at=NULL WHERE id=$1 AND lifecycle='ready'",
         [row.id],
       );
     } else if (
+      !c.DYNAMIC_ENABLED &&
       evidence.status === "offline" &&
       row.lifecycle === "ready" &&
       row.started_at
@@ -66,6 +99,11 @@ export function createCatalog(
     }
     return {
       ...evidence,
+      ...(dynamic
+        ? { status: dynamic.status, broadcastState: dynamic.state }
+        : {}),
+      category: String(row.category || "Other"),
+      avatarColor: String(row.avatar_color || "#52d7c7"),
       id: row.id,
       title: row.title,
       description: row.description,
@@ -79,6 +117,15 @@ export function createCatalog(
     };
   };
   return {
+    setNotify: (fn: typeof notify) => {
+      notify = fn;
+    },
+    notifyDiscovery: (event: Parameters<typeof notify>[0]) => notify(event),
+    setModerationNotify: (fn: typeof moderationNotify) => {
+      moderationNotify = fn;
+    },
+    notifyModeration: (event: Parameters<typeof moderationNotify>[0]) =>
+      moderationNotify(event),
     invalidate: (path: string) => observers.delete(path),
     observe,
     async get(id: string) {
@@ -159,7 +206,11 @@ export function createCatalog(
   };
 }
 export type Catalog = ReturnType<typeof createCatalog>;
-export async function kickPublisher(c: Config, path: string) {
+export async function kickPublisher(
+  c: Config,
+  path: string,
+  includeWebrtc = false,
+) {
   const headers = {
     Authorization:
       "Basic " +
@@ -169,27 +220,35 @@ export async function kickPublisher(c: Config, path: string) {
   };
   const signal = AbortSignal.timeout(c.MEDIA_PROBE_TIMEOUT_MS);
   try {
-    const response = await fetch(c.MEDIA_API_BASE_URL + "/v3/rtmpconns/list", {
-      headers,
-      signal,
-      redirect: "error",
-    });
-    if (!response.ok) throw new Error("Control unavailable");
-    const list = z
-      .object({
-        items: z.array(
-          z.object({ id: z.uuid(), path: z.string(), state: z.string() }),
-        ),
-      })
-      .parse(await response.json());
-    for (const conn of list.items.filter(
-      (conn) => conn.path === path && conn.state === "publish",
-    )) {
-      const result = await fetch(
-        c.MEDIA_API_BASE_URL + "/v3/rtmpconns/kick/" + conn.id,
-        { method: "POST", headers, signal, redirect: "error" },
+    for (const protocol of [
+      "rtmpconns",
+      ...(includeWebrtc ? ["webrtcsessions"] : []),
+    ]) {
+      const response = await fetch(
+        c.MEDIA_API_BASE_URL + "/v3/" + protocol + "/list",
+        {
+          headers,
+          signal,
+          redirect: "error",
+        },
       );
-      if (!result.ok && result.status !== 404) throw new Error("Kick failed");
+      if (!response.ok) throw new Error("Control unavailable");
+      const list = z
+        .object({
+          items: z.array(
+            z.object({ id: z.uuid(), path: z.string(), state: z.string() }),
+          ),
+        })
+        .parse(await response.json());
+      for (const conn of list.items.filter(
+        (conn) => conn.path === path && conn.state === "publish",
+      )) {
+        const result = await fetch(
+          c.MEDIA_API_BASE_URL + "/v3/" + protocol + "/kick/" + conn.id,
+          { method: "POST", headers, signal, redirect: "error" },
+        );
+        if (!result.ok && result.status !== 404) throw new Error("Kick failed");
+      }
     }
   } catch {
     throw new PlatformError(

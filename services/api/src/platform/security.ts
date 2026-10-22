@@ -91,7 +91,7 @@ export async function session(
   if (!token || !/^[a-zA-Z0-9_-]{43}$/.test(token)) return null;
   const hash = digest(token);
   const result = await r.db.query(
-    "SELECT u.id,u.username,u.email,u.display_name,u.role FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND s.revoked_at IS NULL",
+    "SELECT u.id,u.username,u.email,u.display_name,u.avatar_color,u.role FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND s.revoked_at IS NULL",
     [hash],
   );
   const row = result.rows[0];
@@ -103,6 +103,7 @@ export async function session(
           username: row.username,
           email: row.email,
           displayName: row.display_name,
+          avatarColor: row.avatar_color,
           role: row.role,
         },
       }

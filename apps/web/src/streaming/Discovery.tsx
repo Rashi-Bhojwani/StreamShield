@@ -1,3 +1,5 @@
+import { DynamicDiscovery } from "./DynamicDiscovery";
+import { config } from "../config";
 import { lazy, Suspense, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { Stream } from "@streamshield/shared";
@@ -67,7 +69,7 @@ function QuietState({
     </div>
   );
 }
-export function Discovery({
+function LegacyDiscovery({
   view = "home",
 }: {
   view?: "home" | "live" | "search";
@@ -351,7 +353,7 @@ export function Discovery({
     </div>
   );
 }
-export function Explore() {
+function LegacyExplore() {
   return (
     <div className="explore-page">
       <div className="page-heading">
@@ -387,5 +389,20 @@ export function Explore() {
         </Link>
       </section>
     </div>
+  );
+}
+
+export function Discovery(props: { view?: "home" | "live" | "search" }) {
+  return config.VITE_DYNAMIC_MODE ? (
+    <DynamicDiscovery {...props} />
+  ) : (
+    <LegacyDiscovery {...props} />
+  );
+}
+export function Explore() {
+  return config.VITE_DYNAMIC_MODE ? (
+    <DynamicDiscovery view="explore" />
+  ) : (
+    <LegacyExplore />
   );
 }

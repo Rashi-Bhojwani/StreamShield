@@ -163,7 +163,7 @@ try {
       (await a.r.db.query("SELECT count(*) FROM schema_migrations")).rows[0]
         .count,
     ),
-    5,
+    6,
   );
   assert.deepEqual(
     (
@@ -175,6 +175,7 @@ try {
       "1761190000000_healing",
       "1761280000000_chaos",
       "1761360000000_three_channel_demo",
+      "1761450000000_dynamic_streaming",
     ],
   );
   check("migrations apply and repeat without destructive resets");

@@ -17,6 +17,8 @@ import {
   channelUpdate,
   streamInput,
   streamUpdate,
+  avatarColorSchema,
+  categorySchema,
 } from "@streamshield/shared";
 import type { Config } from "../config.js";
 import type { PlatformConfig } from "./config.js";
@@ -217,12 +219,17 @@ export async function createPlatform(
     const auth = await requireUser(r, req);
     await writeLimit(req, auth.user.id);
     const body = input(
-      z.object({ displayName: z.string().trim().min(1).max(100) }).strict(),
+      z
+        .object({
+          displayName: z.string().trim().min(1).max(100),
+          avatarColor: avatarColorSchema.optional(),
+        })
+        .strict(),
       req.body,
     );
     await r.db.query(
-      "UPDATE users SET display_name=$1,updated_at=now() WHERE id=$2",
-      [body.displayName, auth.user.id],
+      "UPDATE users SET display_name=$1,avatar_color=COALESCE($3,avatar_color),updated_at=now() WHERE id=$2",
+      [body.displayName, auth.user.id, body.avatarColor || null],
     );
     res.json({ ok: true });
   });
@@ -339,6 +346,51 @@ export async function createPlatform(
     );
     res.json(await catalog.list(q.q, q.limit, q.offset));
   });
+  route("get", "/live", async (req, res) => {
+    if (!c.DYNAMIC_ENABLED)
+      throw new PlatformError(
+        404,
+        "NOT_FOUND",
+        "Dynamic discovery is disabled.",
+      );
+    const q = input(
+      z.object({
+        q: z.string().max(120).default(""),
+        category: categorySchema.optional(),
+        offset: z.coerce.number().int().min(0).max(100000).default(0),
+        limit: z.coerce.number().int().min(1).max(48).default(24),
+      }),
+      req.query,
+    );
+    const rows = (
+      await r.db.query(
+        "SELECT s.id FROM streams s JOIN channels c ON c.id=s.channel_id JOIN users u ON u.id=c.owner_id WHERE s.lifecycle='ready' AND s.broadcast_state='LIVE' AND s.dynamic_checked_at>now()-interval '10 seconds' AND ($1::text IS NULL OR s.category=$1) AND ($2='' OR s.title ILIKE $3 OR c.display_name ILIKE $3 OR u.username ILIKE $3) ORDER BY s.created_at DESC,s.id DESC LIMIT $4 OFFSET $5",
+        [
+          q.category || null,
+          q.q,
+          "%" + q.q.replace(/[%_\\]/g, "\\$&") + "%",
+          q.limit + 1,
+          q.offset,
+        ],
+      )
+    ).rows;
+    const streams = await Promise.all(
+      rows.slice(0, q.limit).map(async (row) => {
+        const stream = await catalog.get(row.id);
+        let viewers: number | null = null;
+        try {
+          viewers = await presenceCount(r, row.id);
+        } catch {
+          /* Viewer count remains unknown during a dependency outage. */
+        }
+        return { ...stream, viewers };
+      }),
+    );
+    res.json({
+      streams: streams.filter((s) => s.status === "live"),
+      nextOffset: rows.length > q.limit ? q.offset + q.limit : null,
+    });
+  });
   route("get", "/streams/:id", async (req, res) =>
     res.json(await catalog.get(String(req.params.id))),
   );
@@ -375,7 +427,7 @@ export async function createPlatform(
     const body = input(streamInput, req.body);
     const streamId = randomUUID();
     const result = await r.db.query(
-      "INSERT INTO streams(id,channel_id,title,description,media_path) SELECT $1,c.id,$2,$3,$4 FROM channels c WHERE c.id=$5 AND c.owner_id=$6 RETURNING id",
+      "INSERT INTO streams(id,channel_id,title,description,media_path,category) SELECT $1,c.id,$2,$3,$4,$7 FROM channels c WHERE c.id=$5 AND c.owner_id=$6 RETURNING id",
       [
         streamId,
         body.title,
@@ -383,6 +435,7 @@ export async function createPlatform(
         "s-" + randomUUID().replaceAll("-", ""),
         body.channelId,
         auth.user.id,
+        body.category,
       ],
     );
     if (!result.rowCount)
@@ -399,8 +452,8 @@ export async function createPlatform(
     const body = input(streamUpdate, req.body);
     await catalog.owned(id(req.params.id), auth.user.id);
     await r.db.query(
-      "UPDATE streams SET title=$1,description=$2,updated_at=now() WHERE id=$3",
-      [body.title, body.description, req.params.id],
+      "UPDATE streams SET title=$1,description=$2,category=$4,updated_at=now() WHERE id=$3",
+      [body.title, body.description, req.params.id, body.category],
     );
     res.json({ ok: true });
   });
@@ -420,19 +473,22 @@ export async function createPlatform(
       [row.id],
     );
     catalog.invalidate(row.media_path);
-    await kickPublisher(media, row.media_path);
+    await kickPublisher(media, row.media_path, c.DYNAMIC_ENABLED);
     const key = secret();
     const installed = await r.db.query(
-      "UPDATE streams SET publish_hash=$1,lifecycle='ready',updated_at=now() WHERE id=$2 AND lifecycle!='ended'",
-      [digest(key), row.id],
+      "UPDATE streams SET publish_hash=$1,lifecycle='ready',dynamic_session=$3,broadcast_state='PREPARING',state_changed_at=now(),updated_at=now() WHERE id=$2 AND lifecycle!='ended' AND (NOT $3 OR NOT EXISTS(SELECT 1 FROM streams other WHERE other.channel_id=streams.channel_id AND other.id!=streams.id AND other.lifecycle='ready'))",
+      [digest(key), row.id, c.DYNAMIC_ENABLED],
     );
     if (!installed.rowCount)
       throw new PlatformError(
         409,
-        "STREAM_ENDED",
-        "The stream ended while the key was being rotated.",
+        "PUBLISHING_CONFLICT",
+        "This stream ended or another broadcast already occupies your channel. End it before preparing a new session.",
       );
     res.json({
+      ...(c.DYNAMIC_ENABLED
+        ? { whipUrl: "/ingest/" + row.media_path + "/whip" }
+        : {}),
       server: c.MEDIA_RTMP_PUBLIC_URL,
       path: row.media_path,
       user: row.id,
@@ -445,11 +501,25 @@ export async function createPlatform(
     await writeLimit(req, auth.user.id);
     const row = await catalog.owned(id(req.params.id), auth.user.id);
     await r.db.query(
-      "UPDATE streams SET publish_hash=NULL,lifecycle='ended',ended_at=now(),updated_at=now() WHERE id=$1",
-      [row.id],
+      "UPDATE streams SET publish_hash=NULL,lifecycle='ended',broadcast_state=$2,ended_at=now(),updated_at=now() WHERE id=$1",
+      [row.id, c.DYNAMIC_ENABLED ? "ENDING" : "ENDED"],
     );
     catalog.invalidate(row.media_path);
-    await kickPublisher(media, row.media_path);
+    await kickPublisher(media, row.media_path, c.DYNAMIC_ENABLED);
+    if (c.DYNAMIC_ENABLED) {
+      await r.db.query(
+        "INSERT INTO broadcast_events(stream_id,state,reason) VALUES($1,'ENDING','owner_requested')",
+        [row.id],
+      );
+      await catalog.get(String(row.id));
+    }
+    if (c.DYNAMIC_ENABLED)
+      catalog.notifyDiscovery({
+        version: 1,
+        streamId: String(row.id),
+        state: "ENDED",
+        at: new Date().toISOString(),
+      });
     res.json({ ok: true });
   });
   route("get", "/streams/:id/chat", async (req, res) => {
@@ -495,6 +565,88 @@ export async function createPlatform(
     res.json({
       count: await presenceCount(r, streamId),
       label: "Approximate active players",
+    });
+  });
+  route("post", "/streams/:id/moderation", async (req, res) => {
+    const auth = await requireUser(r, req);
+    await writeLimit(req, auth.user.id);
+    const streamId = id(req.params.id);
+    const owner = (
+      await r.db.query(
+        "SELECT c.owner_id,c.id AS channel_id FROM streams s JOIN channels c ON c.id=s.channel_id WHERE s.id=$1",
+        [streamId],
+      )
+    ).rows[0];
+    if (
+      !owner ||
+      (owner.owner_id !== auth.user.id && auth.user.role !== "administrator")
+    )
+      throw new PlatformError(
+        403,
+        "MODERATION_DENIED",
+        "Only this channel's owner or an administrator can moderate.",
+      );
+    const body = input(
+      z.discriminatedUnion("action", [
+        z.object({ action: z.literal("delete"), messageId: z.uuid() }).strict(),
+        z
+          .object({
+            action: z.enum(["ban", "unban"]),
+            username: z.string().regex(/^[a-z0-9_]{3,24}$/),
+          })
+          .strict(),
+      ]),
+      req.body,
+    );
+    if (body.action === "delete") {
+      const found = await r.db.query(
+        "UPDATE chat_messages SET deleted_at=now() WHERE id=$1 AND stream_id=$2 RETURNING id",
+        [body.messageId, streamId],
+      );
+      if (!found.rowCount)
+        throw new PlatformError(
+          404,
+          "MESSAGE_NOT_FOUND",
+          "Message not found in this stream.",
+        );
+      catalog.notifyModeration({ streamId, messageId: body.messageId });
+    } else {
+      const user = (
+        await r.db.query("SELECT id,role FROM users WHERE username=$1", [
+          body.username,
+        ])
+      ).rows[0];
+      if (!user)
+        throw new PlatformError(404, "USER_NOT_FOUND", "Account not found.");
+      if (user.id === owner.owner_id || user.role === "administrator")
+        throw new PlatformError(
+          409,
+          "PROTECTED_ACCOUNT",
+          "Channel owners and administrators cannot be blocked.",
+        );
+      if (body.action === "ban")
+        await r.db.query(
+          "INSERT INTO chat_bans(channel_id,user_id,actor_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
+          [owner.channel_id, user.id, auth.user.id],
+        );
+      else
+        await r.db.query(
+          "DELETE FROM chat_bans WHERE channel_id=$1 AND user_id=$2",
+          [owner.channel_id, user.id],
+        );
+    }
+    res.json({ ok: true });
+  });
+  route("get", "/studio/streams/:id/history", async (req, res) => {
+    const auth = await requireUser(r, req);
+    await catalog.owned(id(req.params.id), auth.user.id);
+    res.json({
+      events: (
+        await r.db.query(
+          "SELECT state,reason,observed_at FROM broadcast_events WHERE stream_id=$1 ORDER BY id DESC LIMIT 50",
+          [req.params.id],
+        )
+      ).rows,
     });
   });
   router.use("/monitoring", monitoringRouter(r, c, media));

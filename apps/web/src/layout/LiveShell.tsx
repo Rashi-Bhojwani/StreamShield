@@ -1,3 +1,4 @@
+import { config } from "../config";
 import { useAuth } from "../platform/auth-context";
 import { AccountMenu } from "../platform/Auth";
 import { useEffect, useRef, useState } from "react";
@@ -58,7 +59,9 @@ export function LiveShell() {
     };
   }, [open]);
   return (
-    <div className="live-app">
+    <div
+      className={"live-app" + (config.VITE_DYNAMIC_MODE ? " dynamic-app" : "")}
+    >
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -80,6 +83,16 @@ export function LiveShell() {
           </NavLink>
           <NavLink to="/live">Live</NavLink>
           <NavLink to="/explore">Explore</NavLink>
+          {config.VITE_DYNAMIC_MODE && (
+            <NavLink className="mobile-go-live" to="/studio">
+              Go Live
+            </NavLink>
+          )}
+          {config.VITE_DYNAMIC_MODE && (
+            <NavLink className="my-channel-nav" to="/my-channel">
+              My Channel
+            </NavLink>
+          )}
         </nav>
         <form
           className="search-form"
@@ -109,6 +122,11 @@ export function LiveShell() {
             <Icon name="arrow" />
           </button>
         </form>
+        {config.VITE_DYNAMIC_MODE && (
+          <Link className="button primary" to="/studio">
+            <Icon name="studio" /> Go Live
+          </Link>
+        )}
         <AccountMenu />
       </header>
       {open && (
@@ -245,11 +263,7 @@ export function LiveShell() {
               <small>Administrator operations</small>
             </div>
           </div>
-          <button className="sidebar-future" disabled>
-            <Icon name="lock" />
-            <span>Control Center</span>
-            <small>Soon</small>
-          </button>
+
           <Link
             className="connection-link"
             to="/diagnostics"

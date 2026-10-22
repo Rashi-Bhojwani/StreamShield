@@ -3,7 +3,7 @@ import { DemoRoutes } from "./demo/ThreeChannels";
 import { useAuth } from "./platform/auth-context";
 import { AuthProvider, AuthPage, Profile, Protected } from "./platform/Auth";
 
-import { ChannelPage, Channels } from "./platform/Channels";
+import { ChannelPage, Channels, MyChannel } from "./platform/Channels";
 import { lazy, Suspense } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { LiveShell } from "./layout/LiveShell";
@@ -75,9 +75,9 @@ function About() {
       <section className="panel diagnostics-panel">
         <h2>Planned, not operational</h2>
         <p>
-          Following, categories and uploaded profile assets come in later
-          phases. Autonomous recovery and interactive chaos controls remain
-          future work.
+          Following, uploaded profile assets and recording are not implemented.
+          Dynamic streaming includes categories, real browser/OBS publishing,
+          and administrator-only monitoring, autonomous recovery and Chaos.
         </p>
         <p>
           StreamShield Control is a separate authorized operations product. No
@@ -104,6 +104,14 @@ function LegacyRoutes() {
         <Route path="/login" element={<AuthPage />} />
         <Route path="/signup" element={<AuthPage signup />} />
         <Route path="/profile" element={<Profile />} />
+        <Route
+          path="/my-channel"
+          element={
+            <Protected>
+              <MyChannel />
+            </Protected>
+          }
+        />
         <Route
           path="/studio"
           element={

@@ -14,9 +14,11 @@ import { Icon } from "../ui/Icon";
 export function Chat({
   streamId,
   playerContainer,
+  ownerUsername,
 }: {
   streamId: string;
   playerContainer: RefObject<HTMLElement | null>;
+  ownerUsername?: string;
 }) {
   const auth = useAuth(),
     [messages, setMessages] = useState<ChatMessage[]>([]),
@@ -92,6 +94,15 @@ export function Chat({
       if (message.success && message.data.streamId === streamId)
         merge([message.data]);
     });
+    client.on(
+      "chat:moderated",
+      (raw: { streamId?: string; messageId?: string }) => {
+        if (raw?.streamId === streamId && typeof raw.messageId === "string")
+          setMessages((previous) =>
+            previous.filter((m) => m.id !== raw.messageId),
+          );
+      },
+    );
     client.on("disconnect", (reason) => {
       if (!disposed) {
         setStatus("Disconnected");
@@ -318,6 +329,98 @@ export function Chat({
                 </time>
               </div>
               <p>{message.content}</p>
+              {(auth.user?.username === ownerUsername ||
+                auth.user?.role === "administrator") &&
+                !message.synthetic && (
+                  <div className="moderation-actions">
+                    <button
+                      className="text-link"
+                      onClick={async () => {
+                        try {
+                          await auth.call(
+                            "/streams/" + streamId + "/moderation",
+                            {
+                              method: "POST",
+                              body: JSON.stringify({
+                                action: "delete",
+                                messageId: message.id,
+                              }),
+                            },
+                          );
+                          setMessages((previous) =>
+                            previous.filter((m) => m.id !== message.id),
+                          );
+                        } catch (e) {
+                          setError(
+                            e instanceof Error
+                              ? e.message
+                              : "Moderation failed.",
+                          );
+                        }
+                      }}
+                    >
+                      Remove message
+                    </button>
+                    {message.username !== ownerUsername && (
+                      <>
+                        <button
+                          className="text-link"
+                          onClick={async () => {
+                            try {
+                              await auth.call(
+                                "/streams/" + streamId + "/moderation",
+                                {
+                                  method: "POST",
+                                  body: JSON.stringify({
+                                    action: "ban",
+                                    username: message.username,
+                                  }),
+                                },
+                              );
+                              setError(
+                                "Account blocked from this channel’s chat.",
+                              );
+                            } catch (e) {
+                              setError(
+                                e instanceof Error
+                                  ? e.message
+                                  : "Moderation failed.",
+                              );
+                            }
+                          }}
+                        >
+                          Block
+                        </button>
+                        <button
+                          className="text-link"
+                          onClick={async () => {
+                            try {
+                              await auth.call(
+                                "/streams/" + streamId + "/moderation",
+                                {
+                                  method: "POST",
+                                  body: JSON.stringify({
+                                    action: "unban",
+                                    username: message.username,
+                                  }),
+                                },
+                              );
+                              setError("Account can chat again.");
+                            } catch (e) {
+                              setError(
+                                e instanceof Error
+                                  ? e.message
+                                  : "Moderation failed.",
+                              );
+                            }
+                          }}
+                        >
+                          Allow
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
             </article>
           ))
         )}

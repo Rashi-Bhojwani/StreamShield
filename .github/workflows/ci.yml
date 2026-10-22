@@ -191,3 +191,31 @@ jobs:
           if-no-files-found: ignore
       - if: always()
         run: if [ -f .local/demo/compose.yml ]; then npm run demo:down; fi
+
+  dynamic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:dynamic -- --enable-local-chaos
+      - run: node infrastructure/dynamic/compose.mjs config --quiet
+      - run: npm run dynamic:up
+      - run: npm run chaos:probe
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:dynamic
+      - if: failure()
+        run: node scripts/dynamic-diagnostics.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dynamic-streaming-results
+          path: test-results/dynamic/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/dynamic/compose.yml ]; then npm run dynamic:down; fi

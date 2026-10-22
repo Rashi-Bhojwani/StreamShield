@@ -3,6 +3,9 @@ const int = (min: number, max: number) =>
   z.coerce.number().int().min(min).max(max);
 const bool = z.enum(["true", "false"]).transform((v) => v === "true");
 const schema = z.object({
+  DYNAMIC_ENABLED: bool.default(false),
+  DYNAMIC_SOURCE_GRACE_MS: int(2000, 60000).default(8000),
+  DYNAMIC_PROGRESS_TTL_MS: int(2000, 30000).default(6000),
   DEMO_ENABLED: bool.default(false),
   DEMO_GUEST_TTL_SECONDS: int(300, 86400).default(21600),
   DEMO_GUEST_CREATE_LIMIT: int(1, 1000).default(120),
@@ -69,6 +72,8 @@ export function parsePlatformConfig(input: Record<string, unknown>) {
         result.error.issues.map((i) => i.path.join(".")).join(", "),
     );
   const c = result.data;
+  if (c.DYNAMIC_ENABLED && c.DEMO_ENABLED)
+    throw new Error("Choose dynamic or fixed demo mode, not both");
   if (c.DEMO_ENABLED && input.NODE_ENV !== "development")
     throw new Error(
       "Three-channel demo requires explicit development environment",
