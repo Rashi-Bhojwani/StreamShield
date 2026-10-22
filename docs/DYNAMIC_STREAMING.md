@@ -36,6 +36,8 @@ Browser capture requires localhost or HTTPS. The generated local deployment adve
 
 ## OBS and trusted LAN devices
 
+On Windows, restrict `.env` and `.local` to your own account using NTFS permissions; keep credentials out of shared folders, screenshots and Git.
+
 Studio's **Create publishing key** / **Rotate publishing key** returns that stream's Server and masked Stream Key once. Reveal/copy only in private. OBS Settings → Stream → Custom: paste the exact Server and Stream Key; encode H.264/yuv420p, AAC audio and two-second keyframes. Start Streaming. Media uses that user's independent random path and exact Watch route. Rotation revokes and disconnects only the matching RTMP/WebRTC publisher; other channels continue.
 
 For another laptop, run `ipconfig` on the host and use its actual assigned LAN IPv4. Example only:
@@ -100,4 +102,32 @@ Stop your load workers and external publishers with Ctrl+C. Shutdown retains nam
 - Chat: expired sessions, rate limits and bans produce visible errors. Redis disruption can interrupt live delivery without stopping independent media.
 - Healing: wait for healthy fresh peers and full verification; exhausted cooldown/start budgets must expire naturally. Never erase audit state to bypass admission.
 
-The free self-hosted software stack does not make machines, bandwidth or public hosting free. Single-host relay/gateways/PostgreSQL/Redis remain failure domains. There is no recording, adaptive-bitrate transcoding, CDN, host-level HA or claimed 50K capacity in this release. Actual test measurements and screenshots will be attached to this feature's PR after execution.
+The free self-hosted software stack does not make machines, bandwidth or public hosting free. Single-host relay/gateways/PostgreSQL/Redis remain failure domains. There is no recording, adaptive-bitrate transcoding, CDN, host-level HA or claimed 50K capacity in this release. Actual test measurements and screenshots follow below.
+
+## Verified results
+
+**Platform PASS**, browser-camera WHIP **PASS with synthetic capture devices**, OBS-compatible FFmpeg **PASS**. The **50K capacity milestone remains PARTIAL / UNVERIFIED**. All eight [clean Linux CI jobs](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39729395061) passed on `13a1c43`: verify, resilience, monitoring, healing, chaos, demo, capacity and dynamic. Local lint/typecheck/build/format and 179 tests in 18 files passed. Generated MediaMTX and Nginx configuration were also checked in isolated real containers; the complete topology ran in CI.
+
+The dynamic integration registered four independent accounts, verified three simultaneous distinct FFmpeg broadcasts with remote decoded widths 640/480/320, typed live-feed events without a page reload, category filtering, ownership/false-LIVE prevention, authenticated chat/history/moderation/isolation, logout and independent source ending. After one source stopped, the fourth account used real camera/microphone WHIP alongside the remaining broadcasters. This proves three concurrent publishers, not four concurrent publishers or a capacity benchmark.
+
+The browser capture produced remote 640×360 H.264 video and Opus audio; observed audio decoded bytes were 3425 and remote audio RMS was 0.127110. These are actual browser observations using synthetic test devices, not a physical webcam or operating-system screen chooser rehearsal.
+
+| Actual fault  | Detection (s) | Healing start (s) | Functional restoration (s) | Maximum sampled decoded-progress gap (s) |
+| ------------- | ------------: | ----------------: | -------------------------: | ---------------------------------------: |
+| crash-api     |         4.264 |             5.306 |                     17.869 |                                    0.500 |
+| crash-edge    |         3.427 |             3.830 |                     14.579 |                                    0.500 |
+| crash-primary |         3.774 |             4.871 |                     23.499 |                                    1.750 |
+
+All three faults completed with independent Healer functional verification and continued correct channel identities. No manual restore command was used. Playback gaps are separately sampled every 250ms across media-timeline resets; maximum observed gap was 1.750s. Server `playbackInterruptionMs` remains null. These bounded observations do not establish zero buffering, global uptime or host-level redundancy.
+
+The public homepage was captured and visually reviewed at 375/768/1280/1440/1920px; Watch and live browser Studio were additionally reviewed at mobile/desktop sizes. Home captures wait for advancing decoded frames, not just a playlist or startup spinner. Publishing credentials are absent from evidence. [Raw actual measurements, definitions and CI source](DYNAMIC_STREAMING_MEASUREMENTS.json).
+
+| Width  | Home                                                      |
+| ------ | --------------------------------------------------------- |
+| 375px  | [Actual live homepage](screenshots/dynamic/home-375.png)  |
+| 768px  | [Actual live homepage](screenshots/dynamic/home-768.png)  |
+| 1280px | [Actual live homepage](screenshots/dynamic/home-1280.png) |
+| 1440px | [Actual live homepage](screenshots/dynamic/home-1440.png) |
+| 1920px | [Actual live homepage](screenshots/dynamic/home-1920.png) |
+
+[Watch mobile](screenshots/dynamic/watch-375.png) · [Watch desktop](screenshots/dynamic/watch-1440.png) · [Browser Studio mobile](screenshots/dynamic/studio-375.png) · [Browser Studio desktop](screenshots/dynamic/studio-1440.png).

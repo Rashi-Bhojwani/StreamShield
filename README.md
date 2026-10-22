@@ -2,6 +2,8 @@
 
 **StreamShield 2.0 dynamic mode** restores public registration/login and user-owned channels, adds browser WHIP publishing, authoritative media-progress lifecycle/discovery, working category filters and channel chat moderation. Start with `npm.cmd run setup:dynamic -- --enable-local-chaos`, then `npm.cmd run dynamic:up`. Open http://127.0.0.1:5173/signup. No shared accounts are seeded. [Complete Windows, browser/OBS/LAN and healing guide](docs/DYNAMIC_STREAMING.md) · [Design and verification plan](docs/DYNAMIC_STREAMING_PLAN.md).
 
+All eight [CI jobs](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39729395061) passed with 179 tests, real three-source playback, automatic discovery, authenticated chat and independent recovery. Browser WHIP remote video/audio passed using synthetic camera/microphone devices; physical Windows/OBS/screen-choice checks remain unexecuted. [Actual dynamic measurements and screenshots](docs/DYNAMIC_STREAMING.md#verified-results).
+
 The earlier fixed three-channel experience below is a preserved optional demo, not the dynamic platform limit.
 
 The new explicit **three-channel demo mode** provides Streamer 1/2/3, guest viewing/chat, private CLI broadcaster provisioning and one-use local administrator access. The presentation screen combines three genuine live players, real capacity measurements and the existing independent Healer/Chaos controls. The **50,000 simulated-client target remains unverified**; workload profiles and achieved counts are kept separate.
