@@ -666,6 +666,58 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       ),
     ).toBe(false);
     await studio.unroute("**/ingest/**");
+    // A real accepted WHIP session with unreachable test-only ICE candidates must fail visibly and be deleted.
+    await studio
+      .getByRole("button", { name: "Create livestream", exact: true })
+      .click();
+    await studio
+      .getByLabel("Stream title", { exact: true })
+      .first()
+      .fill("Blocked ICE attempt " + suffix);
+    await studio
+      .getByRole("button", { name: "Create stream", exact: true })
+      .click();
+    await studio
+      .getByRole("button", { name: "Preview camera", exact: true })
+      .click();
+    await expect(
+      studio.getByRole("button", { name: "Start Live", exact: true }),
+    ).toBeEnabled({ timeout: 30000 });
+    const blockedIceId = (
+      await (await cameraContext.request.get("/api/v1/studio/streams")).json()
+    ).streams[0].id;
+    await studio.route("**/ingest/**", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      const response = await route.fetch();
+      expect(response.status()).toBe(201);
+      const answer = await response.text();
+      expect(answer).toContain("a=candidate:");
+      await route.fulfill({
+        response,
+        body: answer
+          .replace(/^a=ice-ufrag:.*$/gm, "a=ice-ufrag:unreachabletest")
+          .replace(/(a=candidate:\S+ \d+ \S+ \d+) \S+ \d+/g, "$1 192.0.2.1 9"),
+      });
+    });
+    await studio
+      .getByRole("button", { name: "Start Live", exact: true })
+      .click();
+    await expect(
+      studio.getByText(/Media connection (timed out|failed)/),
+    ).toBeVisible({ timeout: 40000 });
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get("/api/v1/streams/" + blockedIceId)).json())
+            .lifecycle,
+      )
+      .toBe("ended");
+    expect(
+      (await (await request.get("/api/v1/live")).json()).streams.some(
+        (s: { id: string }) => s.id === blockedIceId,
+      ),
+    ).toBe(false);
+    await studio.unroute("**/ingest/**");
     await studio
       .getByRole("button", { name: "Create livestream", exact: true })
       .click();
