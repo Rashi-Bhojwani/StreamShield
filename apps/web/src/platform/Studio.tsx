@@ -18,6 +18,16 @@ import { config } from "../config";
 function StreamEditor({ stream }: { stream: Stream }) {
   const auth = useAuth(),
     client = useQueryClient();
+  const presence = useQuery({
+    queryKey: ["presence", stream.id],
+    queryFn: () =>
+      auth.call<{ count: number; label: string }>(
+        "/streams/" + stream.id + "/presence",
+      ),
+    enabled: config.VITE_DYNAMIC_MODE,
+    refetchInterval: config.VITE_STATUS_POLL_MS,
+    retry: false,
+  });
   const [publishing, setPublishing] = useState<Publishing | null>(null),
     [reveal, setReveal] = useState(false),
     [notice, setNotice] = useState(""),
@@ -52,11 +62,13 @@ function StreamEditor({ stream }: { stream: Stream }) {
       <div className="section-heading">
         <div>
           <p className="eyebrow">
-            {stream.lifecycle === "ended"
-              ? "Past broadcast"
-              : stream.lifecycle === "draft"
-                ? "Draft livestream"
-                : "Broadcast ready"}
+            {stream.status === "live"
+              ? "On air"
+              : stream.lifecycle === "ended"
+                ? "Past broadcast"
+                : stream.lifecycle === "draft"
+                  ? "Draft livestream"
+                  : "Broadcast ready"}
           </p>
           <h3>{stream.title}</h3>
         </div>
@@ -66,6 +78,10 @@ function StreamEditor({ stream }: { stream: Stream }) {
       {config.VITE_DYNAMIC_MODE && (
         <p className="fine-print">
           {stream.category} · {stream.broadcastState} ·{" "}
+          {presence.isPending || presence.isError
+            ? "Player estimate unavailable"
+            : `${presence.data.count} approximate active players`}{" "}
+          ·{" "}
           <a className="text-link" href={"/watch/" + stream.id}>
             Share/watch link
           </a>

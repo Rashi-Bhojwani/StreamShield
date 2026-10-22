@@ -15,6 +15,14 @@
 .dynamic-app .top-navigation a {
   white-space: nowrap;
 }
+.dynamic-app .topbar > .button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dynamic-app .search-form {
+  min-width: 0;
+  flex: 1;
+}
 .dynamic-app main {
   min-width: 0;
 }

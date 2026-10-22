@@ -594,11 +594,19 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       remoteAudioRms: audioRms,
     };
     await studio.setViewportSize({ width: 1440, height: 1000 });
+    await studio.evaluate(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      window.scrollTo(0, 0);
+    });
     await studio.screenshot({
       path: "test-results/dynamic/studio-1440.png",
       fullPage: true,
     });
     await studio.setViewportSize({ width: 375, height: 1000 });
+    await studio.evaluate(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      window.scrollTo(0, 0);
+    });
     await studio.screenshot({
       path: "test-results/dynamic/studio-375.png",
       fullPage: true,

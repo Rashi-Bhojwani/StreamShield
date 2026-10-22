@@ -331,7 +331,11 @@ export function BrowserStudio({
           Stop preview
         </button>
       </div>
-      <p role="status">{state}</p>
+      <p role="status">
+        {live && publishing
+          ? "Live · your broadcast is available to viewers."
+          : state}
+      </p>
       {error && (
         <p className="form-error" role="alert">
           {error}
