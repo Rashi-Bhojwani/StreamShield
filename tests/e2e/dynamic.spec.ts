@@ -44,7 +44,8 @@ async function stop(p: ChildProcess) {
     .toBe(true);
 }
 async function advances(page: Page, width?: number) {
-  let last = 0;
+  let last = { frames: 0, time: 0 },
+    verified: unknown = null;
   await expect
     .poll(
       async () => {
@@ -56,7 +57,9 @@ async function advances(page: Page, width?: number) {
             return {
               width: v.videoWidth,
               time: v.currentTime,
-              frames: v.getVideoPlaybackQuality().totalVideoFrames,
+              frames:
+                v.getVideoPlaybackQuality().totalVideoFrames -
+                v.getVideoPlaybackQuality().droppedVideoFrames,
               playing: !v.paused && v.readyState >= 2,
             };
           })
@@ -65,14 +68,17 @@ async function advances(page: Page, width?: number) {
         const ok =
           current.playing &&
           (!width || current.width === width) &&
-          current.frames > last &&
-          last > 0;
-        last = current.frames;
+          current.frames > last.frames &&
+          current.time > last.time &&
+          last.frames > 0;
+        if (ok) verified = { before: last, after: current };
+        last = current;
         return ok;
       },
       { timeout, intervals: [500] },
     )
     .toBe(true);
+  return verified;
 }
 async function socketFor(context: BrowserContext, csrf: string) {
   const s = io(origin, {
@@ -777,13 +783,17 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
     ).toBeVisible({ timeout });
     expect(cameraFeedNavigations).toBe(0);
     await expect.poll(() => liveHints.has(browserId), { timeout }).toBe(true);
+    await feed.screenshot({
+      path: "test-results/dynamic/exact-lakshita-live.png",
+      fullPage: true,
+    });
     const cameraViewer = feed;
     await feed
       .locator('[data-stream-id="' + browserId + '"] a')
       .first()
       .click();
     await expect(cameraViewer).toHaveURL(new RegExp("/watch/" + browserId));
-    await advances(cameraViewer);
+    const cameraDecodedProgress = await advances(cameraViewer);
     const popupPromise = studio.waitForEvent("popup");
     await currentStudio.getByRole("link", { name: "Open watch page" }).click();
     const rashiWatch = await popupPromise;
@@ -846,7 +856,19 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       ).messages.some((m: { content: string }) => m.content === conversation),
     ).toBe(false);
     await cameraViewer.context().setOffline(true);
+    expect(
+      await cameraViewer.evaluate(() =>
+        fetch("/api/v1/live", { cache: "no-store" }).then(
+          () => false,
+          () => true,
+        ),
+      ),
+    ).toBe(true);
     await cameraViewer.context().setOffline(false);
+    await cameraViewer.reload();
+    await expect(
+      cameraViewer.getByRole("log").getByText(conversation, { exact: true }),
+    ).toHaveCount(1, { timeout: 30000 });
     await expect(
       cameraViewer.getByLabel("Your message", { exact: true }),
     ).toBeEnabled({ timeout: 30000 });
@@ -909,6 +931,7 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
     checks.browserWhip = {
       status: "PASS",
       remoteDecoded: browserMedia,
+      decodedProgress: cameraDecodedProgress,
       tracks: meta.tracks,
       remoteAudioRms: audioRms,
     };
@@ -1001,6 +1024,15 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       path: "test-results/dynamic/studio-375.png",
       fullPage: true,
     });
+    const afterEndFeed = await contexts[1]!.newPage();
+    await afterEndFeed.goto("/live");
+    await expect(
+      afterEndFeed.locator('[data-stream-id="' + browserId + '"]'),
+    ).toBeVisible({ timeout });
+    let endFeedNavigations = 0;
+    afterEndFeed.on("framenavigated", (frame) => {
+      if (frame === afterEndFeed.mainFrame()) endFeedNavigations++;
+    });
     await studio.getByRole("button", { name: "End Live", exact: true }).click();
     await expect
       .poll(
@@ -1016,11 +1048,11 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
     await expect(
       rashiWatch.getByRole("heading", { name: "Waiting for a broadcaster" }),
     ).toBeVisible({ timeout: 30000 });
-    const afterEndFeed = await contexts[1]!.newPage();
-    await afterEndFeed.goto("/live");
     await expect(
       afterEndFeed.locator('[data-stream-id="' + browserId + '"]'),
-    ).toHaveCount(0);
+    ).toHaveCount(0, { timeout: 30000 });
+    expect(endFeedNavigations).toBe(0);
+    checks.automaticCameraFeedRemoval = true;
     await advances(viewers[0]!, 640);
     await advances(viewers[2]!, 320);
     checks.fourthAccountAndBrowserEnd = true;
