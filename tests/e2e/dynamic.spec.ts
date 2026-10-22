@@ -407,7 +407,7 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
           contexts[0]!.request,
           users[0]!.csrf,
           "/streams/" + ids[0] + "/moderation",
-          { action: "ban", username: "dynamic1_" + suffix },
+          { action: "ban", username: "lakshita_" + suffix },
         )
       ).status(),
     ).toBe(200);
@@ -421,7 +421,7 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
           contexts[0]!.request,
           users[0]!.csrf,
           "/streams/" + ids[0] + "/moderation",
-          { action: "unban", username: "dynamic1_" + suffix },
+          { action: "unban", username: "lakshita_" + suffix },
         )
       ).status(),
     ).toBe(200);
@@ -737,6 +737,25 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       users[1]!.csrf,
       browserId,
       "Cross-replica camera " + suffix,
+    );
+    checks.mediaServerSnapshots = JSON.parse(
+      compose(
+        "exec",
+        "-T",
+        "api-2",
+        "node",
+        "--input-type=module",
+        "-e",
+        `
+      const evidence = {};
+      for (const [name, key] of [["relay", "MEDIA_API_BASE_URL"], ["primary", "MEDIA_DELIVERY_API_BASE_URL"], ["standby", "MEDIA_STANDBY_API_BASE_URL"]]) {
+        const response = await fetch(process.env[key] + "/v3/paths/list", { headers: { Authorization: "Basic " + Buffer.from(process.env.MEDIA_API_USER + ":" + process.env.MEDIA_API_PASSWORD).toString("base64") }, signal: AbortSignal.timeout(5000) });
+        const body = await response.json();
+        evidence[name] = { status: response.status, paths: (body.items || []).map(p => ({ name: p.name, ready: p.ready, source: p.source?.type, tracks: p.tracks, bytes: p.inboundBytes ?? p.bytesReceived })) };
+      }
+      console.log(JSON.stringify(evidence));
+    `,
+      ),
     );
     const conversation = "Lakshita to Rashi " + suffix;
     await cameraViewer
