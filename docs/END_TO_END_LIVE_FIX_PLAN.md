@@ -24,3 +24,7 @@ Camera/screen + microphone → authenticated same-origin `/ingest/<unique-path>/
 ## Verification and delivery
 
 Run existing baseline tests, lint, formatting, typecheck and build. Run targeted failure tests first. Use clean Linux CI for the complete Docker topology: this VFS cloud host previously exhausted its 32 GB disk with that topology and currently has about 4.9 GB available. Do not erase databases or volumes to make it fit. Record actual run results and distinguish synthetic devices from physical Windows hardware and screen chooser. Keep the PR draft while verifying, then mark ready only with the actual evidence. Push the feature branch and create the requested PR without merging it.
+
+## Completed verification
+
+All eight clean Linux CI jobs passed on `a451e4343f7fc26c766e43b4156c85af0543d7e9`: verify, resilience, monitoring, healing, chaos, demo, capacity and dynamic. The exact Rashi/Lakshita browser-camera workflow, acknowledged cross-account and cross-replica chat, decoded audio/video, automatic discovery/removal, credential isolation, independent concurrent streams and real API/edge recovery passed. Local lint/format/typecheck/build and 186 unit tests passed. See [actual results, Windows commands and reviewed screenshots](END_TO_END_LIVE_FIX_RESULTS.md) and [source-linked raw evidence](END_TO_END_LIVE_FIX_MEASUREMENTS.json). Physical Windows camera/firewall/OS screen-chooser checks remain unverified; the user's machine-specific first failing point remains unconfirmed.
