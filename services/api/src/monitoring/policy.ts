@@ -99,16 +99,79 @@ export function duration(from: string, to: string) {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-/** Rejected observer authority cannot establish that the target itself is down. */
-export function failedProbe(error: unknown, latencyMs: number): Probe {
-  const value = error as { code?: string; message?: string } | null;
-  const denied =
+const CONNECT_ERRORS = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EPIPE",
+  "ETIMEDOUT",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_SOCKET",
+]);
+/**
+ * Classifies why a probe failed without guessing beyond the evidence:
+ * - probe_denied: the observer's own authority was rejected (target state unknown).
+ * - probe_unreachable: no connection/answer path exists (refused, DNS gone, reset).
+ *   A connect-phase timeout is also unreachable: a hung process still has its
+ *   socket accepted by the kernel, so only a dead/absent endpoint fails to connect.
+ * - probe_timeout: the request/command was accepted but no answer arrived in time
+ *   (process alive but unresponsive).
+ */
+export function probeFailureCode(
+  error: unknown,
+): "probe_denied" | "probe_unreachable" | "probe_timeout" {
+  const value = error as {
+    code?: string;
+    name?: string;
+    message?: string;
+    cause?: unknown;
+  } | null;
+  if (
     ["28P01", "28000", "42501", "3D000", "MONITOR_AUTH_DENIED"].includes(
       value?.code || "",
-    ) || /^(WRONGPASS|NOAUTH|NOPERM)\b/.test(value?.message || "");
+    ) ||
+    /^(WRONGPASS|NOAUTH|NOPERM)\b/.test(value?.message || "")
+  )
+    return "probe_denied";
+  const chain: { code?: string; name?: string; message?: string }[] = [];
+  for (
+    let e = value as typeof value | undefined, depth = 0;
+    e && typeof e === "object" && depth < 4;
+    e = e.cause as typeof value | undefined, depth++
+  )
+    chain.push(e);
+  if (chain.some((e) => CONNECT_ERRORS.has(e.code || "")))
+    return "probe_unreachable";
+  if (
+    chain.some(
+      (e) =>
+        e.name === "TimeoutError" ||
+        e.name === "AbortError" ||
+        // node-redis command timeouts are TimeoutError subclasses without a name.
+        ["TimeoutError", "SocketTimeoutError"].includes(
+          (e as { constructor?: { name?: string } }).constructor?.name || "",
+        ) ||
+        e.code === "ABORT_ERR" ||
+        e.code === "UND_ERR_HEADERS_TIMEOUT" ||
+        e.code === "UND_ERR_BODY_TIMEOUT" ||
+        e.code === "57014" ||
+        /^(Query read timeout|Timeout|Command timed out)/i.test(
+          e.message || "",
+        ),
+    )
+  )
+    return "probe_timeout";
+  return "probe_unreachable";
+}
+/** Rejected observer authority cannot establish that the target itself is down. */
+export function failedProbe(error: unknown, latencyMs: number): Probe {
+  const code = probeFailureCode(error);
   return {
-    state: denied ? "UNKNOWN" : "UNHEALTHY",
-    code: denied ? "probe_denied" : "probe_unreachable",
+    state: code === "probe_denied" ? "UNKNOWN" : "UNHEALTHY",
+    code,
     latencyMs,
   };
 }

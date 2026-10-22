@@ -136,3 +136,32 @@ it("reports rejected DB/Redis observer authority as unknown without declaring a 
   );
   expect(failedProbe({ code: "ECONNREFUSED" }, 1000).state).toBe("UNHEALTHY");
 });
+
+it("distinguishes a hung target (timeout) from an absent one (unreachable)", () => {
+  expect(failedProbe(new DOMException("t", "TimeoutError"), 1000)).toEqual({
+    state: "UNHEALTHY",
+    code: "probe_timeout",
+    latencyMs: 1000,
+  });
+  expect(failedProbe(new DOMException("a", "AbortError"), 999).code).toBe(
+    "probe_timeout",
+  );
+  expect(failedProbe(new Error("Query read timeout"), 1000).code).toBe(
+    "probe_timeout",
+  );
+  expect(failedProbe({ code: "57014" }, 1000).code).toBe("probe_timeout");
+  class TimeoutError extends Error {}
+  expect(failedProbe(new TimeoutError(), 1000).code).toBe("probe_timeout");
+  const refused = new TypeError("fetch failed", {
+    cause: { code: "ECONNREFUSED" },
+  });
+  expect(failedProbe(refused, 3).code).toBe("probe_unreachable");
+  const dns = new TypeError("fetch failed", { cause: { code: "ENOTFOUND" } });
+  expect(failedProbe(dns, 3).code).toBe("probe_unreachable");
+  const connect = new TypeError("fetch failed", {
+    cause: { code: "UND_ERR_CONNECT_TIMEOUT", name: "ConnectTimeoutError" },
+  });
+  expect(failedProbe(connect, 1000).code).toBe("probe_unreachable");
+  expect(failedProbe(new Error("redis"), 0).code).toBe("probe_unreachable");
+  expect(failedProbe({ code: "28P01" }, 2).code).toBe("probe_denied");
+});
