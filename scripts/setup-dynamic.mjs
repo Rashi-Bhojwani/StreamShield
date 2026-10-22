@@ -76,7 +76,7 @@ Object.assign(relay, {
   webrtcAdditionalHosts: ["127.0.0.1"],
   webrtcICEServers2: [],
 });
-save("relay.yml", stringify(relay));
+save("relay.yml", stringify(relay, { defaultStringType: "QUOTE_DOUBLE" }));
 let web = readFileSync(".local/healing/web.conf", "utf8");
 web = web.replace(
   " server {\n  listen",
@@ -84,7 +84,7 @@ web = web.replace(
 );
 web = web.replace(
   "  location /api/",
-  `  location ~ ^/ingest/(s-[a-f0-9]{32}/whip(?:/[a-f0-9-]+)?)$ {
+  `  location ~ "^/ingest/(s-[a-f0-9]{32}/whip(?:/[a-f0-9-]+)?)$" {
     access_log off; client_max_body_size 64k; proxy_pass http://browser_ingest/$1;
     proxy_set_header Cookie ''; proxy_set_header Authorization $http_authorization;
     proxy_set_header Host $host; proxy_buffering off; proxy_read_timeout 20s;

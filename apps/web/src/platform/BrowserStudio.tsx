@@ -29,6 +29,7 @@ export function BrowserStudio({
     [publishing, setPublishing] = useState(false),
     [level, setLevel] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
   const audio = useRef<AudioContext | null>(null),
     meterTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const release = useCallback(() => {
@@ -123,6 +124,7 @@ export function BrowserStudio({
         setState("Capture stopped. End the broadcast or select a new source.");
         void publisher.current?.close();
         publisher.current = null;
+        release();
         setPublishing(false);
       };
       setReady(true);
@@ -163,6 +165,7 @@ export function BrowserStudio({
         }),
       );
       if (attempt.current !== current) return;
+      setHasSession(true);
       const connection = await publishWhip(source, key, (s) => {
         if (attempt.current === current)
           setState(
@@ -196,6 +199,7 @@ export function BrowserStudio({
       await publisher.current?.close();
       publisher.current = null;
       setPublishing(false);
+      setHasSession(false);
       await auth.call("/studio/streams/" + streamId + "/end", {
         method: "POST",
       });
@@ -310,7 +314,7 @@ export function BrowserStudio({
         </button>
         <button
           className="button secondary danger-button"
-          disabled={!publishing || busy}
+          disabled={!hasSession || busy}
           onClick={() => void end()}
         >
           End Live

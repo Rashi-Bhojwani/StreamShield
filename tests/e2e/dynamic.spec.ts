@@ -242,6 +242,16 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       feed.getByRole("heading", { name: "Live, right now." }),
     ).toBeVisible();
     let navigations = 0;
+    const discoverySocket = await socketFor(contexts[1]!, users[1]!.csrf);
+    sockets.push(discoverySocket);
+    const liveHints = new Set<string>();
+    discoverySocket.on(
+      "discovery:v1",
+      (event: { version: number; streamId: string; state: string }) => {
+        if (event.version === 1 && event.state === "LIVE")
+          liveHints.add(event.streamId);
+      },
+    );
     feed.on("framenavigated", (frame) => {
       if (frame === feed.mainFrame()) navigations++;
     });
@@ -259,7 +269,11 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
         timeout,
       });
     expect(navigations).toBe(0);
+    await expect
+      .poll(() => ids.every((id) => liveHints.has(id)), { timeout })
+      .toBe(true);
     checks.automaticFeedWithoutReload = true;
+    checks.typedLiveDiscoveryEvents = true;
     for (let i = 0; i < 3; i++) {
       const page = await contexts[(i + 1) % 3]!.newPage();
       viewers.push(page);

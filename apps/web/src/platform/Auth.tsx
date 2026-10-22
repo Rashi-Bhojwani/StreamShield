@@ -260,7 +260,11 @@ export function AccountMenu() {
       <div className="account-popover">
         <p className="fine-print">Signed in as {auth.user.username}</p>
         <Link to="/profile">Your profile</Link>
+        <Link to="/my-channel">My Channel</Link>
         <Link to="/studio">Broadcaster Studio</Link>
+        {auth.user.role === "administrator" && (
+          <Link to="/control">Control Center</Link>
+        )}
         <button
           onClick={async () => {
             try {

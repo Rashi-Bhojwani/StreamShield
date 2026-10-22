@@ -79,7 +79,10 @@ export async function observeBroadcast(
     ).rows[0];
     const now = (row.observed_now as Date).getTime();
     const progressed =
-      bytes !== null && bytes > 0 && bytes !== Number(row.media_bytes);
+      bytes !== null &&
+      Number(row.media_bytes) > 0 &&
+      bytes > 0 &&
+      bytes !== Number(row.media_bytes);
     const recentProgress =
       !!row.media_progress_at &&
       now - row.media_progress_at.getTime() < c.DYNAMIC_PROGRESS_TTL_MS;
