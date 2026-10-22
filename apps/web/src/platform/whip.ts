@@ -25,6 +25,7 @@ export async function publishWhip(
   stream: MediaStream,
   publishing: Publishing,
   onState: (state: RTCPeerConnectionState) => void,
+  signal?: AbortSignal,
 ) {
   if (!publishing.whipUrl)
     throw new Error(
@@ -48,6 +49,7 @@ export async function publishWhip(
     }
   };
   try {
+    signal?.throwIfAborted();
     pc.onconnectionstatechange = () => onState(pc.connectionState);
     for (const track of stream.getTracks()) {
       const transceiver = pc.addTransceiver(track, {
@@ -91,12 +93,17 @@ export async function publishWhip(
       headers: { Authorization: auth, "Content-Type": "application/sdp" },
       body: pc.localDescription!.sdp,
       credentials: "omit",
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.any([
+        AbortSignal.timeout(15000),
+        ...(signal ? [signal] : []),
+      ]),
       redirect: "error",
     });
     if (response.status !== 201)
       throw new Error(
-        `Publishing negotiation failed (${response.status}). Check the stream key and service health.`,
+        response.status === 401 || response.status === 403
+          ? `Publishing authorization rejected (${response.status}). Refresh your login and create a new broadcast; keep its key private.`
+          : `Publishing negotiation failed (${response.status}). Check dynamic:status and the /ingest proxy; rerun setup:dynamic and recreate services after updating.`,
       );
     const location = response.headers.get("Location");
     if (!location) throw new Error("Publishing session address is missing.");
@@ -104,6 +111,38 @@ export async function publishWhip(
     await pc.setRemoteDescription({
       type: "answer",
       sdp: await response.text(),
+    });
+    await new Promise<void>((resolve, reject) => {
+      const finish = (error?: Error) => {
+        clearTimeout(timer);
+        pc.removeEventListener("connectionstatechange", check);
+        signal?.removeEventListener("abort", abort);
+        if (error) reject(error);
+        else resolve();
+      };
+      const check = () => {
+        if (pc.connectionState === "connected") finish();
+        else if (["failed", "closed"].includes(pc.connectionState))
+          finish(
+            new Error(
+              "Media connection failed. Check Docker Desktop, VPN/firewall and BROWSER_ICE_PORT UDP/TCP forwarding.",
+            ),
+          );
+      };
+      const abort = () => finish(new Error("Publishing cancelled."));
+      const timer = setTimeout(
+        () =>
+          finish(
+            new Error(
+              "Media connection timed out: WHIP accepted the request but ICE could not connect. Check BROWSER_ICE_PORT UDP/TCP, firewall/VPN and the advertised ICE host. Local preview is not a broadcast.",
+            ),
+          ),
+        20000,
+      );
+      pc.addEventListener("connectionstatechange", check);
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) abort();
+      else check();
     });
     return { close, stats: () => pc.getStats() };
   } catch (e) {

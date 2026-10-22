@@ -103,6 +103,67 @@ const emit = (s: Socket, event: string, body: object) =>
           e ? reject(e) : resolve(r),
         ),
   );
+async function crossReplicaChat(
+  a: BrowserContext,
+  b: BrowserContext,
+  csrfA: string,
+  csrfB: string,
+  streamId: string,
+  content: string,
+) {
+  const cookie = async (context: BrowserContext) =>
+    (await context.cookies()).map((c) => c.name + "=" + c.value).join("; ");
+  // Trusted test terminal only: pass session material via stdin, never command arguments or evidence.
+  const program = `
+    import { io } from "socket.io-client";
+    let input = ""; for await (const chunk of process.stdin) input += chunk;
+    const p = JSON.parse(input), clients = [];
+    const timer = setTimeout(() => process.exit(2), 30000);
+    const emit = (s, event, data) => new Promise((resolve, reject) => s.timeout(10000).emit(event, data, (e, r) => e ? reject(e) : resolve(r)));
+    try {
+      for (let i = 0; i < 2; i++) {
+        const s = io(i ? "http://api-2:4000" : "http://api:4000", { transports: ["websocket"], autoConnect: false, auth: { csrf: p.csrf[i] }, extraHeaders: { Origin: p.origin, Cookie: p.cookies[i] } });
+        clients.push(s);
+        await new Promise((resolve, reject) => { s.once("connect", resolve); s.once("connect_error", reject); s.connect(); });
+        if (!(await emit(s, "join", { streamId: p.streamId })).ok) throw Error("Join denied");
+      }
+      let deliveries = 0;
+      clients[0].on("message", m => { if (m.content === p.content && m.streamId === p.streamId) deliveries++; });
+      const ack = await emit(clients[1], "message", { streamId: p.streamId, content: p.content });
+      for (let i=0; i<50 && !deliveries; i++) await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 500));
+      if (!ack.ok || deliveries !== 1) throw Error("Cross-replica delivery failed");
+      console.log(JSON.stringify({ sender: "api-2", receiver: "api-1", acknowledged: true, deliveries }));
+    } finally { clearTimeout(timer); for (const s of clients) s.disconnect(); }
+  `;
+  return JSON.parse(
+    execFileSync(
+      "docker",
+      [
+        ...dynamicComposeArgs,
+        "exec",
+        "-T",
+        "api-2",
+        "node",
+        "--input-type=module",
+        "-e",
+        program,
+      ],
+      {
+        input: JSON.stringify({
+          origin,
+          cookies: [await cookie(a), await cookie(b)],
+          csrf: [csrfA, csrfB],
+          streamId,
+          content,
+        }),
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+        timeout: 40000,
+      },
+    ),
+  );
+}
 async function sample(page: Page) {
   await page.evaluate(() => {
     let previous: {
@@ -179,7 +240,7 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       contexts.push(context);
       const user = await account(
         context.request,
-        "dynamic" + i + "_" + suffix,
+        (i === 1 ? "lakshita_" : "dynamic" + i + "_") + suffix,
         "Dynamic-test-password-42",
       );
       users.push(user);
@@ -480,19 +541,51 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
     await advances(viewers[0]!, 640);
     await advances(viewers[2]!, 320);
     checks.independentSourceStop = true;
+    const cameraEvidence: {
+      network: unknown[];
+      consoleErrors: number;
+      pageErrors: number;
+    } = { network: [], consoleErrors: 0, pageErrors: 0 };
+    checks.exactCameraScenario = cameraEvidence;
     // A fourth independently registered account proves there is no fixed three-user platform limit.
     const cameraContext = await browser.newContext({
       permissions: ["camera", "microphone"],
     });
     contexts.push(cameraContext);
+    await cameraContext.addInitScript(() => {
+      const Original = window.RTCPeerConnection;
+      const states: string[] = [];
+      (window as unknown as { publishStates: string[] }).publishStates = states;
+      window.RTCPeerConnection = class extends Original {
+        constructor(config?: RTCConfiguration) {
+          super(config);
+          this.addEventListener("connectionstatechange", () =>
+            states.push(this.connectionState),
+          );
+        }
+      };
+    });
     const studio = await cameraContext.newPage();
+    studio.on("console", (m) => {
+      if (m.type() === "error") cameraEvidence.consoleErrors++;
+    });
+    studio.on("pageerror", () => cameraEvidence.pageErrors++);
+    studio.on("response", (response) => {
+      const path = new URL(response.url()).pathname;
+      if (path.startsWith("/ingest/"))
+        cameraEvidence.network.push({
+          method: response.request().method(),
+          path,
+          status: response.status(),
+        });
+    });
     await studio.goto("/signup");
     await studio
       .getByLabel("Username", { exact: true })
-      .fill("camera_" + suffix);
+      .fill("rashi_" + suffix);
     await studio
       .getByLabel("Email address")
-      .fill("camera_" + suffix + "@example.test");
+      .fill("rashi_" + suffix + "@example.test");
     await studio
       .getByLabel("Password", { exact: true })
       .fill("Dynamic-camera-password-42");
@@ -500,6 +593,26 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       .getByRole("button", { name: "Create account", exact: true })
       .click();
     await expect(studio).toHaveURL(/\/studio/, { timeout });
+    const registered = await (
+      await cameraContext.request.get("/api/v1/auth/me")
+    ).json();
+    expect(
+      (
+        await write(cameraContext.request, registered.csrf, "/auth/logout")
+      ).status(),
+    ).toBe(200);
+    const signedOut = await (
+      await cameraContext.request.get("/api/v1/auth/me")
+    ).json();
+    expect(
+      (
+        await write(cameraContext.request, signedOut.csrf, "/auth/login", {
+          identifier: "rashi_" + suffix,
+          password: "Dynamic-camera-password-42",
+        })
+      ).status(),
+    ).toBe(200);
+    await studio.goto("/studio");
     await studio
       .getByLabel("Channel name", { exact: true })
       .fill("Camera Studio");
@@ -512,7 +625,7 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       .click();
     await studio
       .getByLabel("Stream title", { exact: true })
-      .fill("Browser camera live " + suffix);
+      .fill("Rejected browser attempt " + suffix);
     await studio
       .getByRole("button", { name: "Create stream", exact: true })
       .click();
@@ -525,7 +638,62 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
     await expect(
       studio.getByRole("button", { name: "Start Live", exact: true }),
     ).toBeEnabled({ timeout: 30000 });
+    // Reproduce a rejected publish request: preview must not become LIVE and the owned key must be revoked.
+    const rejectedId = (
+      await (await cameraContext.request.get("/api/v1/studio/streams")).json()
+    ).streams[0].id;
+    await studio.route("**/ingest/**", (route) =>
+      route.request().method() === "POST"
+        ? route.fulfill({ status: 401 })
+        : route.continue(),
+    );
     await studio
+      .getByRole("button", { name: "Start Live", exact: true })
+      .click();
+    await expect(
+      studio.getByText(/Publishing authorization rejected/),
+    ).toBeVisible({ timeout: 30000 });
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get("/api/v1/streams/" + rejectedId)).json())
+            .lifecycle,
+      )
+      .toBe("ended");
+    expect(
+      (await (await request.get("/api/v1/live")).json()).streams.some(
+        (s: { id: string }) => s.id === rejectedId,
+      ),
+    ).toBe(false);
+    await studio.unroute("**/ingest/**");
+    await studio
+      .getByRole("button", { name: "Create livestream", exact: true })
+      .click();
+    await studio
+      .getByLabel("Stream title", { exact: true })
+      .first()
+      .fill("learn c++ in 2 hour");
+    await studio
+      .getByRole("button", { name: "Create stream", exact: true })
+      .click();
+    const currentStudio = studio.locator(".studio-stream").filter({
+      has: studio.getByRole("heading", {
+        name: "learn c++ in 2 hour",
+        exact: true,
+      }),
+    });
+    await currentStudio
+      .getByRole("button", { name: "Preview camera", exact: true })
+      .click();
+    await expect(
+      currentStudio.getByRole("button", { name: "Start Live", exact: true }),
+    ).toBeEnabled({ timeout: 30000 });
+    await feed.goto("/live");
+    let cameraFeedNavigations = 0;
+    feed.on("framenavigated", (frame) => {
+      if (frame === feed.mainFrame()) cameraFeedNavigations++;
+    });
+    await currentStudio
       .getByRole("button", { name: "Start Live", exact: true })
       .click();
     await expect(
@@ -535,9 +703,72 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       await cameraContext.request.get("/api/v1/studio/streams")
     ).json();
     const browserId = browserStreams.streams[0].id;
-    const cameraViewer = await contexts[2]!.newPage();
-    await cameraViewer.goto("/watch/" + browserId);
+    await expect(
+      feed.locator('[data-stream-id="' + browserId + '"]'),
+    ).toBeVisible({ timeout });
+    expect(cameraFeedNavigations).toBe(0);
+    await expect.poll(() => liveHints.has(browserId), { timeout }).toBe(true);
+    const cameraViewer = feed;
+    await feed
+      .locator('[data-stream-id="' + browserId + '"] a')
+      .first()
+      .click();
+    await expect(cameraViewer).toHaveURL(new RegExp("/watch/" + browserId));
     await advances(cameraViewer);
+    const popupPromise = studio.waitForEvent("popup");
+    await currentStudio.getByRole("link", { name: "Open watch page" }).click();
+    const rashiWatch = await popupPromise;
+    await expect(studio).toHaveURL(/\/studio/);
+    await advances(rashiWatch);
+    const thirdViewer = await contexts[2]!.newPage();
+    await thirdViewer.goto("/live");
+    await expect(
+      thirdViewer.locator('[data-stream-id="' + browserId + '"]'),
+    ).toBeVisible({ timeout });
+    await thirdViewer.goto("/watch/" + browserId);
+    await advances(thirdViewer);
+    const cameraAuth = await (
+      await cameraContext.request.get("/api/v1/auth/me")
+    ).json();
+    checks.crossReplicaCameraChat = await crossReplicaChat(
+      cameraContext,
+      contexts[1]!,
+      cameraAuth.csrf,
+      users[1]!.csrf,
+      browserId,
+      "Cross-replica camera " + suffix,
+    );
+    const conversation = "Lakshita to Rashi " + suffix;
+    await cameraViewer
+      .getByLabel("Your message", { exact: true })
+      .fill(conversation);
+    await cameraViewer
+      .getByRole("button", { name: "Send", exact: true })
+      .click();
+    await expect(
+      cameraViewer.getByLabel("Your message", { exact: true }),
+    ).toHaveValue("");
+    for (const page of [rashiWatch, thirdViewer])
+      await expect(
+        page.getByRole("log").getByText(conversation, { exact: true }),
+      ).toHaveCount(1);
+    expect(
+      (
+        await (await request.get("/api/v1/streams/" + ids[2] + "/chat")).json()
+      ).messages.some((m: { content: string }) => m.content === conversation),
+    ).toBe(false);
+    await cameraViewer.context().setOffline(true);
+    await cameraViewer.context().setOffline(false);
+    await expect(
+      cameraViewer.getByLabel("Your message", { exact: true }),
+    ).toBeEnabled({ timeout: 30000 });
+    await advances(cameraViewer);
+    await cameraViewer.screenshot({
+      path: "test-results/dynamic/exact-lakshita-watch.png",
+      fullPage: true,
+    });
+    await advances(viewers[0]!, 640);
+    await advances(viewers[2]!, 320);
     const browserMedia = await cameraViewer
       .getByLabel("Live stream video")
       .evaluate((n) => {
@@ -593,6 +824,77 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
       tracks: meta.tracks,
       remoteAudioRms: audioRms,
     };
+    for (const [scenario, target] of [
+      ["crash-api", "api-1"],
+      ["crash-edge", "edge-1"],
+    ]) {
+      await expect
+        .poll(
+          async () =>
+            (await state())?.scenarios.find((s) => s.id === scenario)
+              ?.available,
+          { timeout: 150000, intervals: [1000] },
+        )
+        .toBe(true);
+      await sample(cameraViewer);
+      const id = randomUUID();
+      expect(
+        (
+          await write(
+            contexts[0]!.request,
+            users[0]!.csrf,
+            "/monitoring/chaos/experiments",
+            { id, scenario, confirmation: target },
+          )
+        ).status(),
+      ).toBe(201);
+      await expect
+        .poll(
+          async () =>
+            (await state())?.experiments.find((e) => e.id === id)?.state,
+          { timeout: 150000, intervals: [1000] },
+        )
+        .toBe("COMPLETED");
+      const experiment = (await state())!.experiments.find((e) => e.id === id)!;
+      expect(experiment.evidence.independentBehaviorVerified).toBe(true);
+      await advances(cameraViewer);
+      await advances(viewers[2]!, 320);
+      const message = "Camera chat after " + scenario + " " + suffix;
+      await expect(
+        cameraViewer.getByLabel("Your message", { exact: true }),
+      ).toBeEnabled({ timeout: 30000 });
+      await cameraViewer
+        .getByLabel("Your message", { exact: true })
+        .fill(message);
+      await cameraViewer
+        .getByRole("button", { name: "Send", exact: true })
+        .click();
+      await expect(
+        cameraViewer.getByLabel("Your message", { exact: true }),
+      ).toHaveValue("");
+      await expect(
+        rashiWatch.getByRole("log").getByText(message, { exact: true }),
+      ).toHaveCount(1, { timeout: 30000 });
+      faults.push({
+        scope: "exact-browser-camera",
+        experiment,
+        playback: await finishSample(cameraViewer),
+        chat: "acknowledged and received",
+      });
+    }
+    checks.exactCameraScenario = {
+      ...cameraEvidence,
+      status: "PASS",
+      title: "learn c++ in 2 hour",
+      separateAccounts: 3,
+      automaticFeed: true,
+      watchPopupPreservesPublishing: true,
+      chatAcknowledgedAndReceivedOnce: true,
+      isolatedOtherSource: true,
+      iceStates: await studio.evaluate(
+        () => (window as unknown as { publishStates: string[] }).publishStates,
+      ),
+    };
     await studio.setViewportSize({ width: 1440, height: 1000 });
     await studio.evaluate(() => {
       (document.activeElement as HTMLElement | null)?.blur();
@@ -620,6 +922,19 @@ test("real dynamic accounts, discovery, isolated media/chat, WHIP publishing and
         { timeout: 30000 },
       )
       .toBe("offline");
+    await expect(
+      cameraViewer.getByRole("heading", { name: "Waiting for a broadcaster" }),
+    ).toBeVisible({ timeout: 30000 });
+    await expect(
+      rashiWatch.getByRole("heading", { name: "Waiting for a broadcaster" }),
+    ).toBeVisible({ timeout: 30000 });
+    const afterEndFeed = await contexts[1]!.newPage();
+    await afterEndFeed.goto("/live");
+    await expect(
+      afterEndFeed.locator('[data-stream-id="' + browserId + '"]'),
+    ).toHaveCount(0);
+    await advances(viewers[0]!, 640);
+    await advances(viewers[2]!, 320);
     checks.fourthAccountAndBrowserEnd = true;
     expect(
       (

@@ -3,13 +3,16 @@ import { type Publishing, publishingSchema } from "@streamshield/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./auth-context";
 import { publishWhip } from "./whip";
+import { verifyBroadcast } from "./verify-broadcast";
 
 export function BrowserStudio({
   streamId,
   live,
+  onNotice,
 }: {
   streamId: string;
   live: boolean;
+  onNotice: (notice: string) => void;
 }) {
   const auth = useAuth(),
     cache = useQueryClient();
@@ -19,6 +22,8 @@ export function BrowserStudio({
     null,
   );
   const attempt = useRef(0);
+  const pending = useRef<AbortController | null>(null);
+  const connected = useRef(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]),
     [camera, setCamera] = useState(""),
     [microphone, setMicrophone] = useState("");
@@ -30,6 +35,15 @@ export function BrowserStudio({
     [level, setLevel] = useState(0);
   const [muted, setMuted] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+  useEffect(() => {
+    if (!publishing) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [publishing]);
   const audio = useRef<AudioContext | null>(null),
     meterTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const release = useCallback(() => {
@@ -43,6 +57,7 @@ export function BrowserStudio({
   useEffect(
     () => () => {
       attempt.current++;
+      pending.current?.abort();
       void publisher.current?.close();
       release();
     },
@@ -120,10 +135,14 @@ export function BrowserStudio({
         );
       }, 150);
       video.getVideoTracks()[0]!.onended = () => {
+        if (publisher.current || pending.current) {
+          void end(
+            "Capture stopped. The broadcast has ended; create a new livestream to publish again.",
+          );
+          return;
+        }
         setReady(false);
         setState("Capture stopped. End the broadcast or select a new source.");
-        void publisher.current?.close();
-        publisher.current = null;
         release();
         setPublishing(false);
       };
@@ -148,6 +167,9 @@ export function BrowserStudio({
     if (!capture.current || busy || publishing) return;
     const source = capture.current;
     const current = ++attempt.current;
+    const controller = new AbortController();
+    pending.current = controller;
+    let allocated = false;
     setBusy(true);
     setError("");
     setState("Preparing publishing connection…");
@@ -164,48 +186,91 @@ export function BrowserStudio({
           method: "POST",
         }),
       );
-      if (attempt.current !== current) return;
+      allocated = true;
+      controller.signal.throwIfAborted();
       setHasSession(true);
-      const connection = await publishWhip(source, key, (s) => {
-        if (attempt.current === current)
-          setState(
-            s === "connected"
-              ? "Publishing media · waiting for verified LIVE status"
-              : s === "disconnected"
-                ? "Connection lost · reconnecting"
-                : s === "failed"
-                  ? "Connection failed · check your network"
-                  : "Connection: " + s,
-          );
-      });
+      const connection = await publishWhip(
+        source,
+        key,
+        (s) => {
+          if (attempt.current === current)
+            setState(
+              s === "connected"
+                ? "Publishing media · waiting for verified LIVE status"
+                : s === "disconnected"
+                  ? "Connection lost · reconnecting"
+                  : s === "failed"
+                    ? "Connection failed · check your network"
+                    : "Connection: " + s,
+            );
+          if (s === "failed" && connected.current) {
+            connected.current = false;
+            void end(
+              "Media connection failed. The broadcast was stopped. Create a new livestream and check the ICE port/firewall before retrying.",
+            );
+          }
+        },
+        controller.signal,
+      );
       if (attempt.current !== current) {
         await connection.close();
         return;
       }
       publisher.current = connection;
+      connected.current = true;
       setPublishing(true);
+      await verifyBroadcast(
+        (signal) => auth.call("/streams/" + streamId + "/status", { signal }),
+        controller.signal,
+      );
+      setState("Live · your broadcast is available to viewers.");
       await cache.invalidateQueries({ queryKey: ["studio"] });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Publishing failed.");
+      if (controller.signal.reason === "owner-ended") return;
+      connected.current = false;
+      await publisher.current?.close();
+      publisher.current = null;
+      setPublishing(false);
+      let message = e instanceof Error ? e.message : "Publishing failed.";
+      if (allocated) {
+        try {
+          await auth.call("/studio/streams/" + streamId + "/end", {
+            method: "POST",
+          });
+          setHasSession(false);
+          message += " Publishing stopped. Create a new livestream to retry.";
+        } catch {
+          message +=
+            " Server cleanup could not be confirmed. Use End Live or End stream once services recover.";
+        }
+      }
+      setError(message);
+      onNotice(message);
+      setState("Publishing failed · preview is not live");
+      await cache.invalidateQueries({ queryKey: ["studio"] });
     } finally {
+      if (pending.current === controller) pending.current = null;
       setBusy(false);
     }
   };
-  const end = async () => {
+  const end = async (notice = "Broadcast ended.") => {
     setBusy(true);
     setError("");
     attempt.current++;
+    pending.current?.abort("owner-ended");
+    connected.current = false;
     try {
       await publisher.current?.close();
       publisher.current = null;
       setPublishing(false);
-      setHasSession(false);
       await auth.call("/studio/streams/" + streamId + "/end", {
         method: "POST",
       });
+      setHasSession(false);
       release();
       setReady(false);
-      setState("Broadcast ended.");
+      setState(notice);
+      onNotice(notice);
       await cache.invalidateQueries({ queryKey: ["studio"] });
     } catch (e) {
       setError(e instanceof Error ? e.message : "End could not be confirmed.");
@@ -233,7 +298,8 @@ export function BrowserStudio({
       />
       <p className="fine-print">
         Local preview stays private until you press Start Live. Your broadcast
-        appears publicly only after media is verified.
+        appears publicly only after media is verified. Keep this Studio tab open
+        while broadcasting. Watch links open in a separate tab.
       </p>
       <div className="device-grid">
         <label>
@@ -314,7 +380,7 @@ export function BrowserStudio({
         </button>
         <button
           className="button secondary danger-button"
-          disabled={!hasSession || busy}
+          disabled={!hasSession}
           onClick={() => void end()}
         >
           End Live

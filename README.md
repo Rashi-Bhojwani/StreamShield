@@ -1,5 +1,7 @@
 # StreamShield Live + Control
 
+**Browser Go Live correction:** peer connectivity and server LIVE verification now have explicit deadlines and failed-session cleanup. Studio Watch links open a separate tab to preserve browser broadcasting. [Exact two-account workflow, Windows commands and verification results](docs/END_TO_END_LIVE_FIX_RESULTS.md) · [Fix plan](docs/END_TO_END_LIVE_FIX_PLAN.md).
+
 **StreamShield 2.0 dynamic mode** restores public registration/login and user-owned channels, adds browser WHIP publishing, authoritative media-progress lifecycle/discovery, working category filters and channel chat moderation. Start with `npm.cmd run setup:dynamic -- --enable-local-chaos`, then `npm.cmd run dynamic:up`. Open http://127.0.0.1:5173/signup. No shared accounts are seeded. [Complete Windows, browser/OBS/LAN and healing guide](docs/DYNAMIC_STREAMING.md) · [Design and verification plan](docs/DYNAMIC_STREAMING_PLAN.md).
 
 All eight [CI jobs](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39729395061) passed with 179 tests, real three-source playback, automatic discovery, authenticated chat and independent recovery. Browser WHIP remote video/audio passed using synthetic camera/microphone devices; physical Windows/OBS/screen-choice checks remain unexecuted. [Actual dynamic measurements and screenshots](docs/DYNAMIC_STREAMING.md#verified-results).
