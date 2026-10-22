@@ -1,6 +1,6 @@
 {
   "name": "streamshield",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -69,7 +69,12 @@
     "capacity:stop": "node scripts/capacity/stop.mjs",
     "test:demo": "node scripts/demo-integration.mjs",
     "capacity:stages": "node --import tsx scripts/capacity/stages.mjs",
-    "broadcast:demo": "node scripts/demo-broadcast.mjs"
+    "broadcast:demo": "node scripts/demo-broadcast.mjs",
+    "setup:dynamic": "node scripts/setup-dynamic.mjs",
+    "dynamic:up": "node infrastructure/dynamic/compose.mjs up --build --wait",
+    "dynamic:down": "node infrastructure/dynamic/compose.mjs down",
+    "dynamic:status": "node infrastructure/dynamic/compose.mjs ps",
+    "test:dynamic": "node scripts/dynamic-integration.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

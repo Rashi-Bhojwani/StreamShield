@@ -49,6 +49,10 @@ export const streamSchema = z.object({
   channelSlug: z.string().optional(),
   channelName: z.string().optional(),
   ownerUsername: z.string().optional(),
+  category: z.string().optional(),
+  broadcastState: z.string().optional(),
+  avatarColor: z.string().optional(),
+  viewers: z.number().nullable().optional(),
   lifecycle: z.enum(["draft", "ready", "ended"]).optional(),
   startedAt: z.string().nullable().optional(),
   endedAt: z.string().nullable().optional(),
@@ -115,3 +119,5 @@ export * from "./monitoring";
 export * from "./healing";
 export * from "./chaos";
 export * from "./demo.js";
+
+export * from "./dynamic.js";

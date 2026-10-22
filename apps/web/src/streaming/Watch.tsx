@@ -40,7 +40,10 @@ export default function Watch() {
           className="watch-main"
           aria-label="Video playback"
         >
-          {stream?.status === "live" ? (
+          {stream?.status === "live" ||
+          (config.VITE_DYNAMIC_MODE &&
+            stream?.status === "unavailable" &&
+            observation?.metrics.sourceId === stream.id) ? (
             <LivePlayer
               key={stream.playbackUrl}
               source={stream.playbackUrl}
@@ -268,6 +271,7 @@ export default function Watch() {
         </section>
         {stream?.channelId ? (
           <Chat
+            ownerUsername={stream?.ownerUsername}
             key={stream.id}
             streamId={stream.id}
             playerContainer={playerContainer}

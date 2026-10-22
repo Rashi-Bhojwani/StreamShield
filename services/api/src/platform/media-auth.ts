@@ -110,7 +110,10 @@ export function createMediaAuth(
       }
       return;
     }
-    if (a.action !== "publish" || a.protocol !== "rtmp") {
+    if (
+      a.action !== "publish" ||
+      !(a.protocol === "rtmp" || (c.DYNAMIC_ENABLED && a.protocol === "webrtc"))
+    ) {
       res.sendStatus(401);
       return;
     }

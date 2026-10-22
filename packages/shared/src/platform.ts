@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { categorySchema, avatarColorSchema } from "./dynamic.js";
 export const usernameSchema = z
   .string()
   .trim()
@@ -22,6 +23,7 @@ export const userSchema = z.object({
   username: z.string(),
   email: z.email(),
   displayName: z.string(),
+  avatarColor: avatarColorSchema.optional(),
   role: z.enum(["viewer", "broadcaster", "administrator"]),
 });
 export type User = z.infer<typeof userSchema>;
@@ -55,6 +57,7 @@ export const channelSchema = z.object({
 export type Channel = z.infer<typeof channelSchema>;
 export const streamInput = z
   .object({
+    category: categorySchema.default("Other"),
     channelId: z.uuid(),
     title: z.string().trim().min(1).max(120),
     description: z.string().trim().max(4000),
@@ -94,6 +97,7 @@ export interface RealtimeReply<T = unknown> {
   error?: { code: string; message: string };
 }
 export const publishingSchema = z.object({
+  whipUrl: z.string().optional(),
   server: z.string(),
   path: z.string(),
   user: z.string(),

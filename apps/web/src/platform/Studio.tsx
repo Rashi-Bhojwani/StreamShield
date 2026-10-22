@@ -1,3 +1,6 @@
+import { BrowserStudio } from "./BrowserStudio";
+import { categories } from "@streamshield/shared";
+import "../streaming/dynamic.css";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -60,6 +63,17 @@ function StreamEditor({ stream }: { stream: Stream }) {
         <StatusBadge status={stream.status} />
       </div>
       <p className="muted">{stream.description || "No description added."}</p>
+      {config.VITE_DYNAMIC_MODE && (
+        <p className="fine-print">
+          {stream.category} · {stream.broadcastState} ·{" "}
+          <a className="text-link" href={"/watch/" + stream.id}>
+            Share/watch link
+          </a>
+        </p>
+      )}
+      {config.VITE_DYNAMIC_MODE && stream.lifecycle !== "ended" && (
+        <BrowserStudio streamId={stream.id} live={stream.status === "live"} />
+      )}
       <div className="studio-actions">
         <Link className="button secondary" to={"/watch/" + stream.id}>
           Open watch page <Icon name="arrow" />
@@ -180,6 +194,7 @@ function StreamEditor({ stream }: { stream: Stream }) {
                 body: JSON.stringify({
                   title: data.get("title"),
                   description: data.get("description"),
+                  category: data.get("category") || "Other",
                 }),
               });
               await client.invalidateQueries({ queryKey: ["studio"] });
@@ -203,6 +218,16 @@ function StreamEditor({ stream }: { stream: Stream }) {
               defaultValue={stream.title}
             />
           </label>
+          {config.VITE_DYNAMIC_MODE && (
+            <label>
+              Category
+              <select name="category" defaultValue={stream.category || "Other"}>
+                {categories.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Description
             <textarea
@@ -453,10 +478,10 @@ export function Studio() {
                           channelId: owned.id,
                           title: data.get("title"),
                           description: data.get("description"),
+                          category: data.get("category") || "Other",
                         }),
                       });
                       setCreating(false);
-                      setOffset(0);
                       setOffset(0);
                       await streams.refetch();
                       setNotice("Livestream saved to your channel.");
@@ -480,6 +505,16 @@ export function Studio() {
                       placeholder="Give your live moment a title"
                     />
                   </label>
+                  {config.VITE_DYNAMIC_MODE && (
+                    <label>
+                      Category
+                      <select name="category" defaultValue="Other">
+                        {categories.map((c) => (
+                          <option key={c}>{c}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <label>
                     Stream description
                     <textarea

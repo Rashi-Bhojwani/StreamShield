@@ -1,3 +1,4 @@
+import { startDiscoveryObserver } from "./platform/discovery.js";
 import { attachMonitoring } from "./monitoring/realtime.js";
 import { createMetrics } from "./monitoring/metrics.js";
 import pino from "pino";
@@ -38,6 +39,9 @@ async function main() {
     logger.info({ port: config.API_PORT }, "Platform API listening");
   });
   const io = createRealtime(server, r, c, config, platform, metrics);
+  const stopDiscovery = c.DYNAMIC_ENABLED
+    ? startDiscoveryObserver(r, platform.catalog, io)
+    : () => {};
   if (process.env.OBS_URL) attachMonitoring(io, r);
   io.on("connection", (socket) => {
     metrics.sockets.inc();
@@ -72,6 +76,7 @@ async function main() {
     if (draining) return;
     draining = true;
     lifecycle.ready = false;
+    stopDiscovery();
     logger.info({ signal }, "Draining platform");
     const deadline = setTimeout(() => {
       server.closeAllConnections();

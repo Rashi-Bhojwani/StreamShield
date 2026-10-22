@@ -252,7 +252,7 @@ export function AccountMenu() {
   return (
     <details className="account-menu">
       <summary aria-label="Account menu" role="button">
-        <span className="avatar">
+        <span className="avatar" style={{ color: auth.user.avatarColor }}>
           {auth.user.username.slice(0, 1).toUpperCase()}
         </span>
         <span>{auth.user.username}</span>
@@ -311,6 +311,9 @@ export function Profile() {
                 await auth.call("/auth/profile", {
                   method: "PATCH",
                   body: JSON.stringify({
+                    avatarColor:
+                      new FormData(e.currentTarget).get("avatarColor") ||
+                      undefined,
                     displayName: new FormData(e.currentTarget).get(
                       "displayName",
                     ),
@@ -334,6 +337,14 @@ export function Profile() {
                 required
                 maxLength={100}
                 defaultValue={auth.user?.displayName}
+              />
+            </label>
+            <label>
+              Avatar color
+              <input
+                name="avatarColor"
+                type="color"
+                defaultValue={auth.user?.avatarColor || "#52d7c7"}
               />
             </label>
             <button className="button primary" disabled={busy}>

@@ -434,6 +434,20 @@ export function createRealtime(
               "GUEST_EXPIRED",
               "Refresh your guest session.",
             );
+          if (
+            auth &&
+            (
+              await r.db.query(
+                "SELECT 1 FROM chat_bans b JOIN streams s ON s.channel_id=b.channel_id WHERE s.id=$1 AND b.user_id=$2",
+                [streamId, auth.user.id],
+              )
+            ).rowCount
+          )
+            throw new PlatformError(
+              403,
+              "CHAT_BLOCKED",
+              "You cannot send messages in this channel.",
+            );
           await rate(
             r,
             "chat:" + (guest?.id || auth!.user.id),

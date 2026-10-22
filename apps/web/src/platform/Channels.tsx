@@ -1,5 +1,6 @@
+import { useAuth } from "./auth-context";
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { type Channel, type Stream } from "@streamshield/shared";
 import { platformRequest } from "./request";
@@ -221,5 +222,31 @@ export function ChannelPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export function MyChannel() {
+  const auth = useAuth();
+  const q = useQuery({
+    queryKey: ["studio", "channel", auth.user?.id],
+    queryFn: () => auth.call<{ channel: Channel | null }>("/studio/channel"),
+    enabled: !!auth.user,
+  });
+  if (q.isPending)
+    return <p className="loading-surface">Loading your channel…</p>;
+  if (q.isError)
+    return (
+      <div className="panel">
+        <p>Unable to load your channel.</p>
+        <button className="button secondary" onClick={() => void q.refetch()}>
+          Retry
+        </button>
+      </div>
+    );
+  return (
+    <Navigate
+      replace
+      to={q.data.channel ? "/channels/" + q.data.channel.slug : "/studio"}
+    />
   );
 }
