@@ -2,7 +2,10 @@ import { capacityAdminRoutes } from "../demo/routes.js";
 import { chaosRoutes } from "../chaos/routes.js";
 import type { PlatformConfig } from "../platform/config.js";
 import type { Config } from "../config.js";
-import { localAdmission } from "./admission.js";
+import {
+  localAdmission,
+  MONITORING_ADMISSIONS_PER_MINUTE,
+} from "./admission.js";
 import { recoveryRoutes } from "../healing/routes.js";
 import express from "express";
 import { z } from "zod";
@@ -34,7 +37,12 @@ export function monitoringRouter(
         (req.path.startsWith("/chaos") ? ":chaos" : ":monitoring");
       if (r.redis.isReady) {
         try {
-          await rate(r, "monitoring:" + admissionKey, 120, 60000);
+          await rate(
+            r,
+            "monitoring:" + admissionKey,
+            MONITORING_ADMISSIONS_PER_MINUTE,
+            60000,
+          );
         } catch (error) {
           if (error instanceof PlatformError && error.code === "RATE_LIMITED")
             throw error;
