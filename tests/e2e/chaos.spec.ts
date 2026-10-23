@@ -401,7 +401,15 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
             s.available &&
             s.enabled &&
             s.databaseAvailable &&
-            s.scenarios.filter((x) => x.supported).every((x) => x.available)
+            // Every scenario this deployment permits (a composition may omit
+            // scenarios it cannot host, e.g. the surge without a spare API).
+            s.scenarios
+              .filter(
+                (x) =>
+                  x.supported &&
+                  x.reason !== "Scenario disabled by deployment policy.",
+              )
+              .every((x) => x.available)
           );
         },
         { timeout, intervals: [1000] },

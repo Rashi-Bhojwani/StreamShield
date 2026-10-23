@@ -16,6 +16,14 @@ if (command === "up") {
     ...process.argv.slice(3),
   ]);
   run(["infrastructure/dynamic/compose.mjs", "up", "--build", "--wait"]);
+  // The spare API exists but stays stopped; only the Healer's scale-out starts it.
+  run([
+    "infrastructure/dynamic/compose.mjs",
+    "--profile",
+    "spare",
+    "create",
+    "api-3",
+  ]);
   run(["scripts/chaos-probe.mjs"]);
   console.log(
     "\nReady. Presentation: http://127.0.0.1:" +

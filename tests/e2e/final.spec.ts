@@ -876,28 +876,33 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
               timeout: 30000,
             })
             .not.toBeNull();
-          edgeMark = viewer.state.samples.length;
+          edgeMark = Date.now();
           return {};
         },
         async () => {
+          // Every response through the gateway carries its serving edge.
           await expect
             .poll(
               () =>
-                viewer.state.samples
-                  .slice(-6)
-                  .some((s: { edge: string }) => s.edge === "edge-1"),
-              {
-                timeout: 60000,
-              },
+                viewer.state.responses
+                  .slice(-30)
+                  .some((r: { edge: string }) => r.edge === "edge-1"),
+              { timeout: 60000 },
             )
             .toBe(true);
-          const during = viewer.state.samples.slice(edgeMark);
+          const during = viewer.state.responses.filter(
+            (r: { at: number }) => r.at >= edgeMark,
+          );
+          const firstEdge1 = during.find(
+            (r: { edge: string }) => r.edge === "edge-1",
+          );
           return {
             edgesServingAfterInjection: [
-              ...new Set(during.map((s: { edge: string }) => s.edge)),
+              ...new Set(during.map((r: { edge: string }) => r.edge)),
             ],
+            onlyEdge2UntilMs: firstEdge1 ? firstEdge1.at - edgeMark : null,
             edge1ServingAgain: true,
-            videoStalls: stallsSince(Date.now() - 120000),
+            videoStalls: stallsSince(edgeMark),
           };
         },
       );

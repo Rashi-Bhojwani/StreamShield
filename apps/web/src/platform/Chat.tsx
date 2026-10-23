@@ -279,14 +279,24 @@ export function Chat({
           data-testid="chat-status"
           data-status={status}
         >
-          {status === "Connected"
-            ? delivered
-              ? "✓ Delivered"
-              : "✓ Connected"
-            : status === "Reconnecting" || status === "Degraded"
-              ? "⟳ Chat reconnecting…"
-              : "✕ " + status}
+          <span aria-hidden="true">
+            {status === "Connected"
+              ? "✓"
+              : status === "Reconnecting" || status === "Degraded"
+                ? "⟳"
+                : "✕"}
+          </span>{" "}
+          <span>
+            {status === "Reconnecting" || status === "Degraded"
+              ? "Chat reconnecting…"
+              : status}
+          </span>
         </span>
+        {delivered && status === "Connected" && (
+          <span className="chat-delivered" role="status">
+            ✓ Delivered
+          </span>
+        )}
       </div>
       <p className="viewer-estimate">
         {presence.isError || presence.isPending

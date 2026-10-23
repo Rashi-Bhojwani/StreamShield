@@ -63,6 +63,13 @@ export function startViewer({
     stalls: [],
     errors: 0,
     samples: [],
+    /** Serving edge of every response (playlists and segments), newest last. */
+    responses: [],
+  };
+  const note = (edge) => {
+    if (!edge) return;
+    state.responses.push({ edge, at: Date.now() });
+    if (state.responses.length > 500) state.responses.shift();
   };
   let stopped = false,
     init = null,
@@ -86,7 +93,9 @@ export function startViewer({
         .find((l) => l.trim() && !l.startsWith("#") && l.includes("video"));
       if (!variantPath) throw new Error("no variant");
       const variantUrl = new URL(variantPath.trim(), new URL(src.url, base));
-      const playlist = (await get(variantUrl.href, 4000)).body.toString();
+      const variantResponse = await get(variantUrl.href, 4000);
+      note(variantResponse.edge);
+      const playlist = variantResponse.body.toString();
       const map = /#EXT-X-MAP:URI="([^"]+)"/.exec(playlist)?.[1];
       if (map && map !== initUri) {
         init = (await get(new URL(map, variantUrl).href, 4000)).body;
@@ -104,6 +113,7 @@ export function startViewer({
         if (i < uris.length - 2 || seen.has(src.id + seq)) continue;
         seen.add(src.id + seq);
         const seg = await get(new URL(uri.trim(), variantUrl).href, 6000);
+        note(seg.edge);
         const frames = init
           ? await decodedFrames(Buffer.concat([init, seg.body]))
           : 0;

@@ -93,6 +93,12 @@ const config = Object.fromEntries(
     .filter(([k]) => k === k.toUpperCase())
     .map(([k, v]) => [k, String(v)]),
 );
+// The traffic surge needs the spare API, which only the dynamic composition
+// provisions; other compositions do not offer it.
+if (env.DYNAMIC_ENABLED !== "true")
+  config.CHAOS_ALLOWED_SCENARIOS = c.allowed
+    .filter((id) => id !== "traffic-surge")
+    .join(",");
 const common = {
   image: "streamshield-healing-runtime",
   build: {

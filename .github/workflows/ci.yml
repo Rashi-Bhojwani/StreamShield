@@ -233,6 +233,7 @@ jobs:
       - run: npm run setup:dynamic -- --enable-local-chaos
       - run: node infrastructure/dynamic/compose.mjs config --quiet
       - run: npm run dynamic:up
+      - run: node infrastructure/dynamic/compose.mjs --profile spare create api-3
       - run: npm run chaos:probe
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps chromium
