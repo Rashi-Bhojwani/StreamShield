@@ -9,7 +9,7 @@ import type {
   ComponentObservation,
   MediaObservation,
 } from "@streamshield/shared";
-import { evaluate, failedProbe, type Probe } from "./policy.js";
+import { evaluate, failedProbe, tierOverloaded, type Probe } from "./policy.js";
 import { persist, durableSnapshot } from "./store.js";
 import { equal } from "../platform/security.js";
 import { createMetrics } from "./metrics.js";
@@ -30,6 +30,7 @@ const c = z
     OBS_OVERLOAD_P95_MS: number(100, 60000, 1500),
     OBS_OVERLOAD_ERROR_PCT: number(1, 100, 5),
     OBS_OVERLOAD_SAMPLES: number(2, 20, 3),
+    OBS_OVERLOAD_MIN_RPS: number(1, 100000, 20),
   })
   .parse(process.env);
 const targetSchema = z
@@ -189,8 +190,14 @@ async function tierProbe(started: number): Promise<Probe> {
       promScalar('sum(rate(streamshield_http_requests_total{job="api"}[20s]))'),
       promScalar('sum(rate(streamshield_http_limited_total{job="api"}[20s]))'),
     ]);
-    const overloaded =
-      p95 > c.OBS_OVERLOAD_P95_MS || errors > c.OBS_OVERLOAD_ERROR_PCT;
+    const overloaded = tierOverloaded(
+      { p95Ms: p95, errorPct: errors, rps },
+      {
+        p95Ms: c.OBS_OVERLOAD_P95_MS,
+        errorPct: c.OBS_OVERLOAD_ERROR_PCT,
+        minRps: c.OBS_OVERLOAD_MIN_RPS,
+      },
+    );
     return {
       state: overloaded ? "DEGRADED" : "HEALTHY",
       code: overloaded ? "overloaded" : "probe_ok",

@@ -182,3 +182,14 @@ export function failedProbe(error: unknown, latencyMs: number): Probe {
     latencyMs,
   };
 }
+
+/**
+ * API-tier overload needs real traffic: with only a few requests, a couple of
+ * slow ones dominate p95 and would trigger a false scale-out.
+ */
+export function tierOverloaded(
+  m: { p95Ms: number; errorPct: number; rps: number },
+  c: { p95Ms: number; errorPct: number; minRps: number },
+) {
+  return m.rps >= c.minRps && (m.p95Ms > c.p95Ms || m.errorPct > c.errorPct);
+}

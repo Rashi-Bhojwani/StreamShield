@@ -1,6 +1,12 @@
 import { localAdmission } from "./admission";
 import { describe, it, expect } from "vitest";
-import { evaluate, overall, duration, failedProbe } from "./policy";
+import {
+  evaluate,
+  overall,
+  duration,
+  failedProbe,
+  tierOverloaded,
+} from "./policy";
 import { finitePoints } from "./queries";
 import type { ComponentObservation } from "@streamshield/shared";
 const initial: ComponentObservation = {
@@ -164,4 +170,13 @@ it("distinguishes a hung target (timeout) from an absent one (unreachable)", () 
   expect(failedProbe(connect, 1000).code).toBe("probe_unreachable");
   expect(failedProbe(new Error("redis"), 0).code).toBe("probe_unreachable");
   expect(failedProbe({ code: "28P01" }, 2).code).toBe("probe_denied");
+});
+
+it("needs real traffic before calling the API tier overloaded", () => {
+  const c = { p95Ms: 1200, errorPct: 5, minRps: 20 };
+  // A handful of slow requests at idle must not trigger a scale-out.
+  expect(tierOverloaded({ p95Ms: 2400, errorPct: 0, rps: 0.6 }, c)).toBe(false);
+  expect(tierOverloaded({ p95Ms: 2400, errorPct: 0, rps: 80 }, c)).toBe(true);
+  expect(tierOverloaded({ p95Ms: 300, errorPct: 9, rps: 80 }, c)).toBe(true);
+  expect(tierOverloaded({ p95Ms: 300, errorPct: 1, rps: 80 }, c)).toBe(false);
 });

@@ -279,6 +279,7 @@ for (const name of ["observer", "healer", "chaos-controller"])
       OBS_OVERLOAD_P95_MS: env.OBS_OVERLOAD_P95_MS || "1200",
       OBS_OVERLOAD_ERROR_PCT: env.OBS_OVERLOAD_ERROR_PCT || "5",
       OBS_OVERLOAD_SAMPLES: env.OBS_OVERLOAD_SAMPLES || "3",
+      OBS_OVERLOAD_MIN_RPS: env.OBS_OVERLOAD_MIN_RPS || "20",
       FINAL_API_CPUS: String(apiCpus),
     },
   };
