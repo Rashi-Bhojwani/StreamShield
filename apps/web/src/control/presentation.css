@@ -660,3 +660,20 @@
     break-inside: avoid;
   }
 }
+.experiment-summary {
+  overflow-x: auto;
+}
+@media (max-width: 640px) {
+  .bda-table,
+  .presentation-report table,
+  .scorecard table {
+    font-size: 0.72rem;
+  }
+  .bda-table th,
+  .bda-table td {
+    padding: 4px;
+  }
+  .presentation-head {
+    align-items: flex-start;
+  }
+}

@@ -163,4 +163,31 @@ describe("health timeline from persisted evidence", () => {
       ]),
     ).toBe(0.75);
   });
+  it("does not paint a dependency symptom as a human escalation", () => {
+    const t3 = buildTimeline({
+      from: at(0),
+      to: at(30),
+      changes: [
+        { component: "api-1", state: "HEALTHY", code: "probe_ok", at: at(0) },
+        { component: "api-1", state: "DEGRADED", code: "http_503", at: at(5) },
+        { component: "api-1", state: "HEALTHY", code: "probe_ok", at: at(20) },
+      ],
+      attempts: [
+        attempt({
+          component: "api-1",
+          state: "ESCALATED",
+          reason: "authority_or_dependency_symptom",
+          actionStartedAt: null,
+          finishedAt: at(6),
+        }),
+      ],
+      experiments: [],
+    });
+    expect(t3.components[0]!.segments.map((s) => s.tone)).toEqual([
+      "healthy",
+      "degraded",
+      "healthy",
+    ]);
+    expect(t3.events).toEqual([]);
+  });
 });

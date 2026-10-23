@@ -74,7 +74,14 @@
     "dynamic:up": "node infrastructure/dynamic/compose.mjs up --build --wait",
     "dynamic:down": "node infrastructure/dynamic/compose.mjs down",
     "dynamic:status": "node infrastructure/dynamic/compose.mjs ps",
-    "test:dynamic": "node scripts/dynamic-integration.mjs"
+    "test:dynamic": "node scripts/dynamic-integration.mjs",
+    "test:final": "node scripts/final-integration.mjs",
+    "final:up": "node scripts/final-cli.mjs up",
+    "final:status": "node scripts/final-cli.mjs status",
+    "final:demo": "node scripts/final-cli.mjs demo",
+    "final:down": "node infrastructure/dynamic/compose.mjs down",
+    "final:watch": "node scripts/final-watch.mjs",
+    "final:healer-log": "node scripts/final-healer-log.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

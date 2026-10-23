@@ -116,6 +116,10 @@ export const fmt = (ms: number | null | undefined) =>
       ? Math.round(ms) + " ms"
       : (ms / 1000).toFixed(1) + " s";
 const RECOVERED_MS = 30000;
+export const DEPENDENCY_REASONS = [
+  "authority_or_dependency_symptom",
+  "component_returned_without_healer_action",
+];
 /** Tone of a component right now, from real state and real Healer attempts. */
 export function componentTone(
   c: ComponentObservation | undefined,
@@ -133,7 +137,12 @@ export function componentTone(
     )
   )
     return "healing";
-  const escalated = own.find((a) => a.state === "ESCALATED");
+  // A dependency symptom (e.g. APIs degraded while Redis is down) is recorded as
+  // ESCALATED by the Healer but self-verifies when the dependency returns: show
+  // it as degraded, not as "needs a human".
+  const escalated = own.find(
+    (a) => a.state === "ESCALATED" && !DEPENDENCY_REASONS.includes(a.reason),
+  );
   if (
     escalated &&
     c.state !== "HEALTHY" &&

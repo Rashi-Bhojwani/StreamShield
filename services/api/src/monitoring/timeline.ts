@@ -41,6 +41,10 @@ export interface Timeline {
   events: TimelineEvent[];
 }
 const RECOVERED_MS = 30000;
+const DEPENDENCY_REASONS = [
+  "authority_or_dependency_symptom",
+  "component_returned_without_healer_action",
+];
 const toneOf = (state: string): Tone =>
   state === "HEALTHY"
     ? "healthy"
@@ -181,7 +185,13 @@ export function buildTimeline(input: {
           code: a.playbook,
           attemptId: a.id,
         });
-      if (a.state === "ESCALATED" && a.finishedAt) {
+      // Dependency symptoms self-verify when the dependency returns; they are
+      // shown by the observed state (degraded), not as a human escalation.
+      if (
+        a.state === "ESCALATED" &&
+        a.finishedAt &&
+        !DEPENDENCY_REASONS.includes(a.reason)
+      ) {
         // Escalated until the next observed HEALTHY transition (or window end).
         const healthy = own.find(
           (c) => c.state === "HEALTHY" && t(c.at) > finished,
@@ -265,7 +275,11 @@ export function buildTimeline(input: {
       });
   }
   for (const a of input.attempts)
-    if (a.state === "ESCALATED" && within(a.finishedAt))
+    if (
+      a.state === "ESCALATED" &&
+      within(a.finishedAt) &&
+      !DEPENDENCY_REASONS.includes(a.reason)
+    )
       events.push({
         kind: "escalated",
         at: a.finishedAt!,
