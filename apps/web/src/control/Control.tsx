@@ -1,3 +1,5 @@
+import { Presentation } from "./Presentation";
+import { Analysis, ExperimentAnalysis, RecoveryReport } from "./Analysis";
 import { CapacityPage, ThreeStreamDemo } from "./Capacity";
 import { useEffect, useState } from "react";
 import {
@@ -721,6 +723,7 @@ function Console() {
     });
     socket.on("monitoring:v1", (event: { kind: string }) => {
       if (["recovery_changed", "chaos_changed"].includes(event.kind)) {
+        void query.invalidateQueries({ queryKey: ["monitoring", "timeline"] });
         void query.invalidateQueries({ queryKey: ["monitoring", "healing"] });
         void query.invalidateQueries({ queryKey: ["monitoring", "chaos"] });
       }
@@ -825,6 +828,12 @@ function Console() {
           <NavLink to="/control/demo">
             <span>▷</span>Live Demo
           </NavLink>
+          <NavLink to="/control/presentation">
+            <span>◎</span>Presentation
+          </NavLink>
+          <NavLink to="/control/analysis">
+            <span>▤</span>Analysis
+          </NavLink>
         </nav>
         <div className="cc-sidebar-bottom">
           <p>
@@ -860,7 +869,8 @@ function Console() {
               "/control/demo",
               "/control/capacity",
               "/control/three-stream-demo",
-            ].includes(location.pathname)
+            ].includes(location.pathname) ||
+            /^\/control\/(presentation|analysis)/.test(location.pathname)
               ? " chaos-focused"
               : "")
           }
@@ -975,6 +985,15 @@ function Console() {
                   />
                 }
               />
+              <Route
+                path="presentation"
+                element={
+                  <Presentation components={s.components} stale={stale} />
+                }
+              />
+              <Route path="presentation/report" element={<RecoveryReport />} />
+              <Route path="analysis" element={<Analysis />} />
+              <Route path="analysis/:id" element={<ExperimentAnalysis />} />
               <Route path="metrics" element={<MetricsPage />} />
               <Route path="recoveries" element={<Recoveries />} />
               <Route path="incidents" element={<History />} />

@@ -111,6 +111,24 @@ let media: MediaObservation[] = [],
   lastCompleted = 0,
   lastMedia = 0;
 const failureClocks = new Map<string, number>();
+// Append-only history of thresholded state transitions, buffered across DB loss.
+const lastRecorded = new Map<string, string>();
+let pendingTransitions: {
+  component: string;
+  state: string;
+  previous: string | null;
+  code: string;
+  at: string;
+}[] = [];
+async function flushTransitions() {
+  if (!pendingTransitions.length) return;
+  const batch = pendingTransitions.slice(0, 200);
+  await db.query(
+    "INSERT INTO monitoring_state_changes(component,state,previous,code,at) SELECT * FROM jsonb_to_recordset($1::jsonb) AS t(component text,state text,previous text,code text,at timestamptz)",
+    [JSON.stringify(batch)],
+  );
+  pendingTransitions = pendingTransitions.slice(batch.length);
+}
 let chaosRevision = "";
 let recoveryRevision = "";
 const pendingEvidence = new Map<string, ComponentObservation>();
@@ -404,6 +422,20 @@ async function start() {
       }),
     );
     for (const current of components) {
+      if (lastRecorded.get(current.id) !== current.state) {
+        pendingTransitions.push({
+          component: current.id,
+          state: current.state,
+          previous: lastRecorded.get(current.id) ?? null,
+          code: current.code,
+          at: current.observedAt,
+        });
+        lastRecorded.set(current.id, current.state);
+      }
+    }
+    if (pendingTransitions.length > 2000)
+      pendingTransitions = pendingTransitions.slice(-2000);
+    for (const current of components) {
       const pending = pendingEvidence.get(current.id);
       if (current.confirmedAt) pendingEvidence.set(current.id, { ...current });
       else if (pending)
@@ -429,6 +461,12 @@ async function start() {
       );
       persistence = true;
       pendingEvidence.clear();
+      await flushTransitions().catch(() =>
+        log.warn(
+          { code: "state_history_unavailable" },
+          "State transitions buffered for a later cycle",
+        ),
+      );
       let kind = "snapshot_changed";
       try {
         const revision =

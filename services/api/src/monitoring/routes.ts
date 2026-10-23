@@ -9,7 +9,9 @@ import { z } from "zod";
 import type { Resources } from "../platform/resources.js";
 import { requireUser, PlatformError, rate } from "../platform/security.js";
 import { durableSnapshot } from "./store.js";
-import { metricQueries, finitePoints } from "./queries.js";
+import { metricQueries, finitePoints, impactQueries } from "./queries.js";
+import { buildTimeline, type StateChange } from "./timeline.js";
+import type { ChaosExperiment, RecoveryAttempt } from "@streamshield/shared";
 export function monitoringRouter(
   r: Resources,
   platformConfig: PlatformConfig,
@@ -240,6 +242,119 @@ export function monitoringRouter(
       pending = undefined;
     });
     res.json(await pending);
+  });
+  const windowSchema = z
+    .object({ from: z.iso.datetime(), to: z.iso.datetime() })
+    .strict()
+    .refine(
+      (w) =>
+        Date.parse(w.to) > Date.parse(w.from) &&
+        Date.parse(w.to) - Date.parse(w.from) <= 24 * 3600000,
+    );
+  const badWindow = () =>
+    new PlatformError(
+      400,
+      "INVALID_WINDOW",
+      "Choose a window of at most 24 hours (ISO from/to).",
+    );
+  /** Segments and events built only from persisted evidence. */
+  router.get("/timeline", async (req, res, next) => {
+    try {
+      const w = windowSchema.safeParse(req.query);
+      if (!w.success) throw badWindow();
+      const { from, to } = w.data;
+      const [before, during, attempts, experiments, evidence] =
+        await Promise.all([
+          r.db.query(
+            "SELECT DISTINCT ON (component) component,state,code,at FROM monitoring_state_changes WHERE at<$1 AND at>$1::timestamptz-interval '7 days' ORDER BY component,at DESC",
+            [from],
+          ),
+          r.db.query(
+            "SELECT component,state,code,at FROM monitoring_state_changes WHERE at>=$1 AND at<=$2 ORDER BY at LIMIT 20000",
+            [from, to],
+          ),
+          r.db.query(
+            "SELECT body FROM healing_attempts WHERE (body->>'createdAt')::timestamptz<=$2 AND COALESCE((body->>'finishedAt')::timestamptz,now())>=$1::timestamptz-interval '1 hour' ORDER BY (body->>'createdAt') LIMIT 500",
+            [from, to],
+          ),
+          r.db.query(
+            "SELECT body FROM chaos_experiments WHERE created_at<=$2 AND COALESCE(updated_at,created_at)>=$1::timestamptz-interval '1 hour' ORDER BY created_at LIMIT 200",
+            [from, to],
+          ),
+          r.db.query(
+            "SELECT e.experiment_id,e.at,e.metrics FROM chaos_browser_evidence e JOIN chaos_experiments x ON x.id=e.experiment_id WHERE x.created_at<=$2 AND x.updated_at>=$1::timestamptz-interval '1 hour' ORDER BY e.id LIMIT 2000",
+            [from, to],
+          ),
+        ]);
+      const row = (x: {
+        component: string;
+        state: string;
+        code: string;
+        at: Date;
+      }): StateChange => ({ ...x, at: x.at.toISOString() });
+      const timeline = buildTimeline({
+        from,
+        to,
+        changes: [...before.rows.map(row), ...during.rows.map(row)],
+        attempts: attempts.rows.map((x) => x.body as RecoveryAttempt),
+        experiments: experiments.rows.map((x) => x.body as ChaosExperiment),
+      });
+      res.json({
+        ...timeline,
+        truncated: during.rowCount === 20000,
+        experiments: experiments.rows.map((x) => x.body),
+        attempts: attempts.rows.map((x) => x.body),
+        browserEvidence: evidence.rows.map((x) => ({
+          experimentId: x.experiment_id,
+          at: x.at.toISOString(),
+          metrics: x.metrics,
+        })),
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+  /** Fixed impact queries (no client PromQL) over a bounded window. */
+  router.get("/impact", async (req, res, next) => {
+    try {
+      const w = windowSchema.safeParse(req.query);
+      if (!w.success) throw badWindow();
+      const start = Math.floor(Date.parse(w.data.from) / 1000),
+        end = Math.floor(Date.parse(w.data.to) / 1000);
+      const step = Math.max(5, Math.ceil((end - start) / 240));
+      let available = !!process.env.PROMETHEUS_URL;
+      const series = await Promise.all(
+        impactQueries.map(async (item) => {
+          let points: [number, number][] = [];
+          try {
+            if (!process.env.PROMETHEUS_URL) throw new Error("disabled");
+            const url = new URL(
+              "/api/v1/query_range",
+              process.env.PROMETHEUS_URL,
+            );
+            url.search = new URLSearchParams({
+              query: item.query,
+              start: String(start),
+              end: String(end),
+              step: String(step),
+            }).toString();
+            const response = await fetch(url, {
+              signal: AbortSignal.timeout(1500),
+            });
+            if (!response.ok) throw new Error("metrics");
+            const data = await response.json();
+            if (data.status !== "success") throw new Error("metrics");
+            points = finitePoints(data.data?.result?.[0]?.values, 300);
+          } catch {
+            available = false;
+          }
+          return { id: item.id, label: item.label, unit: item.unit, points };
+        }),
+      );
+      res.json({ available, step, series });
+    } catch (e) {
+      next(e);
+    }
   });
   return router;
 }

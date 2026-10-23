@@ -27,7 +27,7 @@ function Status({ state }: { state: string }) {
     </span>
   );
 }
-function Confirmation({
+export function Confirmation({
   scenario,
   snapshot,
   onClose,
@@ -114,6 +114,18 @@ function Confirmation({
         {scenario.name} <code>{scenario.target}</code>
       </p>
       <p>{scenario.failure}</p>
+      {scenario.audienceSees && (
+        <p>
+          <strong>What the audience will see:</strong> {scenario.audienceSees}
+        </p>
+      )}
+      {scenario.realWorldCause && (
+        <p className="chaos-cause">
+          <strong>Real-world cause:</strong> {scenario.realWorldCause} The demo
+          injects the same end state on purpose; the Healer is never told the
+          cause.
+        </p>
+      )}
       <dl className="chaos-confirm-facts">
         <div>
           <dt>Expected recovery</dt>

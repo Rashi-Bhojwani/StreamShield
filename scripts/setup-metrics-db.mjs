@@ -52,6 +52,13 @@ try {
   await db.query(
     "GRANT USAGE,SELECT ON SEQUENCE monitoring_incident_events_seq_seq TO streamshield_observer",
   );
+  // Append-only state history: insert and read, never update or delete.
+  await db.query(
+    "GRANT SELECT,INSERT ON monitoring_state_changes TO streamshield_observer",
+  );
+  await db.query(
+    "GRANT USAGE,SELECT ON SEQUENCE monitoring_state_changes_id_seq TO streamshield_observer",
+  );
   if (
     (await db.query("SELECT to_regclass('healing_attempts') AS name")).rows[0]
       .name

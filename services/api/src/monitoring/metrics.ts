@@ -32,6 +32,11 @@ export function createMetrics() {
     help: "Locally connected Socket.IO clients",
     registers: [registry],
   });
+  const limited = new Counter({
+    name: "streamshield_http_limited_total",
+    help: "Requests refused with 429 by rate limits (load shedding)",
+    registers: [registry],
+  });
   const chat = new Counter({
     name: "streamshield_chat_accepted_total",
     help: "Accepted chat events; guest/account are persisted, synthetic is ephemeral",
@@ -68,6 +73,7 @@ export function createMetrics() {
           ? Math.floor(res.statusCode / 100) + "xx"
           : "aborted",
       });
+      if (res.writableFinished && res.statusCode === 429) limited.inc();
       latency.observe(
         { method, route: path },
         (performance.now() - start) / 1000,

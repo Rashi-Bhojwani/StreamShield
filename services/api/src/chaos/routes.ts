@@ -170,4 +170,69 @@ export function chaosRoutes(
       );
     }
   });
+  // Browser-observed numeric evidence only (clearly labelled as such). Only the
+  // administrator who ran the experiment may append, bounded per experiment.
+  const evidenceSchema = z
+    .object({
+      stallCount: z.number().int().min(0).max(10000),
+      stallMs: z.number().int().min(0).max(3600000),
+      maxStallMs: z.number().int().min(0).max(3600000),
+      chatDisconnects: z.number().int().min(0).max(10000),
+      chatReconnects: z.number().int().min(0).max(10000),
+      requestFailures: z.number().int().min(0).max(100000),
+      maxRequestLatencyMs: z.number().int().min(0).max(600000),
+      outageMs: z.number().int().min(0).max(3600000),
+      edgeSwitches: z.number().int().min(0).max(10000),
+      samples: z.number().int().min(1).max(100000),
+    })
+    .partial()
+    .strict()
+    .refine((v) => Object.keys(v).length > 0);
+  router.post("/chaos/experiments/:id/evidence", async (req, res, next) => {
+    try {
+      checkCsrf(
+        req.headers.origin,
+        req.headers["x-csrf-token"],
+        req.headers.cookie,
+        media.CORS_ORIGINS,
+        c,
+      );
+      const id = z.uuid().parse(req.params.id);
+      const metrics = evidenceSchema.parse(req.body);
+      const actor = z.uuid().parse(res.locals.monitoringActor);
+      const row = (
+        await r.db.query(
+          "SELECT actor,(SELECT count(*)::int FROM chaos_browser_evidence WHERE experiment_id=$1) AS n FROM chaos_experiments WHERE id=$1",
+          [id],
+        )
+      ).rows[0];
+      if (!row || row.actor !== actor)
+        throw new PlatformError(
+          404,
+          "EXPERIMENT_NOT_FOUND",
+          "No experiment owned by this administrator.",
+        );
+      if (row.n >= 200)
+        throw new PlatformError(
+          429,
+          "EVIDENCE_LIMIT",
+          "Browser evidence limit reached for this experiment.",
+        );
+      await r.db.query(
+        "INSERT INTO chaos_browser_evidence(experiment_id,actor,metrics) VALUES($1,$2,$3)",
+        [id, actor, { ...metrics, source: "browser-observed" }],
+      );
+      res.status(201).json({ recorded: true, source: "browser-observed" });
+    } catch (e) {
+      next(
+        e instanceof z.ZodError
+          ? new PlatformError(
+              400,
+              "INVALID_EVIDENCE",
+              "Only bounded numeric browser measurements are accepted.",
+            )
+          : e,
+      );
+    }
+  });
 }

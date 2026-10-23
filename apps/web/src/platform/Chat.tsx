@@ -15,10 +15,13 @@ export function Chat({
   streamId,
   playerContainer,
   ownerUsername,
+  onStatus,
 }: {
   streamId: string;
   playerContainer: RefObject<HTMLElement | null>;
   ownerUsername?: string;
+  /** Observes real connection-state changes (presentation evidence). */
+  onStatus?: (status: string) => void;
 }) {
   const auth = useAuth(),
     [messages, setMessages] = useState<ChatMessage[]>([]),
@@ -219,6 +222,13 @@ export function Chat({
     playerContainer,
     refreshAuth,
   ]);
+  const statusSubscriber = useRef(onStatus);
+  useEffect(() => {
+    statusSubscriber.current = onStatus;
+  }, [onStatus]);
+  useEffect(() => {
+    statusSubscriber.current?.(status);
+  }, [status]);
   useEffect(() => {
     if (!delivered) return;
     const t = setTimeout(() => setDelivered(false), 4000);
