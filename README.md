@@ -1,5 +1,33 @@
 # StreamShield Live + Control
 
+## Final presentation build
+
+Five-plus **genuinely Healer-driven** repairs that the audience can see in the
+real product, not only on a dashboard: Redis (chat breaks), video gateway
+(everyone's video freezes), the whole API tier (site down, video survives),
+the ingest relay (broadcaster drops, then reconnects by itself), API-2 frozen
+(alive but unresponsive, so the Healer **restarts** it), plus a traffic surge
+with autonomous **scale-out to a spare API and scale-in**, Edge-1 failover and
+primary origin. Each repair ends with an accepted Docker receipt and independent
+functional verification. `/control/presentation` shows live video, the topology,
+stage-by-stage evidence and measured durations; `/control/analysis` shows the
+green → red → blue → green history from persisted evidence.
+
+```powershell
+npm.cmd ci
+npm.cmd run final:up        # setup, build, start, create the stopped spare API, chaos probe
+npm.cmd run final:demo      # optional bounded 10-minute test pattern + presentation URL
+npm.cmd run final:watch     # read-only terminal proof: StartedAt, uptime, Healer actions
+npm.cmd run final:down      # never removes volumes
+```
+
+[Architecture](docs/FINAL_SYSTEM_ARCHITECTURE.md) ·
+[Scenarios](docs/FINAL_DEMO_SCENARIOS.md) ·
+[Measured evidence](docs/SELF_HEALING_RECOVERY_EVIDENCE.md) ·
+[Demo guide (Hinglish)](docs/FINAL_DEMO_GUIDE.md) ·
+[Test results](docs/FINAL_TEST_RESULTS.md) ·
+[Known limitations / PARTIAL](docs/KNOWN_LIMITATIONS.md)
+
 **Browser Go Live correction:** peer connectivity and server LIVE verification now have deadlines and credential-bound failed-attempt cleanup. Studio Watch links open a separate tab to preserve camera broadcasting. The exact Rashi/Lakshita browser workflow passed with real H.264/Opus delivery, decoded video/audio, cross-replica chat, independent sources and API/edge recovery using synthetic capture devices. Local checks and 186 tests passed; [all eight clean CI jobs passed](https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39742661575). Physical Windows device/firewall checks remain unverified. [Exact workflow, Windows CMD/PowerShell commands, measurements and screenshots](docs/END_TO_END_LIVE_FIX_RESULTS.md) · [Fix plan](docs/END_TO_END_LIVE_FIX_PLAN.md).
 
 **StreamShield 2.0 dynamic mode** restores public registration/login and user-owned channels, adds browser WHIP publishing, authoritative media-progress lifecycle/discovery, working category filters and channel chat moderation. Start with `npm.cmd run setup:dynamic -- --enable-local-chaos`, then `npm.cmd run dynamic:up`. Open http://127.0.0.1:5173/signup. No shared accounts are seeded. [Complete Windows, browser/OBS/LAN and healing guide](docs/DYNAMIC_STREAMING.md) · [Design and verification plan](docs/DYNAMIC_STREAMING_PLAN.md).

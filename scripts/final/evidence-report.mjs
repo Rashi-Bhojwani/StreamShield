@@ -5,13 +5,18 @@
 import { readFileSync } from "node:fs";
 
 const files = process.argv.slice(2);
+// Accepts single test:final outputs or the merged docs/FINAL_MEASUREMENTS.json.
 const runs = files.flatMap((f) => {
   const d = JSON.parse(readFileSync(f, "utf8"));
-  return d.runs.map((r) => ({
-    ...r,
-    execution: d.generatedAt,
-    machine: d.machine,
-  }));
+  return (d.executions || [d]).flatMap((x) =>
+    x.runs.map((r) => ({
+      ...r,
+      execution:
+        (x.execution ? "#" + x.execution + " " : "") +
+        x.generatedAt.slice(0, 16),
+      machine: x.machine,
+    })),
+  );
 });
 const ms = (a, b) =>
   a && b && Number.isFinite(Date.parse(a)) && Number.isFinite(Date.parse(b))
@@ -50,7 +55,7 @@ out.push(
 for (const r of runs) {
   const ts = r.timestamps;
   out.push(
-    `| ${r.execution.slice(0, 16)} | ${r.round} | ${r.scenario} | ${r.state} | ${t(ts.injected)} | ${t(ts.incidentDetected)} | ${t(ts.actionStarted)} | ${t(ts.actionFinished)} | ${t(ts.verified)} | ${s(ms(ts.injected, ts.incidentDetected))} | ${s(ms(ts.injected, ts.actionStarted))} | ${s(ms(ts.actionStarted, ts.actionFinished))} | ${s(ms(ts.injected, ts.verified))} | ${(r.attempts || []).map((a) => a.component + ":" + a.receipt).join(", ")} | ${visible(r)} |`,
+    `| ${r.execution} | ${r.round} | ${r.scenario} | ${r.state} | ${t(ts.injected)} | ${t(ts.incidentDetected)} | ${t(ts.actionStarted)} | ${t(ts.actionFinished)} | ${t(ts.verified)} | ${s(ms(ts.injected, ts.incidentDetected))} | ${s(ms(ts.injected, ts.actionStarted))} | ${s(ms(ts.actionStarted, ts.actionFinished))} | ${s(ms(ts.injected, ts.verified))} | ${(r.attempts || []).map((a) => a.component + ":" + a.receipt).join(", ")} | ${visible(r)} |`,
   );
 }
 out.push("", "### Variability across runs (completed runs)", "");
