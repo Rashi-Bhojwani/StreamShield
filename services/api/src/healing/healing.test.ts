@@ -660,8 +660,11 @@ describe("healer scheduling and corroboration", () => {
       ...deps(),
     ]);
     try {
-      vi.spyOn(globalThis, "fetch").mockRejectedValue(
-        new DOMException("timeout", "TimeoutError"),
+      // The hung API times out; its healthy peer answers at once.
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
+        !String(url).includes("api-2")
+          ? new Response('{"status":"ready"}')
+          : Promise.reject(new DOMException("timeout", "TimeoutError")),
       );
       vi.spyOn(t.verifier, "verify").mockResolvedValue({
         ok: false,
@@ -681,6 +684,39 @@ describe("healer scheduling and corroboration", () => {
         containerState: "running",
         controlReceipt: "docker_restart_accepted",
         actionPerformed: true,
+      });
+    } finally {
+      await t.close();
+    }
+  });
+  it("does not restart when the peer is slow too (congestion, not a hang)", async () => {
+    const t = await harness(() => [
+      component("api-1", { state: "HEALTHY" }),
+      component("api-2", {
+        code: "probe_timeout",
+        failureCode: "probe_timeout",
+      }),
+      ...deps(),
+    ]);
+    try {
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(
+        new DOMException("timeout", "TimeoutError"),
+      );
+      vi.spyOn(t.verifier, "verify").mockResolvedValue({
+        ok: false,
+        evidence: {},
+      });
+      await t.h.tick();
+      expect(t.actions).toEqual([]);
+      const a = t.journal.all()[0]!;
+      expect(a).toMatchObject({
+        state: "VERIFYING",
+        reason: "peer_also_slow_congestion_not_a_hang_no_restart",
+      });
+      expect(a.evidence).toMatchObject({
+        corroboration: "probe_timeout",
+        peerProbe: "probe_timeout",
+        actionPerformed: false,
       });
     } finally {
       await t.close();

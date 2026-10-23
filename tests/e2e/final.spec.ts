@@ -624,12 +624,27 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
       expect(attempts.length).toBeGreaterThanOrEqual(targets.length);
       // Decoded video advances after the repair (ffprobe-decoded frames).
       const mark = viewer.snapshot();
-      await expect
-        .poll(() => viewer.state.frames - mark.frames, {
-          timeout: 60000,
-          intervals: [1000],
-        })
-        .toBeGreaterThan(30);
+      try {
+        await expect
+          .poll(() => viewer.state.frames - mark.frames, {
+            timeout: 60000,
+            intervals: [1000],
+          })
+          .toBeGreaterThan(30);
+      } catch (error) {
+        throw new Error(
+          scenario +
+            ": no decoded frames after repair; viewer " +
+            JSON.stringify({
+              source: viewer.state.source,
+              errors: viewer.state.errors,
+              lastSequence: viewer.state.lastSequence,
+              lastProgressAt: viewer.state.lastProgressAt,
+              samples: viewer.state.samples.slice(-3),
+            }),
+          { cause: error },
+        );
+      }
       record.visible = {
         ...record.visible,
         framesDecodedDuringExperiment: mark.frames - framesBefore.frames,

@@ -48,6 +48,7 @@ export function healingConfig(env: Record<string, string | undefined>) {
       HEALER_SCALE_IN_RPS: integer(1, 100000, 50),
       HEALER_HANG_MAX_RPS: integer(1, 100000, 15),
       HEALER_HANG_CONFIRM_MS: integer(0, 60000, 10000),
+      HEALER_PEER_FAST_MS: integer(50, 5000, 500),
       HEALER_MAX_ATTEMPTS: integer(1, 3, 2),
       HEALER_BACKOFF_MS: integer(500, 10000, 1000),
       HEALER_LEASE_MS: integer(20000, 60000, 30000),

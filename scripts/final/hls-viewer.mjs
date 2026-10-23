@@ -110,8 +110,12 @@ export function startViewer({
       // Live edge only: the newest two segments, like a player near live.
       for (const [i, uri] of uris.entries()) {
         const seq = first + i;
-        if (i < uris.length - 2 || seen.has(src.id + seq)) continue;
-        seen.add(src.id + seq);
+        // Key on the segment URI too: a new publisher session restarts the
+        // media sequence, so a sequence number alone would be taken as seen.
+        const key = src.id + "|" + seq + "|" + uri.trim().split("?")[0];
+        if (i < uris.length - 2 || seen.has(key)) continue;
+        seen.add(key);
+        if (seen.size > 5000) seen.clear();
         const seg = await get(new URL(uri.trim(), variantUrl).href, 6000);
         note(seg.edge);
         const frames = init

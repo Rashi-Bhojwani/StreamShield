@@ -547,6 +547,25 @@ export class Healer {
           );
           return true;
         }
+        // A hang is one instance; congestion slows the healthy peer too. The
+        // tier rate lags the first timeouts of a surge, this probe does not.
+        const peer = await this.peerProbe(a.component);
+        a.evidence.peerProbe = peer.outcome;
+        a.evidence.peerProbeMs = peer.ms;
+        if (
+          peer.outcome !== "answered" ||
+          peer.ms > this.c.HEALER_PEER_FAST_MS
+        ) {
+          a.verificationStartedAt = new Date().toISOString();
+          a.deadline = Date.now() + this.c.HEALER_VERIFY_MS;
+          this.transition(
+            a,
+            "VERIFYING",
+            "peer_also_slow_congestion_not_a_hang_no_restart",
+            { actionOrigin: "none", actionPerformed: false },
+          );
+          return true;
+        }
       }
       a.actionStartedAt = new Date().toISOString();
       this.transition(a, "EXECUTING", "allowlisted_playbook_selected");
@@ -750,6 +769,26 @@ export class Healer {
       a.evidence.containerStartedAtBefore = r.body.startedAt || null;
     } catch {
       /* Evidence only; the adapter still enforces its own preconditions. */
+    }
+  }
+  private async peerProbe(component: string) {
+    const peer = component === "api-1" ? "api-2" : "api-1";
+    const started = performance.now();
+    try {
+      const r = await fetch(this.verifier.url(peer), {
+        redirect: "error",
+        signal: AbortSignal.timeout(this.c.HEALER_PROBE_TIMEOUT_MS),
+      });
+      await r.body?.cancel();
+      return {
+        outcome: r.ok ? "answered" : "http_" + r.status,
+        ms: Math.round(performance.now() - started),
+      };
+    } catch (error) {
+      return {
+        outcome: probeFailureCode(error),
+        ms: Math.round(performance.now() - started),
+      };
     }
   }
   private async corroborate(a: RecoveryAttempt) {
