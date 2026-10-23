@@ -75,6 +75,8 @@ const serviceOf: Record<string, string> = {
   relay: "mediamtx",
   "edge-1": "edge-1",
   "origin-primary": "origin-primary",
+  // The surge's Healer action changes the spare.
+  "api-tier": "api-3",
 };
 function diag(host: string) {
   return JSON.parse(
@@ -473,7 +475,10 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
       const before = Object.fromEntries(
         targets.map((t) => [t, container(serviceOf[t]!)]),
       );
-      for (const t of targets) expect(before[t]!.status).toBe("running");
+      for (const t of targets)
+        if (scenario !== "traffic-surge")
+          expect(before[t]!.status).toBe("running");
+        else expect(before[t]!.status).not.toBe("running");
       const framesBefore = viewer.snapshot();
       const id = randomUUID();
       const r = await write(admin, csrf, "/monitoring/chaos/experiments", {
@@ -561,11 +566,14 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
       save();
       expect(e!.state, scenario + ": " + e!.reason).toBe("COMPLETED");
       for (const t of targets) {
-        expect(afterState[t]!.status).toBe("running");
-        // A real restart: Docker reports a new StartedAt, and nobody but the Healer acted.
+        // The spare is scaled in again (stopped) after a surge.
+        if (scenario !== "traffic-surge")
+          expect(afterState[t]!.status).toBe("running");
+        // A real start: Docker reports a new StartedAt, and nobody but the Healer acted.
         expect(afterState[t]!.startedAt).not.toBe(before[t]!.startedAt);
       }
-      expect(attempts).toHaveLength(targets.length);
+      // One attempt per target (plus the scale-in for a surge).
+      expect(attempts.length).toBeGreaterThanOrEqual(targets.length);
       // Decoded video advances after the repair (ffprobe-decoded frames).
       const mark = viewer.snapshot();
       await expect
@@ -913,6 +921,42 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
           return { sourceSwitches: switches, preferredSourceRetried: true };
         },
       );
+      // Traffic surge: load climbs, Healer adds API-3, later removes it.
+      await run(
+        round,
+        "traffic-surge",
+        "api-tier",
+        ["api-tier"],
+        async (find) => {
+          latency.length = 0;
+          void probeLoop();
+          await expect
+            .poll(async () => (await find())?.actionStartedAt ?? null, {
+              timeout: 90000,
+            })
+            .not.toBeNull();
+          if (round === 1)
+            await presentationShot("surge-presentation-scale-out");
+          return {};
+        },
+        async () => {
+          probing = false;
+          const servedBy = [...new Set(latency.map((l) => l.servedBy))];
+          return {
+            maxRequestLatencyMs: Math.max(...latency.map((l) => l.ms)),
+            requestsDuringWindow: latency.length,
+            servedByDuringWindow: servedBy,
+            api3ServedRealRequests: latency.some((l) => l.servedBy === "api-3"),
+          };
+        },
+      ).then((x) => {
+        if (!x) return;
+        expect(x.e.evidence.recoveryPlaybook).toBe("api-scale-out");
+        expect(x.e.evidence.healerReceipt).toBe("docker_start_accepted");
+        expect(x.e.evidence.spareServingThroughGateway).toBe(true);
+        expect(x.record.visible.api3ServedRealRequests).toBe(true);
+        expect(Number(x.e.evidence.loadP95Ms)).toBeGreaterThan(1000);
+      });
       // 7. Whole API tier: site down (banner), Healer starts API-1 then API-2.
       since = Date.now();
       await run(

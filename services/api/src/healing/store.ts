@@ -41,7 +41,7 @@ export class RecoveryStore {
         a.incidentId =
           (
             await db.query(
-              "SELECT id FROM monitoring_incidents WHERE component=$1 AND (first_observed_at=$2 OR (resolved_at IS NULL AND first_observed_at<=$2)) ORDER BY (first_observed_at=$2) DESC,detected_at DESC LIMIT 1",
+              "SELECT id FROM monitoring_incidents WHERE component=$1 AND source<>'healer-capacity-v1' AND (first_observed_at=$2 OR (resolved_at IS NULL AND first_observed_at<=$2)) ORDER BY (first_observed_at=$2) DESC,detected_at DESC LIMIT 1",
               [a.component, a.detectedAt],
             )
           ).rows[0]?.id || null;
@@ -63,10 +63,27 @@ export class RecoveryStore {
           ],
         );
       }
+      if (a.playbook === "api-scale-in" && a.incidentId) {
+        // Scale-in answers sustained normal load, not a failure: the Healer
+        // records its own capacity-change incident so the audit stays complete.
+        await db.query(
+          "INSERT INTO monitoring_incidents(id,component,failure_identity,severity,state,first_observed_at,detected_at,evidence,correlation_id,source) VALUES($1,'api-tier','scale-in','warning','DIAGNOSED',$2,$2,$3,$1,'healer-capacity-v1') ON CONFLICT(id) DO NOTHING",
+          [
+            a.incidentId,
+            a.detectedAt,
+            { code: "scale_in", reason: a.diagnosis, playbackVerified: false },
+          ],
+        );
+      }
       if (!a.incidentId) {
         await db.query("ROLLBACK");
         return false;
       }
+      if (a.playbook === "api-scale-in" && a.state === "VERIFIED")
+        await db.query(
+          "UPDATE monitoring_incidents SET state='RESOLVED',verified_at=$2,resolved_at=$2,updated_at=$2 WHERE id=$1 AND resolved_at IS NULL",
+          [a.incidentId, a.finishedAt],
+        );
       const body = { ...a, databasePersisted: true };
       const accepted = await db.query(
         "INSERT INTO healing_attempts(id,incident_id,component,episode,playbook,state,epoch,body) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(id) DO UPDATE SET incident_id=excluded.incident_id,state=excluded.state,epoch=excluded.epoch,body=excluded.body,updated_at=now() WHERE excluded.epoch>=healing_attempts.epoch RETURNING id",

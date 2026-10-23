@@ -708,6 +708,8 @@ export class Healer {
         .some((a) => a.component === "api-tier" && !terminal(a))
     )
       return;
+    // Wait for the rolling budget instead of creating doomed attempts.
+    if (this.budgets?.["api-3"]?.availableAt) return;
     const now = new Date().toISOString();
     const a = this.create(
       {
@@ -719,7 +721,7 @@ export class Healer {
       },
       this.lease!.epoch,
       "load_normal_for_stability_window",
-      null,
+      randomUUID(),
       "api-tier:scale-in:" + now,
     );
     if (a) {

@@ -10,6 +10,8 @@ export interface SurgeStats {
   ok: number;
   errors: number;
   limited: number;
+  /** Outcome breakdown: HTTP status codes, "timeout" or "network". */
+  outcomes: Record<string, number>;
   p95Ms: number | null;
   startedAt: string;
   endedAt: string | null;
@@ -35,6 +37,7 @@ export function startSurge(options: {
     ok: 0,
     errors: 0,
     limited: 0,
+    outcomes: {},
     p95Ms: null,
     startedAt: new Date().toISOString(),
     endedAt: null,
@@ -54,12 +57,20 @@ export function startSurge(options: {
       const body = r.ok
         ? await r.json().catch(() => null)
         : await r.body?.cancel();
+      stats.outcomes[r.status] = (stats.outcomes[r.status] || 0) + 1;
       if (r.status === 429) stats.limited++;
       else if (r.ok) stats.ok++;
       else stats.errors++;
-      return body as { streams?: { id: string }[] } | null;
-    } catch {
-      if (!controller.signal.aborted) stats.errors++;
+      return r.ok ? (body as { streams?: { id: string }[] } | null) : null;
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        stats.errors++;
+        const kind =
+          error instanceof DOMException && error.name === "TimeoutError"
+            ? "timeout"
+            : "network";
+        stats.outcomes[kind] = (stats.outcomes[kind] || 0) + 1;
+      }
       return null;
     } finally {
       if (latencies.length < 200000)
@@ -72,6 +83,8 @@ export function startSurge(options: {
       const id = list?.streams?.[0]?.id;
       if (id && !controller.signal.aborted)
         await one("/api/v1/streams/" + encodeURIComponent(id));
+      // A failed viewer backs off briefly instead of hot-spinning (no retry storm).
+      else if (!list) await new Promise((r) => setTimeout(r, 250));
       if (options.thinkMs)
         await new Promise((r) => setTimeout(r, options.thinkMs));
     }

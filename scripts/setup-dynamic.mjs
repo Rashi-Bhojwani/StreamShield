@@ -62,12 +62,14 @@ if (
   );
 if (
   !initial.CHAOS_ALLOWED_SCENARIOS ||
-  initial.CHAOS_ALLOWED_SCENARIOS ===
-    "crash-api,crash-edge,crash-primary,crash-redis,network-timeout,external-api"
+  [
+    "crash-api,crash-edge,crash-primary,crash-redis,network-timeout,external-api",
+    "crash-redis,crash-video-gateway,crash-api-tier,crash-relay,hang-api,crash-api,crash-edge,crash-primary,network-timeout,external-api",
+  ].includes(initial.CHAOS_ALLOWED_SCENARIOS)
 )
   set(
     "CHAOS_ALLOWED_SCENARIOS",
-    "crash-redis,crash-video-gateway,crash-api-tier,crash-relay,hang-api,crash-api,crash-edge,crash-primary,network-timeout,external-api",
+    "crash-redis,crash-video-gateway,crash-api-tier,crash-relay,hang-api,traffic-surge,crash-api,crash-edge,crash-primary,network-timeout,external-api",
   );
 set(
   "MEDIA_RTMP_PUBLIC_URL",
@@ -176,7 +178,7 @@ const overlay = {
   },
 };
 // ---- Final build: spare API capacity, small API servers, tier overload signal ----
-const apiCpus = Number(env.FINAL_API_CPUS || "0.5");
+const apiCpus = Number(env.FINAL_API_CPUS || "0.2");
 if (!(apiCpus >= 0.1 && apiCpus <= 8))
   throw Error("FINAL_API_CPUS must be between 0.1 and 8.");
 const baseFiles = [
@@ -274,9 +276,10 @@ for (const name of ["observer", "healer", "chaos-controller"])
     environment: {
       ...(overlay.services[name]?.environment || {}),
       PROMETHEUS_URL: "http://prometheus:9090",
-      OBS_OVERLOAD_P95_MS: env.OBS_OVERLOAD_P95_MS || "1000",
+      OBS_OVERLOAD_P95_MS: env.OBS_OVERLOAD_P95_MS || "1200",
       OBS_OVERLOAD_ERROR_PCT: env.OBS_OVERLOAD_ERROR_PCT || "5",
       OBS_OVERLOAD_SAMPLES: env.OBS_OVERLOAD_SAMPLES || "3",
+      FINAL_API_CPUS: String(apiCpus),
     },
   };
 const doc = new Document(overlay);

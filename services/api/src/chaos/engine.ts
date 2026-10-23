@@ -7,6 +7,7 @@ import type {
   ExperimentState,
   ExperimentEventKind,
 } from "@streamshield/shared";
+import { availableParallelism } from "node:os";
 import { startSurge } from "./load.js";
 import { standby } from "../monitoring/policy.js";
 import {
@@ -45,7 +46,7 @@ const flat = (o: object) =>
   Object.fromEntries(
     Object.entries(o).map(([k, v]) => [
       "load" + k[0]!.toUpperCase() + k.slice(1),
-      v ?? null,
+      v && typeof v === "object" ? JSON.stringify(v) : (v ?? null),
     ]),
   ) as Record<string, string | number | boolean | null>;
 export class ChaosEngine {
@@ -141,8 +142,16 @@ export class ChaosEngine {
         if (!b) return "Healer repair budget is not reported for " + who + ".";
         if (b.availableAt)
           return `Healer repair budget/cooldown for ${who} is spent until ${b.availableAt.slice(11, 19)} UTC; wait so the Healer can repair it.`;
-        if (b.max - b.used < 1)
-          return "Healer repair budget for " + who + " is exhausted.";
+        // A surge needs two spare operations: scale-out now and scale-in later.
+        const needed = generated(id) ? 2 : 1;
+        if (b.max - b.used < needed)
+          return (
+            "Healer budget for " +
+            who +
+            (needed > 1
+              ? " must allow both scale-out and scale-in; wait for the rolling window."
+              : " is exhausted.")
+          );
       }
     }
     if (
@@ -787,6 +796,7 @@ export class ChaosEngine {
       simulatedUsers: users,
       loadDurationMs: this.c.CHAOS_SURGE_DURATION_MS,
       apiCpuLimit: process.env.FINAL_API_CPUS || null,
+      hostCpus: availableParallelism(),
       loadTarget: "local api-gateway only",
     };
     this.event(
@@ -959,9 +969,10 @@ export class ChaosEngine {
       this.event(
         e,
         "SCALE_IN_NOT_OBSERVED",
-        scaleIn
+        scaleIn?.state === "ESCALATED"
           ? "Scale-in escalated: " + scaleIn.reason
-          : "No verified scale-in within the observation window",
+          : "No verified scale-in within the observation window" +
+              (scaleIn ? " (attempt " + scaleIn.state + ")" : ""),
       );
     } else {
       this.journal.save(e);

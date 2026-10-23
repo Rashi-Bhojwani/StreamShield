@@ -29,7 +29,8 @@ export async function persist(
       );
       let active = (
         await client.query(
-          "SELECT * FROM monitoring_incidents WHERE component=$1 AND resolved_at IS NULL FOR UPDATE",
+          // Capacity changes recorded by the Healer are not availability incidents.
+          "SELECT * FROM monitoring_incidents WHERE component=$1 AND resolved_at IS NULL AND source<>'healer-capacity-v1' FOR UPDATE",
           [c.id],
         )
       ).rows[0];

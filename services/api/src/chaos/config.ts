@@ -282,7 +282,7 @@ export function chaosConfig(env: Record<string, string | undefined>) {
       CHAOS_FAULT_DURATION_MS: integer(8000, 30000, 15000),
       CHAOS_TIMEOUT_MS: integer(30000, 300000, 180000),
       CHAOS_BROADCASTER_WAIT_MS: integer(5000, 120000, 60000),
-      CHAOS_SURGE_USERS: integer(1, 5000, 300),
+      CHAOS_SURGE_USERS: integer(1, 5000, 72),
       CHAOS_SURGE_MAX_USERS: integer(1, 5000, 1000),
       CHAOS_SURGE_DURATION_MS: integer(10000, 120000, 60000),
       CHAOS_SURGE_THINK_MS: integer(0, 5000, 0),
