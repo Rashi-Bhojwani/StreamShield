@@ -12,6 +12,7 @@ import {
 import { Brand } from "../ui/Brand";
 import { Icon, type IconName } from "../ui/Icon";
 import { useStreams } from "../streaming/useStreams";
+import { OutageBanner, ServedByBadge } from "../proof/ProofLayer";
 
 const navigation: { to: string; label: string; icon: IconName }[] = [
   { to: "/", label: "Home", icon: "home" },
@@ -277,11 +278,13 @@ export function LiveShell() {
         </div>
       </aside>
       <div className="app-workspace">
+        <OutageBanner />
         <main id="main" tabIndex={-1}>
           <Outlet />
         </main>
         <footer className="app-footer">
           <span>StreamShield Live</span>
+          <ServedByBadge signedIn={!!user} />
           <Link className="text-link" to="/about">
             About this build
           </Link>

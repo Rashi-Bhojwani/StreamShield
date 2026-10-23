@@ -20,17 +20,53 @@ function retryDelay(attempt: number) {
   );
 }
 
+/** Real delivery evidence for the stream-health overlay; no timers invent it. */
+export interface DeliveryHealth {
+  edge: string | null;
+  edges: string[];
+  segment: number | null;
+  bufferSeconds: number | null;
+  stalledSince: number | null;
+  lastStallMs: number | null;
+  resumedAt: number | null;
+}
 export function LivePlayer({
   source,
   sourceId = "unidentified-source",
   onObservation,
   alternateSources,
+  showHealth = false,
+  onHealth,
 }: {
   source: string;
   sourceId?: string;
   alternateSources?: Stream["playbackSources"];
   onObservation?: (observation: PlaybackObservation) => void;
+  showHealth?: boolean;
+  onHealth?: (health: DeliveryHealth) => void;
 }) {
+  const [health, setHealth] = useState<DeliveryHealth>({
+    edge: null,
+    edges: [],
+    segment: null,
+    bufferSeconds: null,
+    stalledSince: null,
+    lastStallMs: null,
+    resumedAt: null,
+  });
+  const healthSubscriber = useRef(onHealth);
+  useEffect(() => {
+    healthSubscriber.current = onHealth;
+  }, [onHealth]);
+  useEffect(() => {
+    healthSubscriber.current?.(health);
+  }, [health]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!showHealth) return;
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [showHealth]);
   const sourcesKey = JSON.stringify(alternateSources || []);
   const [deliverySource, setDeliverySource] = useState("primary");
   const subscriber = useRef(onObservation);
@@ -67,6 +103,33 @@ export function LivePlayer({
     let recovering = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    let played = false;
+    const markStalled = () => {
+      if (!played || disposed) return;
+      setHealth((h) =>
+        h.stalledSince
+          ? h
+          : { ...h, stalledSince: Date.now(), resumedAt: null },
+      );
+    };
+    const markProgress = () => {
+      played = true;
+      const buffered = video.buffered.length
+        ? video.buffered.end(video.buffered.length - 1) - video.currentTime
+        : 0;
+      setHealth((h) => {
+        const bufferSeconds = Math.max(0, Math.round(buffered * 10) / 10);
+        if (h.stalledSince)
+          return {
+            ...h,
+            bufferSeconds,
+            lastStallMs: Date.now() - h.stalledSince,
+            stalledSince: null,
+            resumedAt: Date.now(),
+          };
+        return h.bufferSeconds === bufferSeconds ? h : { ...h, bufferSeconds };
+      });
+    };
     const update = (next: PlaybackState, message: string) => {
       if (!disposed) {
         setState(next);
@@ -86,6 +149,7 @@ export function LivePlayer({
     const retry = (reason: string) => {
       if (disposed || recovering) return;
       recovering = true;
+      markStalled();
       observer.stall();
       clearStall();
       detach();
@@ -167,13 +231,20 @@ export function LivePlayer({
       if (!recovering && !video.paused && video.currentTime > lastTime) {
         observer.progress(video.currentTime, video.paused);
         lastTime = video.currentTime;
+        // Decoded progress after a recovery restores the full retry budget,
+        // so separate outages in one session are each retried in full.
+        attempts = 0;
+        markProgress();
         clearStall();
         watchStall();
       }
     };
     const buffering = () => {
       if (!recovering) {
-        if (!video.paused) observer.stall();
+        if (!video.paused) {
+          observer.stall();
+          markStalled();
+        }
         update("buffering", "Waiting for additional media data.");
         watchStall();
       }
@@ -225,6 +296,31 @@ export function LivePlayer({
           manifestLoadPolicy: policy,
           playlistLoadPolicy: policy,
           fragLoadPolicy: policy,
+          // Read the real serving edge from each segment response header.
+          xhrSetup: (xhr, url) => {
+            if (/\.m3u8(\?|$)/.test(url)) return;
+            xhr.addEventListener("readystatechange", () => {
+              if (xhr.readyState !== XMLHttpRequest.HEADERS_RECEIVED) return;
+              const edge = xhr.getResponseHeader("X-Edge-ID");
+              if (edge && /^[a-z0-9-]{1,32}$/.test(edge) && !disposed)
+                setHealth((h) =>
+                  h.edge === edge
+                    ? h
+                    : {
+                        ...h,
+                        edge,
+                        edges: [
+                          ...h.edges.filter((e) => e !== edge),
+                          edge,
+                        ].slice(-4),
+                      },
+                );
+            });
+          },
+        });
+        hls.on(Hls.Events.FRAG_CHANGED, (_event, data) => {
+          if (!disposed && typeof data.frag.sn === "number")
+            setHealth((h) => ({ ...h, segment: data.frag.sn as number }));
         });
         hls.on(Hls.Events.MANIFEST_LOADED, () =>
           observer.record("manifest_loaded"),
@@ -308,6 +404,11 @@ export function LivePlayer({
       detach();
     };
   }, [source, sourceId, session, sourcesKey]);
+  const frozenFor = health.stalledSince
+    ? Math.round((now - health.stalledSince) / 1000)
+    : null;
+  const resumedRecently =
+    health.resumedAt !== null && now - health.resumedAt < 10000;
   return (
     <div className="player" data-delivery-source={deliverySource}>
       <video
@@ -318,6 +419,51 @@ export function LivePlayer({
         preload="none"
         aria-label="Live stream video"
       />
+      {showHealth && (
+        <div
+          className={
+            "stream-health" +
+            (frozenFor !== null
+              ? " is-frozen"
+              : resumedRecently
+                ? " is-resumed"
+                : "")
+          }
+          data-testid="stream-health"
+          aria-live="polite"
+        >
+          <strong>Stream health</strong>
+          <span data-testid="served-edge" data-edge={health.edge || ""}>
+            Served by{" "}
+            {health.edge ? health.edge.replace("edge-", "Edge-") : "—"}
+          </span>
+          <span data-testid="delivery-source">
+            Source: {deliverySource === "standby" ? "Standby" : "Primary"}
+          </span>
+          <span data-testid="segment-number">
+            Segment {health.segment ?? "—"}
+          </span>
+          <span>
+            Buffer{" "}
+            {health.bufferSeconds !== null
+              ? health.bufferSeconds.toFixed(1) + " s"
+              : "—"}
+          </span>
+          {frozenFor !== null ? (
+            <span
+              className="health-alert"
+              data-testid="stall-timer"
+              role="status"
+            >
+              ✕ Frozen for {frozenFor} s
+            </span>
+          ) : resumedRecently && health.lastStallMs !== null ? (
+            <span className="health-ok" role="status">
+              ✓ Resumed after {Math.round(health.lastStallMs / 1000)} s
+            </span>
+          ) : null}
+        </div>
+      )}
       <div className="playback-bar">
         <span
           className={`status-dot ${state === "playing" ? "ready" : state === "error" || state === "unsupported" ? "error" : "pending"}`}

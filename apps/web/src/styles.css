@@ -30,6 +30,18 @@
   --stage: #111c2c;
   --stage-deep: #11151f;
   --stage-line: #365476;
+  /* One health colour language for the product, Control, charts and reports.
+     Always paired with an icon and a text label (never colour alone). Each is
+     >= 7:1 against --surface and readable as a chip with --state-ink text. */
+  --state-healthy: #6fe0a8;
+  --state-degraded: #f2c46d;
+  --state-failed: #ff8a96;
+  --state-healing: #7fb6ff;
+  --state-recovered: #6fe0a8;
+  --state-escalated: #c9a2ff;
+  --state-unknown: #9aa6b8;
+  --state-injected: #ff6ad5;
+  --state-ink: #0d0f15;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -2280,5 +2292,158 @@ input[readonly] {
   .signin-link {
     white-space: nowrap;
     padding: 8px;
+  }
+}
+
+/* ---- Visible proof layer: real outage, serving-instance and delivery evidence ---- */
+.health-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--state-ink);
+  background: var(--state-unknown);
+  white-space: nowrap;
+}
+.health-chip.tone-healthy {
+  background: var(--state-healthy);
+}
+.health-chip.tone-degraded {
+  background: var(--state-degraded);
+}
+.health-chip.tone-failed {
+  background: var(--state-failed);
+}
+.health-chip.tone-healing {
+  background: var(--state-healing);
+}
+.health-chip.tone-recovered {
+  background: var(--state-recovered);
+  box-shadow:
+    0 0 0 2px var(--canvas),
+    0 0 0 4px var(--state-recovered);
+}
+.health-chip.tone-escalated {
+  background: var(--state-escalated);
+}
+.health-chip.tone-injected {
+  background: var(--state-injected);
+}
+.health-chip.tone-unknown {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--state-unknown) 0 6px,
+    #7f8a9c 6px 12px
+  );
+}
+.outage-banner {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin: var(--space-4) var(--content-padding) 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--state-failed);
+  background: #3a1c22;
+  color: var(--text);
+}
+.outage-banner strong {
+  display: block;
+}
+.outage-banner span {
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+.outage-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--state-failed);
+  color: var(--state-ink) !important;
+  font-weight: 800;
+}
+.served-by {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+.served-by.is-up > span:first-child {
+  color: var(--state-healthy);
+}
+.served-by.is-down {
+  color: var(--state-failed);
+}
+.served-by.is-unknown > span:first-child {
+  color: var(--state-unknown);
+}
+.served-seen {
+  color: var(--text-muted);
+}
+.player {
+  position: relative;
+}
+.stream-health {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  max-width: calc(100% - 20px);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--state-healthy);
+  background: #080b12d9;
+  color: var(--text);
+  font-size: var(--font-xs);
+  pointer-events: none;
+}
+.stream-health strong {
+  color: var(--state-healthy);
+}
+.stream-health.is-frozen {
+  border-left-color: var(--state-failed);
+}
+.stream-health.is-frozen strong,
+.stream-health .health-alert {
+  color: var(--state-failed);
+  font-weight: 700;
+}
+.stream-health.is-resumed {
+  border-left-color: var(--state-recovered);
+}
+.stream-health .health-ok {
+  color: var(--state-recovered);
+  font-weight: 700;
+}
+.stream-health-toggle {
+  margin: var(--space-2) 0;
+  font-size: var(--font-sm);
+}
+.chat-connection.is-reconnecting {
+  color: var(--state-degraded);
+}
+.studio-reconnecting {
+  color: var(--state-degraded);
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .outage-banner {
+    margin: var(--space-3) var(--space-4) 0;
+  }
+  .stream-health {
+    position: static;
+    max-width: none;
+    border-radius: 0;
   }
 }

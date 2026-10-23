@@ -67,6 +67,8 @@ const schema = z.object({
     .regex(/^[a-zA-Z0-9_-]{1,40}$/)
     .optional(),
   TRUST_GATEWAY_IDS: z.enum(["true", "false"]).optional(),
+  /** Adds X-Served-By (the API instance id). Defaults on outside production. */
+  EXPOSE_SERVING_INSTANCE: z.enum(["true", "false"]).optional(),
   MEDIA_DELIVERY_API_BASE_URL: privateUrl.optional(),
   MEDIA_STANDBY_API_BASE_URL: privateUrl.optional(),
   MEDIA_STANDBY_HLS_BASE_URL: privateUrl.optional(),

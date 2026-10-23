@@ -1,4 +1,5 @@
 import { config } from "../config";
+import { trackedFetch } from "../proof/telemetry";
 export class RequestError extends Error {
   constructor(
     public status: number,
@@ -12,7 +13,7 @@ export async function platformRequest<T>(
   options: RequestInit = {},
   csrf?: string,
 ): Promise<T> {
-  const response = await fetch(config.VITE_API_BASE_URL + path, {
+  const response = await trackedFetch(config.VITE_API_BASE_URL + path, {
     credentials: "include",
     signal: AbortSignal.timeout(config.VITE_API_TIMEOUT_MS),
     ...options,
@@ -22,7 +23,7 @@ export async function platformRequest<T>(
       ...options.headers,
     },
   });
-  const body = await response.json();
+  const body = await response.json().catch(() => null);
   if (!response.ok)
     throw new RequestError(
       response.status,

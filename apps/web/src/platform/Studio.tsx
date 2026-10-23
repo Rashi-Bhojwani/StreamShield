@@ -14,6 +14,7 @@ import { useAuth } from "./auth-context";
 import { StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
 import { LivePlayer } from "../streaming/LivePlayer";
+import { readHealthPreference } from "../streaming/health-preference";
 import { config } from "../config";
 function StreamEditor({ stream }: { stream: Stream }) {
   const auth = useAuth(),
@@ -158,6 +159,7 @@ function StreamEditor({ stream }: { stream: Stream }) {
           source={stream.playbackUrl}
           alternateSources={stream.playbackSources}
           sourceId={stream.id}
+          showHealth={readHealthPreference()}
         />
       )}
       {publishing && (

@@ -5,6 +5,7 @@ import {
   streamSchema,
 } from "@streamshield/shared";
 import { config } from "./config";
+import { trackedFetch } from "./proof/telemetry";
 import type { z } from "zod";
 
 export async function request<T>(
@@ -13,7 +14,7 @@ export async function request<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   const timeout = AbortSignal.timeout(config.VITE_API_TIMEOUT_MS);
-  const response = await fetch(
+  const response = await trackedFetch(
     `${config.VITE_API_BASE_URL.replace(/\/$/, "")}${path}`,
     {
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,

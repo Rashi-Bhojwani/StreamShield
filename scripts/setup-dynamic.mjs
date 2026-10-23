@@ -37,6 +37,16 @@ for (const [key, value] of Object.entries({
 }))
   set(key, value);
 const initial = parseEnv(text);
+// A live player and chat must outlast a Healer repair (~10-25 s) on their own.
+// Upgrade only the previous defaults; operator values are left untouched.
+if (["", "3"].includes(initial.VITE_PLAYER_RETRY_LIMIT || ""))
+  set("VITE_PLAYER_RETRY_LIMIT", "12");
+if (["", "5"].includes(initial.VITE_CHAT_RECONNECT_LIMIT || ""))
+  set("VITE_CHAT_RECONNECT_LIMIT", "30");
+// Browser timeout must exceed the gateway's 10 s next-upstream budget, or the
+// browser gives up before the gateway fails over from a hung API.
+if (["", "5000"].includes(initial.VITE_API_TIMEOUT_MS || ""))
+  set("VITE_API_TIMEOUT_MS", "12000");
 // Final build: the gateway and ingest relay are Healer-managed. Upgrade only the
 // previous default allowlist; an operator-narrowed list is left untouched.
 if (

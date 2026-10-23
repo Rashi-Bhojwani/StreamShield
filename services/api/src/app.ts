@@ -22,6 +22,12 @@ export function createApp(
 ) {
   const app = express();
   app.disable("x-powered-by");
+  const servedBy =
+    config.API_INSTANCE_ID &&
+    (config.EXPOSE_SERVING_INSTANCE ??
+      (config.NODE_ENV === "production" ? "false" : "true")) === "true"
+      ? config.API_INSTANCE_ID
+      : null;
   if (metrics) app.use(metrics.middleware);
   app.use((req, res, next) => {
     // Default to our own ID; opt-in local gateway mode accepts only its fixed hex format.
@@ -34,6 +40,8 @@ export function createApp(
         : randomUUID();
     res.locals.requestId = requestId;
     res.setHeader("X-Request-ID", requestId);
+    // Visible proof of which redundant instance answered (demo/development only).
+    if (servedBy) res.setHeader("X-Served-By", servedBy);
     const started = performance.now();
     res.on("finish", () =>
       logger.info(
@@ -55,6 +63,7 @@ export function createApp(
       origin: config.CORS_ORIGINS,
       methods: ["GET", "POST", "PATCH"],
       credentials: true,
+      exposedHeaders: servedBy ? ["X-Served-By"] : [],
     }),
   );
   app.use(express.json({ limit: "16kb" }));

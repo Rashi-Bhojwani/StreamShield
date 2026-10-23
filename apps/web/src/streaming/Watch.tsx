@@ -6,6 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchStream } from "../api";
 import { config } from "../config";
 import { LivePlayer } from "./LivePlayer";
+import {
+  readHealthPreference,
+  writeHealthPreference,
+} from "./health-preference";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConnectionStatus } from "../ui/ConnectionStatus";
@@ -25,6 +29,10 @@ export default function Watch() {
     retry: false,
   });
   const stream = query.data;
+  const [showHealth, setShowHealth] = useState(readHealthPreference);
+  const reconnectingSource = ["CONNECTION_LOST", "RECONNECTING"].includes(
+    stream?.broadcastState || "",
+  );
   return (
     <div className="watch-page">
       <div className="watch-breadcrumb">
@@ -50,6 +58,7 @@ export default function Watch() {
               alternateSources={stream.playbackSources}
               sourceId={stream.id}
               onObservation={setObservation}
+              showHealth={showHealth && config.VITE_SHOW_SERVING_INSTANCE}
             />
           ) : (
             <div className="video-empty">
@@ -59,11 +68,13 @@ export default function Watch() {
                   ? "Checking source"
                   : query.isError
                     ? "Status unknown"
-                    : stream?.status === "offline"
-                      ? "Offline"
-                      : stream?.status === "starting"
-                        ? "Connecting"
-                        : "Origin unavailable"}
+                    : reconnectingSource
+                      ? "Reconnecting"
+                      : stream?.status === "offline"
+                        ? "Offline"
+                        : stream?.status === "starting"
+                          ? "Connecting"
+                          : "Origin unavailable"}
               </span>
               <div className="offline-player-art" aria-hidden="true">
                 <Icon
@@ -79,18 +90,24 @@ export default function Watch() {
                   ? "Finding your signal…"
                   : query.isError
                     ? "Unable to check this stream"
-                    : stream?.status === "offline"
-                      ? "Waiting for a broadcaster"
-                      : stream?.status === "starting"
-                        ? "Your stream is getting ready"
-                        : "The stream is unavailable"}
+                    : reconnectingSource
+                      ? "Broadcaster reconnecting…"
+                      : stream?.status === "unavailable"
+                        ? "Video service reconnecting…"
+                        : stream?.status === "offline"
+                          ? "Waiting for a broadcaster"
+                          : stream?.status === "starting"
+                            ? "Your stream is getting ready"
+                            : "The stream is unavailable"}
               </h2>
               <p>
-                {stream?.status === "offline"
-                  ? "This channel isn’t broadcasting right now. Keep this page open — the player will appear when the source returns."
-                  : query.isError
-                    ? "We couldn’t check the channel. Try again to see its current availability."
-                    : "We’re waiting for a verified video source. Please try again in a moment."}
+                {reconnectingSource
+                  ? "The broadcaster’s connection dropped. Keep this page open — playback returns by itself when their stream reconnects."
+                  : stream?.status === "offline"
+                    ? "This channel isn’t broadcasting right now. Keep this page open — the player will appear when the source returns."
+                    : query.isError
+                      ? "We couldn’t check the channel. Try again to see its current availability."
+                      : "We’re waiting for a verified video source. Please try again in a moment."}
               </p>
               <button
                 className="button secondary"
@@ -101,6 +118,18 @@ export default function Watch() {
                 {query.isFetching ? "Checking…" : "Check source again"}
               </button>
             </div>
+          )}
+          {config.VITE_SHOW_SERVING_INSTANCE && (
+            <button
+              className="text-link stream-health-toggle"
+              aria-pressed={showHealth}
+              onClick={() => {
+                writeHealthPreference(!showHealth);
+                setShowHealth(!showHealth);
+              }}
+            >
+              Stream health overlay: {showHealth ? "on" : "off"}
+            </button>
           )}
           <div className="watch-information">
             <div className="stream-identity">

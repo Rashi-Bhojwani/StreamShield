@@ -133,3 +133,24 @@ it("reports Phase 5 metadata only when the monitoring deployment is configured",
   expect(info.phase).toBe(5);
   expect(info.version).toBe("0.5.0");
 });
+
+it("names the serving instance outside production and never in production", async () => {
+  const dev = parseConfig({ ...env, API_INSTANCE_ID: "api-2" });
+  const served = await request(createApp(dev, { ready: true }))
+    .get("/api/v1/health/live")
+    .expect(200);
+  expect(served.headers["x-served-by"]).toBe("api-2");
+  const prod = parseConfig({
+    ...env,
+    API_INSTANCE_ID: "api-2",
+    EXPOSE_SERVING_INSTANCE: "false",
+  });
+  const hidden = await request(createApp(prod, { ready: true }))
+    .get("/api/v1/health/live")
+    .expect(200);
+  expect(hidden.headers["x-served-by"]).toBeUndefined();
+  const anonymous = await request(createApp(config, { ready: true }))
+    .get("/api/v1/health/live")
+    .expect(200);
+  expect(anonymous.headers["x-served-by"]).toBeUndefined();
+});

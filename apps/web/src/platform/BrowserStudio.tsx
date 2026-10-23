@@ -24,6 +24,9 @@ export function BrowserStudio({
   const attempt = useRef(0);
   const pending = useRef<AbortController | null>(null);
   const connected = useRef(false);
+  const reconnecting = useRef(false);
+  const lostTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]),
     [camera, setCamera] = useState(""),
     [microphone, setMicrophone] = useState("");
@@ -163,6 +166,83 @@ export function BrowserStudio({
       setBusy(false);
     }
   };
+  /**
+   * The broadcaster client heals its own connection: after the ingest server
+   * drops, republish on the same key with bounded backoff. This is the client
+   * reconnecting itself; the server side is restored by the Healer.
+   */
+  const RECONNECT_LIMIT = 8;
+  const reconnect = async (key: Publishing, current: number) => {
+    if (reconnecting.current || attempt.current !== current) return;
+    reconnecting.current = true;
+    connected.current = false;
+    const old = publisher.current;
+    publisher.current = null;
+    void old?.close();
+    for (let i = 1; i <= RECONNECT_LIMIT; i++) {
+      if (attempt.current !== current || !capture.current) break;
+      setReconnectAttempt(i);
+      setState(
+        `Connection to server lost · reconnecting (attempt ${i} of ${RECONNECT_LIMIT})`,
+      );
+      await new Promise((r) => setTimeout(r, Math.min(500 * i, 3000)));
+      if (attempt.current !== current || !capture.current) break;
+      try {
+        const connection = await publishWhip(
+          capture.current,
+          key,
+          watch(key, current),
+        );
+        if (attempt.current !== current) {
+          await connection.close();
+          break;
+        }
+        publisher.current = connection;
+        connected.current = true;
+        reconnecting.current = false;
+        setReconnectAttempt(0);
+        setState(
+          "Reconnected · publishing again (this browser reconnected itself)",
+        );
+        onNotice("Broadcast connection restored automatically.");
+        return;
+      } catch {
+        /* Next bounded attempt. */
+      }
+    }
+    reconnecting.current = false;
+    setReconnectAttempt(0);
+    if (attempt.current === current)
+      void end(
+        `The connection could not be re-established after ${RECONNECT_LIMIT} attempts. This publishing attempt was stopped.`,
+        key.key,
+      );
+  };
+  const watch =
+    (key: Publishing, current: number) => (s: RTCPeerConnectionState) => {
+      if (attempt.current !== current || reconnecting.current) return;
+      if (lostTimer.current) {
+        clearTimeout(lostTimer.current);
+        lostTimer.current = null;
+      }
+      setState(
+        s === "connected"
+          ? "Publishing media · waiting for verified LIVE status"
+          : s === "disconnected"
+            ? "Connection to server lost · reconnecting"
+            : s === "failed"
+              ? "Connection to server lost · reconnecting"
+              : "Connection: " + s,
+      );
+      if (!connected.current) return;
+      if (s === "failed") void reconnect(key, current);
+      // ICE "disconnected" can heal itself; republish if it has not within 3 s.
+      else if (s === "disconnected")
+        lostTimer.current = setTimeout(
+          () => void reconnect(key, current),
+          3000,
+        );
+    };
   const start = async () => {
     if (!capture.current || busy || publishing) return;
     const source = capture.current;
@@ -192,25 +272,7 @@ export function BrowserStudio({
       const connection = await publishWhip(
         source,
         key,
-        (s) => {
-          if (attempt.current === current)
-            setState(
-              s === "connected"
-                ? "Publishing media · waiting for verified LIVE status"
-                : s === "disconnected"
-                  ? "Connection lost · reconnecting"
-                  : s === "failed"
-                    ? "Connection failed · check your network"
-                    : "Connection: " + s,
-            );
-          if (s === "failed" && connected.current) {
-            connected.current = false;
-            void end(
-              "Media connection failed. This publishing attempt was stopped. Check the ICE port/firewall before retrying.",
-              key.key,
-            );
-          }
-        },
+        watch(key, current),
         controller.signal,
       );
       if (attempt.current !== current) {
@@ -414,8 +476,12 @@ export function BrowserStudio({
           Stop preview
         </button>
       </div>
-      <p role="status">
-        {live && publishing
+      <p
+        role="status"
+        data-testid="studio-publish-state"
+        className={reconnectAttempt ? "studio-reconnecting" : undefined}
+      >
+        {live && publishing && !reconnectAttempt
           ? "Live · your broadcast is available to viewers."
           : state}
       </p>

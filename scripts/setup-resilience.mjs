@@ -25,6 +25,10 @@ for (const name of ["RESILIENCE_REPLICATION_SECRET", "RESILIENCE_HLS_SECRET"]) {
 const c = parseResilience(env),
   base = parse(readFileSync("docker-compose.yml", "utf8"));
 mkdirSync(".local/resilience", { recursive: true });
+// Serving-instance proof (X-Served-By, X-Edge-ID) for local/demo builds only.
+const exposeServingInstance =
+  (env.EXPOSE_SERVING_INSTANCE ||
+    (env.NODE_ENV === "production" ? "false" : "true")) === "true";
 const save = (name, content) => {
   const p = ".local/resilience/" + name;
   writeFileSync(p, content, { mode: 0o600 });
@@ -121,6 +125,7 @@ for (const [name, id] of [
       add_header Cache-Control $client_cache always;
       add_header X-Edge-ID "${id}" always;
       add_header X-Cache $upstream_cache_status always;
+      add_header Access-Control-Expose-Headers "X-Edge-ID, X-Cache" always;
       proxy_redirect ~^(/.*)$ /${source}$1;
       proxy_ignore_headers Cache-Control Expires;
       proxy_cache media;
@@ -164,7 +169,7 @@ save(
       proxy_set_header Cookie '';
       proxy_set_header Authorization '';
       proxy_set_header Connection '';
-      proxy_hide_header X-Edge-ID;
+      ${exposeServingInstance ? "# X-Edge-ID passes through: the player overlay shows which edge served each segment." : "proxy_hide_header X-Edge-ID;"}
       proxy_buffering off;
       proxy_pass http://edges;
     }
@@ -250,6 +255,7 @@ if (env.ENABLE_LEGACY_STREAM === "true")
 save("origin.yml", stringify(origin, { defaultStringType: "QUOTE_DOUBLE" }));
 const publicMedia = c.MEDIA_PUBLIC_HLS_BASE_URL.replace(/\/$/, "");
 const apiEnv = {
+  EXPOSE_SERVING_INSTANCE: exposeServingInstance ? "true" : "false",
   MEDIA_PROBE_TIMEOUT_MS: String(c.RESILIENCE_MEDIA_PROBE_TIMEOUT_MS),
   API_INSTANCE_ID: "api-1",
   TRUST_GATEWAY_IDS: "true",

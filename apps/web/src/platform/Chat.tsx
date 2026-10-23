@@ -26,7 +26,8 @@ export function Chat({
     [error, setError] = useState(""),
     [draft, setDraft] = useState(""),
     [sending, setSending] = useState(false),
-    [hasOlder, setHasOlder] = useState(false);
+    [hasOlder, setHasOlder] = useState(false),
+    [delivered, setDelivered] = useState(false);
   const refreshAuth = auth.refresh;
   const socket = useRef<Socket | null>(null),
     list = useRef<HTMLDivElement>(null),
@@ -59,6 +60,8 @@ export function Chat({
       auth: { csrf: auth.csrf },
       reconnectionAttempts: config.VITE_CHAT_RECONNECT_LIMIT,
       reconnectionDelay: config.VITE_CHAT_RECONNECT_DELAY_MS,
+      // Bounded backoff that still outlasts a Healer repair of Redis or the APIs.
+      reconnectionDelayMax: 5000,
       timeout: config.VITE_API_TIMEOUT_MS,
     });
     socket.current = client;
@@ -103,15 +106,28 @@ export function Chat({
           );
       },
     );
-    client.on("disconnect", (reason) => {
+    client.io.on("reconnect_attempt", () => {
+      if (!disposed) setStatus("Reconnecting");
+    });
+    client.io.on("reconnect_failed", () => {
       if (!disposed) {
         setStatus("Disconnected");
+        setError(
+          "Chat could not reconnect automatically. You can keep watching.",
+        );
+      }
+    });
+    client.on("disconnect", (reason) => {
+      if (!disposed) {
+        setStatus(
+          reason === "io client disconnect" ? "Disconnected" : "Reconnecting",
+        );
         if (reason === "io server disconnect") void refreshAuth();
       }
     });
     client.on("connect_error", () => {
       if (!disposed) {
-        setStatus("Unavailable");
+        setStatus(client.active ? "Reconnecting" : "Unavailable");
         setError("Chat connection unavailable. You can keep watching.");
       }
     });
@@ -204,6 +220,11 @@ export function Chat({
     refreshAuth,
   ]);
   useEffect(() => {
+    if (!delivered) return;
+    const t = setTimeout(() => setDelivered(false), 4000);
+    return () => clearTimeout(t);
+  }, [delivered]);
+  useEffect(() => {
     if (follow.current && list.current)
       list.current.scrollTop = list.current.scrollHeight;
   }, [messages]);
@@ -228,6 +249,7 @@ export function Chat({
           }
           setDraft("");
           follow.current = true;
+          setDelivered(true);
           if (reply.data) merge([reply.data]);
         },
       );
@@ -241,10 +263,19 @@ export function Chat({
         </h2>
         <span
           className={
-            "chat-connection " + (status === "Connected" ? "is-connected" : "")
+            "chat-connection " +
+            (status === "Connected" ? "is-connected" : "is-reconnecting")
           }
+          data-testid="chat-status"
+          data-status={status}
         >
-          {status}
+          {status === "Connected"
+            ? delivered
+              ? "✓ Delivered"
+              : "✓ Connected"
+            : status === "Reconnecting" || status === "Degraded"
+              ? "⟳ Chat reconnecting…"
+              : "✕ " + status}
         </span>
       </div>
       <p className="viewer-estimate">
