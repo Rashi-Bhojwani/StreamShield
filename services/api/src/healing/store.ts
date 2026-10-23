@@ -67,13 +67,22 @@ export class RecoveryStore {
         // Scale-in answers sustained normal load, not a failure: the Healer
         // records its own capacity-change incident so the audit stays complete.
         await db.query(
-          "INSERT INTO monitoring_incidents(id,component,failure_identity,severity,state,first_observed_at,detected_at,evidence,correlation_id,source) VALUES($1,'api-tier','scale-in','warning','DIAGNOSED',$2,$2,$3,$1,'healer-capacity-v1') ON CONFLICT(id) DO NOTHING",
+          "INSERT INTO monitoring_incidents(id,component,failure_identity,severity,state,first_observed_at,detected_at,evidence,correlation_id,source) VALUES($1,'api-tier','scale-in','warning','DIAGNOSED',$2,$2,$3,$1,'healer-capacity-v1') ON CONFLICT DO NOTHING",
           [
             a.incidentId,
             a.detectedAt,
             { code: "scale_in", reason: a.diagnosis, playbackVerified: false },
           ],
         );
+        // One open capacity incident at a time: an earlier escalated scale-in
+        // leaves it open, and this attempt joins it (and resolves it if verified).
+        a.incidentId =
+          (
+            await db.query(
+              "SELECT id FROM monitoring_incidents WHERE id=$1 OR (component='api-tier' AND failure_identity='scale-in' AND resolved_at IS NULL AND source='healer-capacity-v1') ORDER BY (id=$1) DESC LIMIT 1",
+              [a.incidentId],
+            )
+          ).rows[0]?.id || a.incidentId;
       }
       if (!a.incidentId) {
         await db.query("ROLLBACK");
