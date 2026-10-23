@@ -490,17 +490,6 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
       after: () => Promise<Record<string, unknown>>,
     ) => {
       if (only.length && !only.includes(scenario)) return;
-      let rotated = false;
-      for (const p of publishers) rotated = (await p.rotate(300000)) || rotated;
-      if (rotated) {
-        const mark = viewer.snapshot();
-        await expect
-          .poll(() => viewer.state.frames - mark.frames, {
-            timeout: 60000,
-            intervals: [1000],
-          })
-          .toBeGreaterThan(30);
-      }
       let waitedMs = 0;
       let before: Record<string, ReturnType<typeof container>>;
       let framesBefore: ReturnType<typeof viewer.snapshot>;
@@ -509,6 +498,22 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
       // flaps between the poll and the POST is refused (409) and we wait again.
       for (let tries = 1; ; tries++) {
         waitedMs += await waitAdmissible(scenario);
+        // Rotate right before injection (after any budget wait), so the
+        // publisher's 600 s cap cannot land inside this experiment.
+        let rotated = false;
+        for (const p of publishers)
+          rotated = (await p.rotate(240000)) || rotated;
+        if (rotated) {
+          const mark = viewer.snapshot();
+          await expect
+            .poll(() => viewer.state.frames - mark.frames, {
+              timeout: 60000,
+              intervals: [1000],
+            })
+            .toBeGreaterThan(30);
+          tries--;
+          continue;
+        }
         before = Object.fromEntries(
           targets.map((t) => [t, container(serviceOf[t]!)]),
         );
