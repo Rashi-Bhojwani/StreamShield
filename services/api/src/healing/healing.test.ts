@@ -431,6 +431,42 @@ describe("symptom-aware diagnosis", () => {
       "peer_not_healthy:api-1",
     );
   });
+  it("never restarts an API whose timeout is load congestion", () => {
+    const hung = component("api-2", {
+      code: "probe_timeout",
+      failureCode: "probe_timeout",
+    });
+    const metrics = (rps: number) => ({
+      p95Ms: 2000,
+      errorPct: 0,
+      rps,
+      limitedRps: 0,
+    });
+    const busy = component("api-tier", {
+      state: "HEALTHY",
+      metrics: metrics(400),
+    });
+    expect(
+      eligibility(hung, [...deps(), healthyPeer("api-1"), busy], config()),
+    ).toEqual({ allowed: false, reason: "tier_under_load_timeout_not_a_hang" });
+    const overloaded = component("api-tier", {
+      state: "DEGRADED",
+      code: "overloaded",
+      failureCode: "overloaded",
+      metrics: metrics(10),
+    });
+    expect(
+      eligibility(hung, [...deps(), healthyPeer("api-1"), overloaded], config())
+        .reason,
+    ).toBe("tier_under_load_timeout_not_a_hang");
+    const quiet = component("api-tier", {
+      state: "HEALTHY",
+      metrics: metrics(3),
+    });
+    expect(
+      eligibility(hung, [...deps(), healthyPeer("api-1"), quiet], config()),
+    ).toMatchObject({ allowed: true });
+  });
   it("refuses dependency-unhealthy and stale restarts", () => {
     const hung = component("api-2", { failureCode: "probe_timeout" });
     expect(

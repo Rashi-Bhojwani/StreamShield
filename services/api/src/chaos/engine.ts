@@ -845,7 +845,11 @@ export class ChaosEngine {
         !e.priorRecoveryIds.includes(a.id) &&
         Date.parse(a.createdAt) >= Date.parse(e.injectedAt!),
     );
-    const out = tierAttempts.find((a) => a.playbook === "api-scale-out");
+    // Correlate the first scale-out of this experiment and stay with it.
+    const outs = tierAttempts
+      .filter((a) => a.playbook === "api-scale-out")
+      .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+    const out = outs.find((a) => e.recoveryIds.includes(a.id)) || outs[0];
     if (!out) return;
     if (!e.recoveryIds.includes(out.id)) {
       e.recoveryIds.push(out.id);

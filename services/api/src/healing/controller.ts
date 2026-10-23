@@ -309,8 +309,16 @@ export class Healer {
       this.lastDependency = Date.now();
       await this.dependency().catch(() => {});
     }
+    const busy = new Set(
+      this.journal
+        .work()
+        .filter((a) => !terminal(a))
+        .map((a) => a.component),
+    );
     for (const component of frame.components) {
       if (
+        // One open attempt per component: a flapping signal is the same incident.
+        busy.has(component.id) ||
         !component.confirmedAt ||
         !component.firstFailureAt ||
         !["UNHEALTHY", "DEGRADED"].includes(component.state) ||

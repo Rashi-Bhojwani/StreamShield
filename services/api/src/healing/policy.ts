@@ -227,6 +227,15 @@ export function eligibility(
     const peer = peers[component.id];
     if (!peer || components.find((x) => x.id === peer)?.state !== "HEALTHY")
       return { allowed: false, reason: "peer_not_healthy:" + (peer || "none") };
+    // A timeout while the tier carries heavy load is congestion, not a hang:
+    // restarting an overloaded instance only removes capacity (scale-out owns it).
+    const tier = components.find((x) => x.id === "api-tier");
+    if (
+      tier &&
+      ((tier.state !== "HEALTHY" && failureCodeOf(tier) === "overloaded") ||
+        (tier.metrics?.rps ?? 0) >= c.HEALER_SCALE_IN_RPS)
+    )
+      return { allowed: false, reason: "tier_under_load_timeout_not_a_hang" };
   }
   for (const dependency of p.dependencies)
     if (components.find((x) => x.id === dependency)?.state !== "HEALTHY")
