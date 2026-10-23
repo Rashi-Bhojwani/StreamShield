@@ -8,6 +8,7 @@ export const supported = [
   "crash-api-tier",
   "crash-relay",
   "hang-api",
+  "traffic-surge",
   "crash-api",
   "crash-edge",
   "crash-primary",
@@ -114,8 +115,26 @@ const drafts: Draft[] = [
     realWorldCause: "A deadlock, an infinite loop or a stuck query.",
   }),
   healer({
-    id: "crash-api",
+    id: "traffic-surge",
     order: 6,
+    name: "Traffic surge (too many users hit the API)",
+    target: "api-tier",
+    targets: ["api-tier"],
+    expectedReceipt: "docker_start_accepted",
+    risk: "moderate",
+    failure:
+      "A bounded load generator floods the API tier with simulated viewers for a bounded time.",
+    recovery:
+      "The Healer adds the pre-provisioned spare API-3 (scale-out) and removes it again after load stays normal.",
+    prerequisites:
+      "Healthy tier, the spare API-3 created but stopped, and Healer budget for API-3.",
+    audienceSees:
+      "Load meter and latency climb, pages slow down, then Served by API-3 appears and latency drops while load continues.",
+    realWorldCause: "A flash crowd, bots or a retry storm.",
+  }),
+  healer({
+    id: "crash-api",
+    order: 7,
     name: "Crash API-1 (invisible failover)",
     target: "api-1",
     targets: ["api-1"],
@@ -133,7 +152,7 @@ const drafts: Draft[] = [
   }),
   healer({
     id: "crash-edge",
-    order: 7,
+    order: 8,
     name: "Crash video Edge-1 (invisible failover)",
     target: "edge-1",
     targets: ["edge-1"],
@@ -150,7 +169,7 @@ const drafts: Draft[] = [
   }),
   healer({
     id: "crash-primary",
-    order: 8,
+    order: 9,
     name: "Kill primary origin",
     target: "origin-primary",
     targets: ["origin-primary"],
@@ -263,6 +282,11 @@ export function chaosConfig(env: Record<string, string | undefined>) {
       CHAOS_FAULT_DURATION_MS: integer(8000, 30000, 15000),
       CHAOS_TIMEOUT_MS: integer(30000, 300000, 180000),
       CHAOS_BROADCASTER_WAIT_MS: integer(5000, 120000, 60000),
+      CHAOS_SURGE_USERS: integer(1, 5000, 300),
+      CHAOS_SURGE_MAX_USERS: integer(1, 5000, 1000),
+      CHAOS_SURGE_DURATION_MS: integer(10000, 120000, 60000),
+      CHAOS_SURGE_THINK_MS: integer(0, 5000, 0),
+      CHAOS_SURGE_SCALE_IN_WAIT_MS: integer(10000, 300000, 120000),
       CHAOS_CONCURRENCY: integer(1, 1, 1),
       CHAOS_COOLDOWN_MS: integer(5000, 600000, 30000),
       CHAOS_RATE_LIMIT: integer(1, 20, 12),
@@ -279,7 +303,8 @@ export function chaosConfig(env: Record<string, string | undefined>) {
     new Set(allowed).size !== allowed.length ||
     c.CHAOS_SECRET === c.CHAOS_CONTROL_SECRET ||
     c.CHAOS_PORT === c.CHAOS_CONTROL_PORT ||
-    c.CHAOS_TIMEOUT_MS < c.CHAOS_FAULT_DURATION_MS + 15000
+    c.CHAOS_TIMEOUT_MS < c.CHAOS_FAULT_DURATION_MS + 15000 ||
+    c.CHAOS_SURGE_USERS > c.CHAOS_SURGE_MAX_USERS
   )
     throw Error("Invalid chaos policy or authority");
   const enabled =
@@ -294,5 +319,10 @@ export const scenarioFor = (id: ChaosScenarioId) =>
   scenarios.find((s) => s.id === id)!;
 export const temporary = (id: ChaosScenarioId) =>
   id === "network-timeout" || id === "external-api";
+/** Faults the controller generates itself (no Docker or Toxiproxy authority). */
+export const generated = (id: ChaosScenarioId) => id === "traffic-surge";
+/** The Healer budget/allowlist identity behind a scenario target. */
+export const authorityFor = (target: string) =>
+  target === "api-tier" ? "api-3" : target;
 export const terminal = (state: string) =>
   ["COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED"].includes(state);

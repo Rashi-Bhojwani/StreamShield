@@ -78,6 +78,56 @@ export function HealthBand({
     </div>
   );
 }
+/** Live API-tier load from the observer's real Prometheus-derived metrics. */
+function LoadMeter({
+  tier,
+  spare,
+  active,
+}: {
+  tier: ComponentObservation | undefined;
+  spare: ComponentObservation | undefined;
+  active: ChaosExperiment | undefined;
+}) {
+  if (!tier) return null;
+  const m = tier.metrics;
+  const users =
+    active?.scenario === "traffic-surge"
+      ? Number(active.evidence.simulatedUsers || 0)
+      : 0;
+  const overloaded = tier.code === "overloaded";
+  return (
+    <div
+      className={"load-meter" + (overloaded ? " is-overloaded" : "")}
+      data-testid="load-meter"
+    >
+      <span>
+        Simulated users <strong>{users || "—"}</strong>
+      </span>
+      <span>
+        Requests/s <strong>{m ? m.rps : "—"}</strong>
+      </span>
+      <span>
+        p95 latency <strong>{m ? m.p95Ms + " ms" : "—"}</strong>
+      </span>
+      <span>
+        5xx <strong>{m ? m.errorPct + " %" : "—"}</strong>
+      </span>
+      <span title="Rate-limit refusals: load shedding, separate from healing">
+        Load shedding (429/s) <strong>{m ? m.limitedRps : "—"}</strong>
+      </span>
+      <span>
+        Spare API-3{" "}
+        <strong>
+          {spare?.code === "spare_standby"
+            ? "stopped"
+            : spare?.state === "HEALTHY"
+              ? "serving"
+              : (spare?.state.toLowerCase() ?? "—")}
+        </strong>
+      </span>
+    </div>
+  );
+}
 export function StageTimeline({
   experiment,
   attempts,
@@ -454,6 +504,11 @@ export function Presentation({
             healerAvailable={recovery.data?.available}
           />
           <HealthBand data={band.data} label="Last 10 minutes" />
+          <LoadMeter
+            tier={components.find((c) => c.id === "api-tier")}
+            spare={components.find((c) => c.id === "api-3")}
+            active={active}
+          />
           <p className="served-line">
             This browser: served by <strong>{telemetry.servedBy || "—"}</strong>
             {telemetry.latencyMs !== null && ` · ${telemetry.latencyMs} ms`}

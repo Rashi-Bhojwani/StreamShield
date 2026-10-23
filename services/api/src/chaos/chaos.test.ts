@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { HealingSnapshot, RecoveryAttempt } from "@streamshield/shared";
 import { chaosConfig, scenarios } from "./config.js";
 import { killable, freezable } from "./docker.js";
+import { startSurge } from "./load.js";
 import { ChaosJournal } from "./journal.js";
 import { ChaosEngine } from "./engine.js";
 import type { ChaosStore } from "./store.js";
@@ -70,6 +71,7 @@ function fixture() {
         "redis",
         "video-gateway",
         "relay",
+        "api-3",
       ].map((s) => [s, { used: 0, max: 2, availableAt: null }]),
     ),
   } as unknown as HealingSnapshot;
@@ -116,7 +118,7 @@ describe("chaos authority and admission", () => {
       expect(() => chaosConfig({ ...env, ...overrides })).toThrow();
   });
   it("shows unsafe/unowned scenarios as disabled with explicit reasons", () => {
-    expect(scenarios.filter((s) => s.supported)).toHaveLength(10);
+    expect(scenarios.filter((s) => s.supported)).toHaveLength(11);
     expect(
       scenarios
         .filter((s) => !s.supported)
@@ -472,7 +474,10 @@ describe("final self-healing scenarios", () => {
   it("never allowlists postgres or unrelated targets for faults", () => {
     expect(killable).not.toContain("postgres" as never);
     expect(freezable).toEqual(["api-2"]);
-    for (const s of scenarios.filter((s) => s.kind === "healer"))
+    // The surge is generated load, not a Docker fault: it has no fault target.
+    for (const s of scenarios.filter(
+      (s) => s.kind === "healer" && s.id !== "traffic-surge",
+    ))
       for (const t of s.targets)
         expect([...killable, ...freezable]).toContain(t as never);
   });
@@ -617,5 +622,49 @@ describe("repair-budget admission", () => {
     expect(engine.reason("network-timeout")).toBeNull();
     delete engine.healer!.budgets;
     expect(engine.reason("crash-redis")).toContain("not reported");
+  });
+});
+
+describe("traffic surge", () => {
+  it("refuses non-local load targets before sending anything", () => {
+    expect(() =>
+      startSurge({ url: "https://example.com", users: 1, durationMs: 10 }),
+    ).toThrow("surge_target_not_local");
+  });
+  it("runs a bounded number of viewers for a bounded time and counts outcomes", async () => {
+    let calls = 0;
+    const fetcher = (async (url: string) => {
+      calls++;
+      if (String(url).includes("/streams?"))
+        return new Response(JSON.stringify({ streams: [{ id: "s1" }] }));
+      return new Response("{}", { status: calls % 2 ? 429 : 200 });
+    }) as typeof fetch;
+    const load = startSurge({
+      url: "http://api-gateway:8080",
+      users: 3,
+      durationMs: 60,
+      thinkMs: 5,
+      fetcher,
+    });
+    const stats = await load.done;
+    expect(stats.users).toBe(3);
+    expect(stats.requests).toBe(calls);
+    expect(stats.ok + stats.limited + stats.errors).toBe(stats.requests);
+    expect(stats.limited).toBeGreaterThan(0);
+    expect(stats.endedAt).not.toBeNull();
+  });
+  it("needs the spare stopped and budget for API-3 before admission", () => {
+    const { engine } = fixture();
+    expect(engine.reason("traffic-surge")).toContain("spare API-3");
+    engine.frame!.components = [
+      { id: "api-3", state: "UNKNOWN", code: "spare_standby" },
+    ] as never;
+    expect(engine.reason("traffic-surge")).toBeNull();
+    engine.healer!.budgets!["api-3"] = {
+      used: 2,
+      max: 2,
+      availableAt: "2026-10-22T20:30:00.000Z",
+    };
+    expect(engine.reason("traffic-surge")).toContain("api-3");
   });
 });

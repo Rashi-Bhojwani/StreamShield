@@ -27,6 +27,9 @@ const c = z
     OBS_RETENTION_DAYS: number(7, 365, 90),
     OBS_PORT: number(1024, 65535, 4010),
     OBS_SECRET: z.string().regex(/^[\w-]{43}$/),
+    OBS_OVERLOAD_P95_MS: number(100, 60000, 1500),
+    OBS_OVERLOAD_ERROR_PCT: number(1, 100, 5),
+    OBS_OVERLOAD_SAMPLES: number(2, 20, 3),
   })
   .parse(process.env);
 const targetSchema = z
@@ -38,7 +41,9 @@ const targetSchema = z
       role: z.string(),
       dependencies: z.array(z.string()),
       url: z.string().url().optional(),
-      kind: z.enum(["http", "api", "media", "postgres", "redis"]),
+      kind: z.enum(["http", "api", "media", "postgres", "redis", "tier"]),
+      /** A pre-provisioned spare: stopped is its normal standby, not a failure. */
+      spare: z.boolean().optional(),
     }),
   )
   .max(20);
@@ -88,6 +93,11 @@ redis.on("ready", () => {
 });
 void redis.connect().catch(() => {});
 const policy = { failures: c.OBS_FAILURES, successes: c.OBS_SUCCESSES };
+// Overload must persist for N consecutive samples before it is confirmed.
+const tierPolicy = {
+  failures: c.OBS_OVERLOAD_SAMPLES,
+  successes: c.OBS_SUCCESSES,
+};
 let components: ComponentObservation[] = targets.map((t) => ({
   id: t.id,
   name: t.name,
@@ -147,8 +157,62 @@ const request = async (url: string, headers: Record<string, string> = {}) =>
     redirect: "error",
     signal: AbortSignal.timeout(c.OBS_TIMEOUT_MS),
   });
+async function promScalar(query: string) {
+  const url = new URL("/api/v1/query", process.env.PROMETHEUS_URL);
+  url.searchParams.set("query", query);
+  const r = await request(url.href);
+  if (!r.ok) throw new Error("metrics");
+  const body = (await r.json()) as {
+    status: string;
+    data?: { result?: { value?: [number, string] }[] };
+  };
+  if (body.status !== "success") throw new Error("metrics");
+  const v = Number(body.data?.result?.[0]?.value?.[1]);
+  return Number.isFinite(v) ? v : 0;
+}
+/**
+ * Logical API-tier load from real metrics already scraped from every API.
+ * Overloaded = p95 above threshold or 5xx ratio above threshold. Individual
+ * APIs are never marked unhealthy merely for being slow.
+ */
+async function tierProbe(started: number): Promise<Probe> {
+  if (!process.env.PROMETHEUS_URL)
+    return { state: "UNKNOWN", code: "metrics_unavailable", latencyMs: null };
+  try {
+    const [p95, errors, rps, limited] = await Promise.all([
+      promScalar(
+        'histogram_quantile(0.95,sum by(le)(rate(streamshield_http_request_duration_seconds_bucket{job="api"}[20s])))*1000',
+      ),
+      promScalar(
+        '100*sum(rate(streamshield_http_requests_total{job="api",category="5xx"}[20s]))/clamp_min(sum(rate(streamshield_http_requests_total{job="api"}[20s])),0.000001)',
+      ),
+      promScalar('sum(rate(streamshield_http_requests_total{job="api"}[20s]))'),
+      promScalar('sum(rate(streamshield_http_limited_total{job="api"}[20s]))'),
+    ]);
+    const overloaded =
+      p95 > c.OBS_OVERLOAD_P95_MS || errors > c.OBS_OVERLOAD_ERROR_PCT;
+    return {
+      state: overloaded ? "DEGRADED" : "HEALTHY",
+      code: overloaded ? "overloaded" : "probe_ok",
+      latencyMs: Math.round(performance.now() - started),
+      metrics: {
+        p95Ms: Math.round(p95),
+        errorPct: Math.round(errors * 100) / 100,
+        rps: Math.round(rps * 10) / 10,
+        limitedRps: Math.round(limited * 10) / 10,
+      },
+    };
+  } catch {
+    return {
+      state: "UNKNOWN",
+      code: "metrics_unavailable",
+      latencyMs: Math.round(performance.now() - started),
+    };
+  }
+}
 async function probe(t: (typeof targets)[number]): Promise<Probe> {
   const started = performance.now();
+  if (t.kind === "tier") return tierProbe(started);
   try {
     let state: Probe["state"] = "HEALTHY",
       code = "probe_ok";
@@ -184,7 +248,11 @@ async function probe(t: (typeof targets)[number]): Promise<Probe> {
     }
     return { state, code, latencyMs: Math.round(performance.now() - started) };
   } catch (error) {
-    return failedProbe(error, Math.round(performance.now() - started));
+    const failed = failedProbe(error, Math.round(performance.now() - started));
+    // A stopped spare is in standby, which is neither healthy nor a failure.
+    return t.spare && failed.code === "probe_unreachable"
+      ? { state: "UNKNOWN", code: "spare_standby", latencyMs: null }
+      : failed;
   }
 }
 async function boundedText(url: string, headers: Record<string, string>) {
@@ -417,7 +485,13 @@ async function start() {
           const elapsed = failureClocks.has(t.id)
             ? performance.now() - failureClocks.get(t.id)!
             : null;
-          components[i] = evaluate(previous, p, policy, now, elapsed);
+          components[i] = evaluate(
+            previous,
+            p,
+            t.kind === "tier" ? tierPolicy : policy,
+            now,
+            elapsed,
+          );
         }
       }),
     );

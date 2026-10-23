@@ -7,7 +7,11 @@ import type {
   ExperimentState,
   ExperimentEventKind,
 } from "@streamshield/shared";
+import { startSurge } from "./load.js";
+import { standby } from "../monitoring/policy.js";
 import {
+  authorityFor,
+  generated,
   chaosConfig,
   scenarioFor,
   scenarios,
@@ -24,17 +28,26 @@ import { probeFailureCode } from "../monitoring/policy.js";
 export const playbookFor = (id: ChaosScenarioId, target: string) =>
   id === "hang-api"
     ? "api-restart-unresponsive"
-    : (
-        {
-          "api-1": "api-start",
-          "api-2": "api-start",
-          "edge-1": "edge-start",
-          "origin-primary": "primary-start",
-          redis: "redis-start",
-          "video-gateway": "gateway-start",
-          relay: "relay-start",
-        } as Record<string, string>
-      )[target]!;
+    : id === "traffic-surge"
+      ? "api-scale-out"
+      : (
+          {
+            "api-1": "api-start",
+            "api-2": "api-start",
+            "edge-1": "edge-start",
+            "origin-primary": "primary-start",
+            redis: "redis-start",
+            "video-gateway": "gateway-start",
+            relay: "relay-start",
+          } as Record<string, string>
+        )[target]!;
+const flat = (o: object) =>
+  Object.fromEntries(
+    Object.entries(o).map(([k, v]) => [
+      "load" + k[0]!.toUpperCase() + k.slice(1),
+      v ?? null,
+    ]),
+  ) as Record<string, string | number | boolean | null>;
 export class ChaosEngine {
   frame: Frame | undefined;
   healer: HealingSnapshot | undefined;
@@ -43,6 +56,7 @@ export class ChaosEngine {
   lastCompleted = 0;
   private nextSync = 0;
   private stable = new Map<string, number>();
+  private surges = new Map<string, ReturnType<typeof startSurge>>();
   constructor(
     public c: ChaosConfig,
     public journal: ChaosJournal,
@@ -94,8 +108,16 @@ export class ChaosEngine {
       return "Target cooldown remains active; wait before repeating this failure boundary.";
     if (this.adapterActive)
       return "An owned fault still awaits adapter cleanup.";
-    if (this.frame!.components.some((c) => c.state !== "HEALTHY"))
+    if (
+      this.frame!.components.some((c) => c.state !== "HEALTHY" && !standby(c))
+    )
       return "All monitored components must return to a healthy baseline.";
+    if (
+      generated(id) &&
+      this.frame!.components.find((c) => c.id === "api-3")?.code !==
+        "spare_standby"
+    )
+      return "The spare API-3 must exist and be stopped (run final:up) before a surge.";
     const allowed = (
       process.env.HEALER_ALLOWED_SERVICES || managed.join(",")
     ).split(",");
@@ -103,7 +125,9 @@ export class ChaosEngine {
     if (
       !temporary(id) &&
       s.targets.some(
-        (t) => !allowed.includes(t) || disabled.includes(playbookFor(id, t)),
+        (t) =>
+          !allowed.includes(authorityFor(t)) ||
+          disabled.includes(playbookFor(id, t)),
       )
     )
       return "The required independent Healer playbook is disabled.";
@@ -112,12 +136,13 @@ export class ChaosEngine {
       if (!this.healer!.budgets)
         return "Healer repair budget is not reported yet.";
       for (const t of s.targets) {
-        const b = this.healer!.budgets[t];
-        if (!b) return "Healer repair budget is not reported for " + t + ".";
+        const b = this.healer!.budgets[authorityFor(t)];
+        const who = authorityFor(t);
+        if (!b) return "Healer repair budget is not reported for " + who + ".";
         if (b.availableAt)
-          return `Healer repair budget/cooldown for ${t} is spent until ${b.availableAt.slice(11, 19)} UTC; wait so the Healer can repair it.`;
+          return `Healer repair budget/cooldown for ${who} is spent until ${b.availableAt.slice(11, 19)} UTC; wait so the Healer can repair it.`;
         if (b.max - b.used < 1)
-          return "Healer repair budget for " + t + " is exhausted.";
+          return "Healer repair budget for " + who + " is exhausted.";
       }
     }
     if (
@@ -280,6 +305,22 @@ export class ChaosEngine {
     reason: string,
   ) {
     this.stable.delete(e.id);
+    if (generated(e.scenario)) {
+      const load = this.surges.get(e.id);
+      if (load) {
+        e.evidence = { ...e.evidence, ...flat(await load.stop()) };
+        this.surges.delete(e.id);
+      }
+      e.cleanup = e.injectedAt ? "COMPLETED" : "NOT_REQUIRED";
+      if (e.injectedAt)
+        this.event(
+          e,
+          "LOAD_ENDED",
+          "Load ended (stopped with the experiment); not a repair",
+        );
+      this.transition(e, state, reason);
+      return;
+    }
     if (["CREATED", "VALIDATING"].includes(e.state) && !e.injectedAt) {
       e.cleanup = "NOT_REQUIRED";
       this.transition(e, state, reason);
@@ -413,7 +454,7 @@ export class ChaosEngine {
         !this.current() ||
         !this.store.available ||
         !this.healer?.enabled ||
-        this.frame!.components.some((c) => c.state !== "HEALTHY")
+        this.frame!.components.some((c) => c.state !== "HEALTHY" && !standby(c))
       ) {
         await this.finish(
           e,
@@ -444,6 +485,10 @@ export class ChaosEngine {
       await this.store.sync(e);
       this.journal.synced(e);
       if (this.journal.get(e.id)?.cancelRequestedBy) return;
+      if (generated(e.scenario)) {
+        this.startLoad(e);
+        return;
+      }
       try {
         const f = await this.control("/v1/inject", {
           id: e.id,
@@ -457,6 +502,15 @@ export class ChaosEngine {
           "Injection response unconfirmed; reconcile the same UUID without repeating the POST",
         );
       }
+      return;
+    }
+    if (e.state === "INJECTING" && generated(e.scenario)) {
+      // A controller restart lost the in-memory load: nothing to reconcile.
+      await this.finish(
+        e,
+        "FAILED",
+        "Load generator interrupted before confirmation",
+      );
       return;
     }
     if (e.state === "INJECTING") {
@@ -474,6 +528,10 @@ export class ChaosEngine {
         "Awaiting a confirmed Phase 5 incident",
       );
       return;
+    }
+    if (generated(e.scenario)) {
+      this.loadProgress(e);
+      return this.advanceSurge(e);
     }
     const f = await this.control("/v1/faults/" + e.id);
     if (f.cleanup !== e.cleanup) {
@@ -703,6 +761,217 @@ export class ChaosEngine {
       }
     }
     await this.finish(e, "COMPLETED", "Restoration independently verified");
+  }
+  private startLoad(e: ChaosExperiment) {
+    const users = Math.min(
+      this.c.CHAOS_SURGE_USERS,
+      this.c.CHAOS_SURGE_MAX_USERS,
+    );
+    const load = startSurge({
+      url: process.env.CHAOS_SURGE_URL || "http://api-gateway:8080",
+      users,
+      durationMs: this.c.CHAOS_SURGE_DURATION_MS,
+      thinkMs: this.c.CHAOS_SURGE_THINK_MS,
+    });
+    this.surges.set(e.id, load);
+    const now = new Date().toISOString();
+    e.injectedAt = now;
+    e.faultConfirmedAt = now;
+    e.cleanup = "PENDING";
+    e.deadline =
+      Date.now() +
+      this.c.CHAOS_SURGE_DURATION_MS +
+      this.c.CHAOS_SURGE_SCALE_IN_WAIT_MS +
+      120000;
+    e.evidence = {
+      simulatedUsers: users,
+      loadDurationMs: this.c.CHAOS_SURGE_DURATION_MS,
+      apiCpuLimit: process.env.FINAL_API_CPUS || null,
+      loadTarget: "local api-gateway only",
+    };
+    this.event(
+      e,
+      "LOAD_STARTED",
+      `${users} simulated viewers for ${Math.round(this.c.CHAOS_SURGE_DURATION_MS / 1000)} s against the local API gateway`,
+    );
+    this.transition(
+      e,
+      "FAULT_CONFIRMED",
+      "Bounded load generator running against the local API tier",
+    );
+  }
+  private loadProgress(e: ChaosExperiment) {
+    const load = this.surges.get(e.id);
+    if (!load) {
+      if (e.cleanup === "PENDING") {
+        e.cleanup = "COMPLETED";
+        this.event(
+          e,
+          "LOAD_ENDED",
+          "Load generator no longer running (controller restart); not a repair",
+        );
+      }
+      return;
+    }
+    e.evidence = { ...e.evidence, ...flat(load.stats) };
+    if (load.stats.endedAt && e.cleanup === "PENDING") {
+      e.cleanup = "COMPLETED";
+      e.evidence.loadEndedAt = load.stats.endedAt;
+      this.surges.delete(e.id);
+      this.event(
+        e,
+        "LOAD_ENDED",
+        `Load ended after its bounded duration (${load.stats.requests} requests); this is the fault ending, not a repair`,
+        load.stats.endedAt,
+      );
+    }
+    this.journal.save(e);
+  }
+  private async advanceSurge(e: ChaosExperiment) {
+    if (!this.current()) return;
+    const tierAttempts = this.healer!.attempts.filter(
+      (a) =>
+        a.component === "api-tier" &&
+        !e.priorRecoveryIds.includes(a.id) &&
+        Date.parse(a.createdAt) >= Date.parse(e.injectedAt!),
+    );
+    const out = tierAttempts.find((a) => a.playbook === "api-scale-out");
+    if (!out) return;
+    if (!e.recoveryIds.includes(out.id)) {
+      e.recoveryIds.push(out.id);
+      e.incidentId = out.incidentId;
+      e.evidence.diagnosis = out.diagnosis;
+      e.evidence.failureCode = out.evidence.failureCode ?? null;
+      e.evidence.recoveryPlaybook = out.playbook;
+      e.evidence.recoveryAction = out.action;
+      this.event(
+        e,
+        "INCIDENT_CORRELATED",
+        `Independent recovery attempt ${out.id} for api-tier (api-scale-out)`,
+      );
+    }
+    if (e.incidentId && !e.incidentDetectedAt) {
+      const i = await this.store.incident(e.incidentId);
+      if (i) {
+        e.incidentDetectedAt = i.detected_at.toISOString();
+        const d = Date.parse(e.incidentDetectedAt) - Date.parse(e.injectedAt!);
+        e.measurements.detectionMs = d >= 0 ? d : null;
+        this.event(
+          e,
+          "INCIDENT_DETECTED",
+          "Confirmed overload detection",
+          e.incidentDetectedAt,
+        );
+      }
+    }
+    if (out.actionStartedAt && !e.actionStartedAt) {
+      e.actionStartedAt = out.actionStartedAt;
+      e.measurements.healingStartMs =
+        Date.parse(out.actionStartedAt) - Date.parse(e.injectedAt!);
+      this.transition(
+        e,
+        "HEALING_OBSERVED",
+        "Independent Healer action observed: start spare capacity api-3",
+      );
+    }
+    if (out.verificationStartedAt && e.state !== "VERIFYING" && !e.verifiedAt)
+      this.transition(
+        e,
+        "VERIFYING",
+        "Independent Healer verification observed",
+      );
+    if (out.state === "ESCALATED") {
+      await this.finish(
+        e,
+        "FAILED",
+        "Independent Healer escalated (api-tier): " + out.reason,
+      );
+      return;
+    }
+    if (out.state !== "VERIFIED") return;
+    if (out.evidence.controlReceipt !== "docker_start_accepted") {
+      await this.finish(
+        e,
+        "FAILED",
+        "No accepted docker_start_accepted receipt from api-scale-out for api-3",
+      );
+      return;
+    }
+    if (!e.verifiedAt) {
+      if (!(await this.verifier.verify(out, this.frame!)).ok) return;
+      e.actionFinishedAt = out.actionFinishedAt;
+      e.measurements.actionMs =
+        out.actionStartedAt && out.actionFinishedAt
+          ? Date.parse(out.actionFinishedAt) - Date.parse(out.actionStartedAt)
+          : null;
+      e.verifiedAt = new Date().toISOString();
+      e.measurements.restorationMs =
+        Date.parse(e.verifiedAt) - Date.parse(e.injectedAt!);
+      e.mechanism =
+        "Independent Healer scale-out: started pre-provisioned spare API-3";
+      e.evidence = {
+        ...e.evidence,
+        healerReceipt: "docker_start_accepted",
+        healerReceipts: 1,
+        healerVerifiedAt: out.finishedAt,
+        spareServingThroughGateway:
+          out.evidence.spareServingThroughGateway ?? null,
+        tierP95AtVerificationMs: out.evidence.tierP95Ms ?? null,
+        verifiedWhileLoadRunning: e.cleanup === "PENDING",
+        independentBehaviorVerified: true,
+      };
+      this.event(
+        e,
+        "SERVICE_VERIFIED",
+        "Spare serving and tier latency back under threshold",
+        e.verifiedAt,
+      );
+    }
+    if (e.cleanup === "PENDING") {
+      this.journal.save(e);
+      return;
+    }
+    const scaleIn = tierAttempts.find(
+      (a) =>
+        a.playbook === "api-scale-in" &&
+        Date.parse(a.createdAt) >= Date.parse(e.verifiedAt!),
+    );
+    if (scaleIn && !e.recoveryIds.includes(scaleIn.id))
+      e.recoveryIds.push(scaleIn.id);
+    if (
+      scaleIn?.state === "VERIFIED" &&
+      scaleIn.evidence.controlReceipt === "docker_stop_accepted"
+    ) {
+      e.evidence.scaledIn = true;
+      e.evidence.scaledInAt = scaleIn.finishedAt;
+      this.event(
+        e,
+        "SCALED_IN",
+        "Healer removed spare API-3 after load stayed normal (docker_stop_accepted)",
+        scaleIn.finishedAt || undefined,
+      );
+    } else if (
+      scaleIn?.state === "ESCALATED" ||
+      Date.now() - Date.parse(String(e.evidence.loadEndedAt || e.verifiedAt)) >
+        this.c.CHAOS_SURGE_SCALE_IN_WAIT_MS
+    ) {
+      e.evidence.scaledIn = false;
+      this.event(
+        e,
+        "SCALE_IN_NOT_OBSERVED",
+        scaleIn
+          ? "Scale-in escalated: " + scaleIn.reason
+          : "No verified scale-in within the observation window",
+      );
+    } else {
+      this.journal.save(e);
+      return;
+    }
+    await this.finish(
+      e,
+      "COMPLETED",
+      "Scale-out independently verified; load ended",
+    );
   }
   /** Direct readiness probe of a frozen target: only a timeout confirms a hang. */
   async hangProbe(target: string) {

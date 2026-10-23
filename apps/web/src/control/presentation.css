@@ -677,3 +677,23 @@
     align-items: flex-start;
   }
 }
+.load-meter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--cc-border);
+  font-size: 0.8rem;
+  color: var(--cc-muted);
+}
+.load-meter strong {
+  color: #f1f4fa;
+}
+.load-meter.is-overloaded {
+  border-color: var(--state-degraded);
+}
+.load-meter.is-overloaded strong {
+  color: var(--state-degraded);
+}

@@ -4,6 +4,7 @@ export type ChaosScenarioId =
   | "crash-api-tier"
   | "crash-relay"
   | "hang-api"
+  | "traffic-surge"
   | "crash-api"
   | "crash-edge"
   | "crash-primary"
@@ -67,6 +68,10 @@ export type ExperimentEventKind =
   | "BROADCASTER_CLIENT_RECONNECTED"
   | "BROADCASTER_NOT_RETURNED"
   | "BROWSER_EVIDENCE"
+  | "LOAD_STARTED"
+  | "LOAD_ENDED"
+  | "SCALED_IN"
+  | "SCALE_IN_NOT_OBSERVED"
   | `CIRCUIT_${"CLOSED" | "OPEN" | "HALF_OPEN"}`;
 export interface ExperimentEvent {
   kind: ExperimentEventKind;

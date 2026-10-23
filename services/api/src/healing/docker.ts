@@ -1,5 +1,5 @@
 import { request } from "node:http";
-import { serviceNames, type managed } from "./config.js";
+import { serviceNames, spares, type managed } from "./config.js";
 /** No shell, exec, delete, create, arbitrary path or container-name interface. */
 export class DockerControl {
   constructor(
@@ -107,6 +107,23 @@ export class DockerControl {
     };
   }
   /**
+   * Graceful stop of the spare capacity only (SIGTERM, then SIGKILL after the
+   * timeout). This is the only stop the adapter permits.
+   */
+  async stop(service: (typeof managed)[number], timeoutSeconds = 10) {
+    if (!spares.includes(service)) throw new Error("stop_not_permitted");
+    const signal = AbortSignal.timeout(this.timeoutMs + timeoutSeconds * 1000);
+    const value = await this.inspect(service, signal);
+    if (value.state !== "running") throw new Error("unsafe_container_state");
+    const r = await this.call(
+      "POST",
+      "/containers/" + value.id + "/stop?t=" + timeoutSeconds,
+      signal,
+    );
+    if (r.status !== 204) throw new Error("docker_stop_rejected");
+    return "docker_stop_accepted";
+  }
+  /**
    * Bounded restart of an alive-but-unresponsive container: Docker sends SIGTERM,
    * waits stopTimeoutSeconds, then SIGKILL, then starts it. Only a `running`, non-OOM
    * container qualifies; anything else is rejected rather than blindly restarted.
@@ -134,7 +151,11 @@ export class DockerControl {
     const value = await this.inspect(service, signal);
     if (value.oom) throw new Error("resource_exhaustion_requires_review");
     if (value.state === "running") return "already_running_no_action";
-    if (value.state !== "exited") throw new Error("unsafe_container_state");
+    // A never-started spare is "created"; every other service must be "exited".
+    const startable =
+      value.state === "exited" ||
+      (value.state === "created" && spares.includes(service));
+    if (!startable) throw new Error("unsafe_container_state");
     const r = await this.call(
       "POST",
       "/containers/" + value.id + "/start",

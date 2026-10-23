@@ -4,7 +4,7 @@ import type {
   RecoveryAttempt,
 } from "@streamshield/shared";
 import { randomUUID } from "node:crypto";
-import { healingConfig, managed } from "./config.js";
+import { healingConfig, managed, spares } from "./config.js";
 import { eligibility, selectPlaybook, playbooks, backoff } from "./policy.js";
 import { Circuit } from "./circuit.js";
 import { ControlJournal } from "./control.js";
@@ -71,13 +71,23 @@ describe("recovery policy", () => {
     ).toThrow();
   });
   it("has exactly one default playbook per managed identity and no overlapping symptom playbooks", () => {
-    for (const id of managed) {
+    for (const id of managed.filter((m) => !spares.includes(m))) {
       const own = playbooks.filter((p) => p.services.includes(id));
       expect(own.filter((p) => !p.symptoms)).toHaveLength(1);
       const symptoms = own.flatMap((p) => p.symptoms || []);
       expect(new Set(symptoms).size).toBe(symptoms.length);
     }
     expect(selectPlaybook("arbitrary")).toBeUndefined();
+    // Spare capacity is only ever acted on by the tier scale playbooks.
+    for (const id of spares)
+      expect(playbooks.some((p) => p.services.includes(id))).toBe(false);
+    expect(selectPlaybook("api-tier", "overloaded")?.action).toBe(
+      "start_spare_capacity",
+    );
+    expect(selectPlaybook("api-tier", "scale_in")?.action).toBe(
+      "stop_spare_capacity",
+    );
+    expect(selectPlaybook("api-tier", "probe_timeout")).toBeUndefined();
   });
   it("permits independently failed APIs with healthy dependencies", () => {
     expect(eligibility(component("api-1"), deps(), config()).allowed).toBe(
@@ -724,4 +734,60 @@ it("reports the remaining budget with the same rule claim() enforces", () => {
   expect(j.claim(randomUUID(), "api-2", 30000, 2, 600000, t + 600001)).toBe(
     "accepted",
   );
+});
+
+describe("traffic surge scale-out and scale-in", () => {
+  const overloaded = component("api-tier", {
+    state: "DEGRADED",
+    code: "overloaded",
+    failureCode: "overloaded",
+    failures: 3,
+  });
+  it("answers confirmed overload with spare capacity, never a restart", () => {
+    const d = eligibility(overloaded, deps(), config());
+    expect(d).toMatchObject({ allowed: true });
+    expect(d.playbook?.id).toBe("api-scale-out");
+    expect(d.playbook?.action).toBe("start_spare_capacity");
+  });
+  it("still treats other degraded states as dependency symptoms", () => {
+    expect(
+      eligibility(
+        component("api-1", { state: "DEGRADED", code: "http_503" }),
+        deps(),
+        config(),
+      ).reason,
+    ).toBe("authority_or_dependency_symptom");
+  });
+  it("scales in only with both permanent APIs serving and authority granted", () => {
+    const tier = component("api-tier", {
+      state: "HEALTHY",
+      code: "scale_in",
+      failureCode: "scale_in",
+    });
+    const both = [
+      component("api-1", { state: "HEALTHY" }),
+      component("api-2", { state: "HEALTHY" }),
+    ];
+    expect(
+      eligibility(tier, both, config(), Date.now(), "api-scale-in"),
+    ).toMatchObject({ allowed: true });
+    expect(
+      eligibility(
+        tier,
+        [both[0]!, component("api-2")],
+        config(),
+        Date.now(),
+        "api-scale-in",
+      ).reason,
+    ).toBe("dependency_unhealthy:api-2");
+    expect(
+      eligibility(
+        tier,
+        both,
+        { ...config(), allowed: ["api-1", "api-2"] },
+        Date.now(),
+        "api-scale-in",
+      ).reason,
+    ).toBe("service_not_allowed");
+  });
 });

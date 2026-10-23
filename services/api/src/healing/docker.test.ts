@@ -100,6 +100,12 @@ describe("healing-control Docker adapter", () => {
     );
     expect(f.calls.every((c) => c.startsWith("GET"))).toBe(true);
   });
+  it("stops only the spare, gracefully", async () => {
+    const f = await fakeDocker({ state: "running" });
+    close = f.close;
+    await expect(f.docker.stop("api-2")).rejects.toThrow("stop_not_permitted");
+    expect(f.calls).toHaveLength(0);
+  });
   it("keeps start limited to exited containers", async () => {
     const f = await fakeDocker({ state: "running" });
     close = f.close;

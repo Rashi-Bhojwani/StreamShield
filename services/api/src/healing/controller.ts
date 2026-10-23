@@ -22,6 +22,15 @@ import { Verifier, type Frame } from "./verification.js";
 import { Circuit } from "./circuit.js";
 import { healingMetrics } from "./metrics.js";
 import type { Lease } from "./control.js";
+const spareActions = ["start_spare_capacity", "stop_spare_capacity"];
+/** The container an attempt acts on (the spare for tier-level playbooks). */
+export const serviceFor = (a: RecoveryAttempt) =>
+  spareActions.includes(a.action) ? "api-3" : a.component;
+const controlled = [
+  "start_stopped_service",
+  "restart_unresponsive_service",
+  ...spareActions,
+];
 export class Healer {
   readonly owner = randomUUID();
   readonly metrics = healingMetrics();
@@ -31,6 +40,7 @@ export class Healer {
   observedAt: string | null = null;
   available = false;
   private lastFrame: Frame | undefined;
+  private normalSince = 0;
   private lastDependency = 0;
   private nextDatabaseRetry = 0;
   private databaseFailures = 0;
@@ -304,7 +314,7 @@ export class Healer {
         !component.confirmedAt ||
         !component.firstFailureAt ||
         !["UNHEALTHY", "DEGRADED"].includes(component.state) ||
-        !selectPlaybook(component.id)
+        !selectPlaybook(component.id, failureCodeOf(component))
       )
         continue;
       const decision = eligibility(component, frame.components, this.c);
@@ -327,6 +337,7 @@ export class Healer {
         this.transition(a, "ESCALATED", decision.reason);
     }
     if (this.c.enabled) await this.sources(frame).catch(() => {});
+    if (this.c.enabled) this.scaleIn(frame);
     const rows = this.journal.work();
     for (const a of rows) {
       if (
@@ -435,7 +446,7 @@ export class Healer {
     if (a.state === "SCHEDULED") {
       const c = frame.components.find((x) => x.id === a.component);
       if (!c) return false;
-      if (c.state === "HEALTHY") {
+      if (c.state === "HEALTHY" && a.action !== "stop_spare_capacity") {
         a.verificationStartedAt = new Date().toISOString();
         a.deadline = Date.now() + this.c.HEALER_VERIFY_MS;
         this.transition(a, "VERIFYING", "component_returned_before_action", {
@@ -474,6 +485,18 @@ export class Healer {
         return false;
       }
       if (a.action !== "safe_read_retry") await this.containerEvidence(a);
+      if (
+        a.action === "start_spare_capacity" &&
+        a.evidence.containerState === "running"
+      ) {
+        // The spare is already serving and the tier is still overloaded.
+        this.transition(
+          a,
+          "ESCALATED",
+          "capacity_exhausted_operator_action_required",
+        );
+        return true;
+      }
       if (a.action === "restart_unresponsive_service") {
         // The Healer's own direct probe must also time out before any restart.
         const outcome = await this.corroborate(a);
@@ -526,15 +549,16 @@ export class Healer {
         { playbook: a.playbook },
         Math.max(0, Date.now() - Date.parse(a.detectedAt)) / 1000,
       );
-      if (
-        a.action === "start_stopped_service" ||
-        a.action === "restart_unresponsive_service"
-      ) {
+      if (controlled.includes(a.action)) {
         try {
           const operation =
-            a.action === "start_stopped_service" ? "/v1/start" : "/v1/restart";
+            a.action === "restart_unresponsive_service"
+              ? "/v1/restart"
+              : a.action === "stop_spare_capacity"
+                ? "/v1/stop"
+                : "/v1/start";
           const r = await this.control(operation, {
-            service: a.component,
+            service: serviceFor(a),
             attemptId: a.id,
             owner: this.owner,
             epoch: this.lease.epoch,
@@ -564,6 +588,7 @@ export class Healer {
           a.evidence.actionPerformed = [
             "docker_start_accepted",
             "docker_restart_accepted",
+            "docker_stop_accepted",
           ].includes(r.body.code);
         } catch {
           return true; /* Reconcile receipt next cycle; never repeat POST. */
@@ -583,10 +608,7 @@ export class Healer {
       return true;
     }
     if (a.state === "EXECUTING") {
-      if (
-        a.action === "start_stopped_service" ||
-        a.action === "restart_unresponsive_service"
-      ) {
+      if (controlled.includes(a.action)) {
         try {
           const r = await this.control("/v1/actions/" + a.id);
           if (!r.ok || r.body.state !== "ACCEPTED") {
@@ -660,10 +682,57 @@ export class Healer {
     }
     return false;
   }
+  /**
+   * Scale-in: once the spare is serving and tier load has stayed below the
+   * scale-in rate with healthy latency for the stability window, remove it.
+   */
+  private scaleIn(frame: Frame) {
+    const tier = frame.components.find((x) => x.id === "api-tier");
+    const spare = frame.components.find((x) => x.id === "api-3");
+    const normal =
+      !!tier &&
+      tier.state === "HEALTHY" &&
+      spare?.state === "HEALTHY" &&
+      (tier.metrics?.rps ?? Number.POSITIVE_INFINITY) <
+        this.c.HEALER_SCALE_IN_RPS;
+    if (!normal) {
+      this.normalSince = 0;
+      return;
+    }
+    this.normalSince ||= Date.now();
+    if (Date.now() - this.normalSince < this.c.HEALER_SCALE_IN_STABLE_MS)
+      return;
+    if (
+      this.journal
+        .work()
+        .some((a) => a.component === "api-tier" && !terminal(a))
+    )
+      return;
+    const now = new Date().toISOString();
+    const a = this.create(
+      {
+        ...tier!,
+        code: "scale_in",
+        failureCode: "scale_in",
+        confirmedAt: now,
+        firstFailureAt: new Date(this.normalSince).toISOString(),
+      },
+      this.lease!.epoch,
+      "load_normal_for_stability_window",
+      null,
+      "api-tier:scale-in:" + now,
+    );
+    if (a) {
+      a.evidence.scaleInRps = tier!.metrics?.rps ?? null;
+      a.evidence.normalForMs = Date.now() - this.normalSince;
+      this.journal.save(a, a.epoch);
+    }
+    this.normalSince = 0;
+  }
   /** Read-only container facts from the adapter, recorded as diagnosis evidence. */
   private async containerEvidence(a: RecoveryAttempt) {
     try {
-      const r = await this.control("/v1/inspect/" + a.component);
+      const r = await this.control("/v1/inspect/" + serviceFor(a));
       if (!r.ok) return;
       a.evidence.containerState = String(r.body.state);
       a.evidence.containerExitCode =

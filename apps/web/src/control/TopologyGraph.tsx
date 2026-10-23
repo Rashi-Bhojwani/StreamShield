@@ -144,6 +144,10 @@ export function TopologyGraph({
               </text>
               <text x="12" y="36" className="topo-state">
                 {overlay[n.id] ||
+                  (components.find((c) => c.id === n.id)?.code ===
+                  "spare_standby"
+                    ? "Spare (stopped)"
+                    : null) ||
                   (n.virtual && !["observer", "healer"].includes(n.id)
                     ? "broadcaster client"
                     : tones[t].label)}

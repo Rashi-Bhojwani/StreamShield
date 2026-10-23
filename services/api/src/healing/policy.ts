@@ -92,6 +92,33 @@ export const playbooks: Playbook[] = [
       "Never claims the broadcast was restored; source return is the broadcaster client's own reconnection",
   },
   {
+    id: "api-scale-out",
+    diagnosis:
+      "API tier overloaded (p95 latency or 5xx ratio above threshold across instances): add pre-provisioned capacity; restarting overloaded servers would not help",
+    version: 1,
+    services: ["api-tier"],
+    action: "start_spare_capacity",
+    symptoms: ["overloaded"],
+    dependencies: ["postgres", "redis"],
+    verification:
+      "Spare API ready + serving through the gateway + tier p95 back under threshold",
+    compensation:
+      "Escalate as capacity exhausted if overload persists with the spare running; never restart overloaded APIs",
+  },
+  {
+    id: "api-scale-in",
+    diagnosis:
+      "Load normal for the stability window: remove the spare capacity again",
+    version: 1,
+    services: ["api-tier"],
+    action: "stop_spare_capacity",
+    symptoms: ["scale_in"],
+    dependencies: ["api-1", "api-2"],
+    verification:
+      "Spare stopped gracefully + both permanent APIs serving + tier healthy",
+    compensation: "Only the spare may be stopped; permanent APIs are untouched",
+  },
+  {
     id: "redis-start",
     diagnosis: "Redis is gone: start the stopped container",
     version: 1,
@@ -164,13 +191,35 @@ export function eligibility(
       )
     : selectPlaybook(component.id, failureCodeOf(component));
   if (!p) return { allowed: false, reason: "unsupported_component" };
+  if (p.action === "stop_spare_capacity") {
+    // Scale-in is decided by the Healer from sustained normal load, not by a
+    // failure; it still needs both permanent APIs serving and authority.
+    for (const dependency of p.dependencies)
+      if (components.find((x) => x.id === dependency)?.state !== "HEALTHY")
+        return { allowed: false, reason: "dependency_unhealthy:" + dependency };
+    if (!c.enabled || c.HEALER_DISABLED_PLAYBOOKS.split(",").includes(p.id))
+      return { allowed: false, reason: "policy_disabled" };
+    if (!c.allowed.includes("api-3"))
+      return { allowed: false, reason: "service_not_allowed" };
+    return {
+      allowed: true,
+      reason: "load_normal_for_stability_window",
+      playbook: p,
+    };
+  }
   if (
     !component.confirmedAt ||
     !["UNHEALTHY", "DEGRADED"].includes(component.state) ||
     now - Date.parse(component.observedAt) > 12000
   )
     return { allowed: false, reason: "unconfirmed_or_stale" };
-  if (component.code === "probe_denied" || component.state === "DEGRADED")
+  // Overload is a DEGRADED symptom with its own playbook; other DEGRADED states
+  // are dependency symptoms the Healer must not act on.
+  const symptomMatched = !!p.symptoms?.includes(failureCodeOf(component) || "");
+  if (
+    component.code === "probe_denied" ||
+    (component.state === "DEGRADED" && !symptomMatched)
+  )
     return { allowed: false, reason: "authority_or_dependency_symptom" };
 
   if (p.action === "restart_unresponsive_service") {
@@ -190,6 +239,11 @@ export function eligibility(
     return { allowed: false, reason: "unresponsive_without_restart_playbook" };
   if (!c.enabled || c.HEALER_DISABLED_PLAYBOOKS.split(",").includes(p.id))
     return { allowed: false, reason: "policy_disabled" };
+  if (
+    ["start_spare_capacity", "stop_spare_capacity"].includes(p.action) &&
+    !c.allowed.includes("api-3")
+  )
+    return { allowed: false, reason: "service_not_allowed" };
   if (
     ["start_stopped_service", "restart_unresponsive_service"].includes(
       p.action,

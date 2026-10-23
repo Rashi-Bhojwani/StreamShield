@@ -2,7 +2,7 @@ import express from "express";
 import pino from "pino";
 import { z } from "zod";
 import { equal } from "./authority.js";
-import { healingConfig, managed, restartable } from "./config.js";
+import { healingConfig, managed, restartable, spares } from "./config.js";
 import { database } from "./journal.js";
 import { ControlJournal } from "./control.js";
 import { DockerControl } from "./docker.js";
@@ -83,7 +83,7 @@ let busy = false;
 // Start and restart share the lease/epoch/attempt identity, the one-operation rule
 // and the rolling per-service budget, so a service cannot be restarted endlessly.
 const operation =
-  (kind: "start" | "restart") =>
+  (kind: "start" | "restart" | "stop") =>
   async (req: express.Request, res: express.Response) => {
     const parsed = z
       .object({
@@ -105,6 +105,10 @@ const operation =
     }
     if (kind === "restart" && !restartable.includes(b.service)) {
       res.status(403).json({ code: "restart_not_permitted" });
+      return;
+    }
+    if (kind === "stop" && !spares.includes(b.service)) {
+      res.status(403).json({ code: "stop_not_permitted" });
       return;
     }
     if (!journal.valid(b.owner, b.epoch)) {
@@ -148,7 +152,9 @@ const operation =
         const code =
           kind === "start"
             ? await docker.start(b.service)
-            : await docker.restart(b.service, c.HEALER_RESTART_STOP_SECONDS);
+            : kind === "stop"
+              ? await docker.stop(b.service)
+              : await docker.restart(b.service, c.HEALER_RESTART_STOP_SECONDS);
         journal.finish(b.attemptId, "ACCEPTED", code);
         log.info(
           {
@@ -191,6 +197,7 @@ const operation =
   };
 app.post("/v1/start", operation("start"));
 app.post("/v1/restart", operation("restart"));
+app.post("/v1/stop", operation("stop"));
 app.use((_req, res) => res.sendStatus(404));
 app.use(
   (

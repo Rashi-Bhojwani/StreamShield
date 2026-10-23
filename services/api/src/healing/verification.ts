@@ -239,10 +239,59 @@ export class Verifier {
     const paths = await this.paths();
     return (await this.hls("origin-standby", paths, "standby")).ok;
   }
+  /** 2xx /streams requests served by one API instance (its own metrics). */
+  private async served(id: string) {
+    const u = new URL(this.url(id));
+    u.port = process.env.API_INTERNAL_PORT!;
+    u.pathname = "/metrics";
+    return (
+      await this.text(u.href, {
+        Authorization: "Bearer " + process.env.OBS_SECRET,
+      })
+    )
+      .split("\n")
+      .filter(
+        (l) =>
+          l.startsWith("streamshield_http_requests_total{") &&
+          l.includes('route="/streams"') &&
+          l.includes('category="2xx"'),
+      )
+      .reduce((sum, l) => sum + Number(l.slice(l.lastIndexOf(" ") + 1)), 0);
+  }
   async verify(a: RecoveryAttempt, frame: Frame) {
     const evidence: RecoveryAttempt["evidence"] = {
       browserPlaybackVerified: false,
     };
+    const tier = frame.components.find((x) => x.id === "api-tier");
+    if (a.action === "start_spare_capacity") {
+      const ready = JSON.parse(await this.text(this.url("api-3")));
+      if (ready.status !== "ready") return { ok: false, evidence };
+      const before = await this.served("api-3");
+      for (let i = 0; i < 12; i++)
+        await this.text(this.url("api-gateway", "/api/v1/streams"));
+      const after = await this.served("api-3");
+      evidence.spareServingThroughGateway = after > before;
+      evidence.tierP95Ms = tier?.metrics?.p95Ms ?? null;
+      evidence.tierRps = tier?.metrics?.rps ?? null;
+      evidence.tierLatencyRecovered = tier?.state === "HEALTHY";
+      return {
+        ok: after > before && tier?.state === "HEALTHY",
+        evidence,
+      };
+    }
+    if (a.action === "stop_spare_capacity") {
+      const spare = frame.components.find((x) => x.id === "api-3");
+      const permanent = ["api-1", "api-2"].every(
+        (id) => frame.components.find((x) => x.id === id)?.state === "HEALTHY",
+      );
+      evidence.spareStandby = spare?.code === "spare_standby";
+      evidence.permanentAPIsServing = permanent;
+      evidence.tierHealthy = tier?.state === "HEALTHY";
+      return {
+        ok: evidence.spareStandby && permanent && tier?.state === "HEALTHY",
+        evidence,
+      };
+    }
     if (a.component.startsWith("api-")) {
       const started = performance.now();
       const ready = JSON.parse(await this.text(this.url(a.component)));

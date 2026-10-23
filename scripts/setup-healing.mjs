@@ -8,6 +8,7 @@ import { parseResilience } from "../infrastructure/resilience/config.mjs";
 import {
   healingConfig,
   serviceNames,
+  spares,
 } from "../services/api/src/healing/config.ts";
 process.chdir(fileURLToPath(new URL("../", import.meta.url)));
 execFileSync(process.execPath, ["scripts/setup-monitoring.mjs"], {
@@ -240,7 +241,9 @@ services.toxiproxy = {
   command: ["-host", "0.0.0.0", "-config", "/config/toxiproxy.json"],
   volumes: ["./.local/healing/toxiproxy.json:/config/toxiproxy.json:ro"],
 };
-for (const [id, name] of Object.entries(serviceNames))
+for (const [id, name] of Object.entries(serviceNames).filter(
+  ([id]) => !spares.includes(id),
+))
   services[name] = {
     restart: "no",
     labels: { "io.streamshield.healer.service": id },

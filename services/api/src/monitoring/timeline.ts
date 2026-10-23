@@ -224,6 +224,8 @@ export function buildTimeline(input: {
     const tones: Record<string, Tone> = {};
     for (const c of components) {
       const s = c.spans.find((x) => x.from <= a && x.to > a);
+      // A stopped spare is standby capacity: it does not make the system unknown.
+      if (s?.code === "spare_standby") continue;
       tones[c.id] = s ? s.tone : "unknown";
     }
     overall.push({ tone: overallTone(tones), from: a, to: b, code: null });

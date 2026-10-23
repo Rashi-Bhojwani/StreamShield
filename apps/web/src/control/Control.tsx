@@ -770,7 +770,10 @@ function Console() {
     UNKNOWN: 0,
     RECOVERING: 0,
   };
-  s?.components.forEach((c) => counts[effective(c, stale)]++);
+  // A stopped spare is standby capacity, not an unknown or failed component.
+  s?.components
+    .filter((c) => c.code !== "spare_standby")
+    .forEach((c) => counts[effective(c, stale)]++);
   let state: HealthState = stale ? "UNKNOWN" : "HEALTHY";
   if (!stale && s) {
     const down = (id: string) =>

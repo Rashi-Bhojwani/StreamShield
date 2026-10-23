@@ -10,6 +10,7 @@ export const managed = [
   "redis",
   "video-gateway",
   "relay",
+  "api-3",
 ] as const;
 export const serviceNames: Record<(typeof managed)[number], string> = {
   "api-1": "api",
@@ -20,7 +21,10 @@ export const serviceNames: Record<(typeof managed)[number], string> = {
   redis: "redis",
   "video-gateway": "video-gateway",
   relay: "mediamtx",
+  "api-3": "api-3",
 };
+/** Pre-provisioned spare capacity: started/stopped only by the scale playbooks. */
+export const spares: readonly string[] = ["api-3"];
 /** Only these may be restarted while running; everything else is start-only. */
 export const restartable: readonly string[] = ["api-1", "api-2"];
 export function healingConfig(env: Record<string, string | undefined>) {
@@ -40,6 +44,8 @@ export function healingConfig(env: Record<string, string | undefined>) {
       HEALER_BUDGET_WINDOW_MS: integer(30000, 3600000, 600000),
       HEALER_MAX_STARTS: integer(1, 3, 2),
       HEALER_RESTART_STOP_SECONDS: integer(1, 10, 3),
+      HEALER_SCALE_IN_STABLE_MS: integer(10000, 600000, 60000),
+      HEALER_SCALE_IN_RPS: integer(1, 100000, 50),
       HEALER_MAX_ATTEMPTS: integer(1, 3, 2),
       HEALER_BACKOFF_MS: integer(500, 10000, 1000),
       HEALER_LEASE_MS: integer(20000, 60000, 30000),

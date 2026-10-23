@@ -51,12 +51,14 @@ if (["", "5000"].includes(initial.VITE_API_TIMEOUT_MS || ""))
 // previous default allowlist; an operator-narrowed list is left untouched.
 if (
   !initial.HEALER_ALLOWED_SERVICES ||
-  initial.HEALER_ALLOWED_SERVICES ===
-    "api-1,api-2,edge-1,edge-2,origin-primary,redis"
+  [
+    "api-1,api-2,edge-1,edge-2,origin-primary,redis",
+    "api-1,api-2,edge-1,edge-2,origin-primary,redis,video-gateway,relay",
+  ].includes(initial.HEALER_ALLOWED_SERVICES)
 )
   set(
     "HEALER_ALLOWED_SERVICES",
-    "api-1,api-2,edge-1,edge-2,origin-primary,redis,video-gateway,relay",
+    "api-1,api-2,edge-1,edge-2,origin-primary,redis,video-gateway,relay,api-3",
   );
 if (
   !initial.CHAOS_ALLOWED_SCENARIOS ||
@@ -95,6 +97,11 @@ const save = (file, value) => {
   chmodSync(".local/dynamic/" + file, 0o600);
 };
 mkdirSync(".local/dynamic", { recursive: true, mode: 0o700 });
+// Read by non-root containers; neither file contains credentials.
+const share = (file, value) => {
+  writeFileSync(".local/dynamic/" + file, value, { mode: 0o644 });
+  chmodSync(".local/dynamic/" + file, 0o644);
+};
 const relay = parse(readFileSync(".local/resilience/relay.yml", "utf8"));
 Object.assign(relay, {
   webrtc: true,
@@ -168,6 +175,110 @@ const overlay = {
     },
   },
 };
+// ---- Final build: spare API capacity, small API servers, tier overload signal ----
+const apiCpus = Number(env.FINAL_API_CPUS || "0.5");
+if (!(apiCpus >= 0.1 && apiCpus <= 8))
+  throw Error("FINAL_API_CPUS must be between 0.1 and 8.");
+const baseFiles = [
+  "docker-compose.yml",
+  ".local/resilience/compose.yml",
+  ".local/monitoring/compose.yml",
+  ".local/healing/compose.yml",
+  ".local/chaos/compose.yml",
+  ...(existsSync(".local/chaos/cloud-vfs.yml")
+    ? [".local/chaos/cloud-vfs.yml"]
+    : []),
+];
+// Resolved locally only to clone API-2's definition; written to ignored .local
+// with owner-only permissions and never printed.
+const resolved = JSON.parse(
+  execFileSync(
+    "docker",
+    [
+      "compose",
+      ...baseFiles.flatMap((f) => ["-f", f]),
+      "config",
+      "--format",
+      "json",
+    ],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  ),
+);
+const spare = structuredClone(resolved.services["api-2"]);
+delete spare.container_name;
+spare.environment = {
+  ...spare.environment,
+  ...overlay.services["api-2"].environment,
+  API_INSTANCE_ID: "api-3",
+};
+spare.networks = { default: { aliases: ["api-3"] } };
+spare.labels = { ...spare.labels, "io.streamshield.healer.service": "api-3" };
+spare.restart = "no";
+spare.ports = [];
+// Created stopped by final:up; only the Healer's scale-out playbook starts it.
+spare.profiles = ["spare"];
+spare.cpus = apiCpus;
+delete spare.depends_on;
+overlay.services["api-3"] = spare;
+for (const api of ["api", "api-2"])
+  overlay.services[api] = { ...overlay.services[api], cpus: apiCpus };
+let gateway = readFileSync(".local/resilience/api-gateway.conf", "utf8");
+for (const port of [env.API_PORT || "4000", env.RESILIENCE_AUTH_PORT || "4001"])
+  gateway = gateway.replace(
+    new RegExp(`(server [a-z0-9-]+2:${port} resolve[^;]*;)`),
+    `$1\nserver api-3:${port} resolve max_fails=1 fail_timeout=5s;`,
+  );
+if (!gateway.includes("server api-3:"))
+  throw Error("Could not add the spare API to the gateway upstream.");
+save("api-gateway.conf", gateway);
+overlay.services["api-gateway"] = {
+  volumes: ["./.local/dynamic/api-gateway.conf:/etc/nginx/nginx.conf:ro"],
+};
+const targets = JSON.parse(readFileSync(".local/healing/targets.json", "utf8"));
+const api2 = targets.find((t) => t.id === "api-2");
+targets.push(
+  {
+    ...api2,
+    id: "api-3",
+    name: "API-3 (spare)",
+    role: "Pre-provisioned spare API; started only by the Healer's scale-out playbook",
+    url: api2.url.replace(/\/\/[^:/]+/, "//api-3"),
+    spare: true,
+  },
+  {
+    id: "api-tier",
+    name: "API tier load",
+    group: "Application",
+    role: "Logical: p95 latency and 5xx ratio across all API instances",
+    dependencies: ["api-1", "api-2"],
+    kind: "tier",
+  },
+);
+share("targets.json", JSON.stringify(targets, null, 2));
+const prometheus = parse(readFileSync(".local/healing/prometheus.yml", "utf8"));
+const apiJob = prometheus.scrape_configs.find((j) => j.job_name === "api");
+const apiTargets = apiJob.static_configs[0].targets;
+if (!apiTargets.some((t) => t.startsWith("api-3:")))
+  apiTargets.push(apiTargets[0].replace(/^[^:]+/, "api-3"));
+share("prometheus.yml", stringify(prometheus));
+overlay.services.prometheus = {
+  volumes: [
+    "./.local/dynamic/prometheus.yml:/etc/prometheus/prometheus.yml:ro",
+  ],
+};
+const targetMount = "./.local/dynamic/targets.json:/config/targets.json:ro";
+for (const name of ["observer", "healer", "chaos-controller"])
+  overlay.services[name] = {
+    ...overlay.services[name],
+    volumes: [...(overlay.services[name]?.volumes || []), targetMount],
+    environment: {
+      ...(overlay.services[name]?.environment || {}),
+      PROMETHEUS_URL: "http://prometheus:9090",
+      OBS_OVERLOAD_P95_MS: env.OBS_OVERLOAD_P95_MS || "1000",
+      OBS_OVERLOAD_ERROR_PCT: env.OBS_OVERLOAD_ERROR_PCT || "5",
+      OBS_OVERLOAD_SAMPLES: env.OBS_OVERLOAD_SAMPLES || "3",
+    },
+  };
 const doc = new Document(overlay);
 doc.getIn(["services", "mediamtx", "ports"]).tag = "!override";
 save("compose.yml", String(doc));

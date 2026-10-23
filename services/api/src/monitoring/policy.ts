@@ -3,6 +3,7 @@ export interface Probe {
   state: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN";
   code: string;
   latencyMs: number | null;
+  metrics?: ComponentObservation["metrics"];
 }
 export interface Policy {
   failures: number;
@@ -20,6 +21,7 @@ export function evaluate(
     observedAt: now,
     code: probe.code,
     latencyMs: probe.latencyMs,
+    ...(probe.metrics ? { metrics: probe.metrics } : {}),
   };
   if (probe.state === "UNKNOWN")
     return { ...next, state: "UNKNOWN", failures: 0, successes: 0 };
@@ -61,9 +63,14 @@ export function evaluate(
   }
   return next;
 }
+/** A stopped spare is standby capacity: excluded from health baselines. */
+export const standby = (c: { code?: string }) => c.code === "spare_standby";
 export function overall(
-  components: Pick<ComponentObservation, "id" | "state">[],
+  components: (Pick<ComponentObservation, "id" | "state"> & {
+    code?: string;
+  })[],
 ): HealthState {
+  components = components.filter((c) => !standby(c));
   if (!components.length || components.some((c) => c.state === "UNKNOWN"))
     return "UNKNOWN";
   for (const peers of [

@@ -19,6 +19,13 @@ export interface ComponentObservation {
   failureCode?: string | null;
   failureState?: "DEGRADED" | "UNHEALTHY" | null;
   firstSuccessAt?: string | null;
+  /** Logical API-tier load metrics (observer-derived from Prometheus). */
+  metrics?: {
+    p95Ms: number;
+    errorPct: number;
+    rps: number;
+    limitedRps: number;
+  };
 }
 export interface IncidentEvent {
   state: string;
