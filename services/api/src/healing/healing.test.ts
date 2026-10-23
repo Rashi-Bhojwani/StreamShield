@@ -38,7 +38,8 @@ const component = (
   latencyMs: null,
   failures: 2,
   successes: 0,
-  firstFailureAt: new Date().toISOString(),
+  // Failing long enough to pass the hang confirmation window.
+  firstFailureAt: new Date(Date.now() - 30000).toISOString(),
   confirmedAt: new Date().toISOString(),
   detectionMs: 2000,
   ...overrides,
@@ -466,6 +467,20 @@ describe("symptom-aware diagnosis", () => {
     expect(
       eligibility(hung, [...deps(), healthyPeer("api-1"), quiet], config()),
     ).toMatchObject({ allowed: true });
+  });
+  it("waits for a timeout to persist before treating it as a hang", () => {
+    const hung = component("api-2", {
+      code: "probe_timeout",
+      failureCode: "probe_timeout",
+      firstFailureAt: new Date(Date.now() - 4000).toISOString(),
+    });
+    const peers = [...deps(), healthyPeer("api-1")];
+    expect(eligibility(hung, peers, config()).reason).toBe(
+      "hang_unconfirmed_wait",
+    );
+    expect(eligibility(hung, peers, config(), Date.now() + 7000)).toMatchObject(
+      { allowed: true },
+    );
   });
   it("refuses dependency-unhealthy and stale restarts", () => {
     const hung = component("api-2", { failureCode: "probe_timeout" });

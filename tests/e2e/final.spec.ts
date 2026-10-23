@@ -1019,6 +1019,8 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
         expect(x.e.evidence.spareServingThroughGateway).toBe(true);
         expect(x.record.visible.api3ServedRealRequests).toBe(true);
         expect(Number(x.e.evidence.loadP95Ms)).toBeGreaterThan(1000);
+        // Scale-in is part of the scenario: the Healer stops API-3 again.
+        expect(x.e.evidence.scaledIn, String(x.e.reason)).toBe(true);
       });
       // 7. Whole API tier: site down (banner), Healer starts API-1 then API-2.
       since = Date.now();

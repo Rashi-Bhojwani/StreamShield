@@ -227,15 +227,20 @@ export function eligibility(
     const peer = peers[component.id];
     if (!peer || components.find((x) => x.id === peer)?.state !== "HEALTHY")
       return { allowed: false, reason: "peer_not_healthy:" + (peer || "none") };
-    // A timeout while the tier carries heavy load is congestion, not a hang:
+    // A timeout while the tier carries real load is congestion, not a hang:
     // restarting an overloaded instance only removes capacity (scale-out owns it).
     const tier = components.find((x) => x.id === "api-tier");
     if (
       tier &&
       ((tier.state !== "HEALTHY" && failureCodeOf(tier) === "overloaded") ||
-        (tier.metrics?.rps ?? 0) >= c.HEALER_SCALE_IN_RPS)
+        (tier.metrics?.rps ?? 0) >= c.HEALER_HANG_MAX_RPS)
     )
       return { allowed: false, reason: "tier_under_load_timeout_not_a_hang" };
+    // A hang persists; congestion at the start of a surge shows up in the
+    // (lagging) tier rate within this window, so wait before restarting.
+    const since = Date.parse(component.firstFailureAt || component.confirmedAt);
+    if (!(now - since >= c.HEALER_HANG_CONFIRM_MS))
+      return { allowed: false, reason: "hang_unconfirmed_wait" };
   }
   for (const dependency of p.dependencies)
     if (components.find((x) => x.id === dependency)?.state !== "HEALTHY")

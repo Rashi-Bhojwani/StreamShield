@@ -153,7 +153,8 @@ const operation =
           kind === "start"
             ? await docker.start(b.service)
             : kind === "stop"
-              ? await docker.stop(b.service)
+              ? // Bounded like a restart so SIGKILL lands inside the Healer's action timeout.
+                await docker.stop(b.service, c.HEALER_RESTART_STOP_SECONDS)
               : await docker.restart(b.service, c.HEALER_RESTART_STOP_SECONDS);
         journal.finish(b.attemptId, "ACCEPTED", code);
         log.info(
