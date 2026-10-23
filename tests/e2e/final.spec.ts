@@ -99,9 +99,12 @@ function diag(host: string) {
 /** RTMP publisher that reconnects by itself, like OBS's auto-reconnect. */
 function publisher(key: Publishing, size: string) {
   let child: ChildProcess | undefined,
-    stopped = false;
+    stopped = false,
+    rotating = false,
+    startedAt = 0;
   const reconnects: string[] = [];
   const run = () => {
+    startedAt = Date.now();
     child = spawn(process.execPath, ["scripts/test-publisher.mjs"], {
       env: {
         ...process.env,
@@ -114,7 +117,7 @@ function publisher(key: Publishing, size: string) {
       stdio: ["ignore", "ignore", "ignore", "ipc"],
     });
     child.on("exit", () => {
-      if (stopped) return;
+      if (stopped || rotating) return;
       reconnects.push(new Date().toISOString());
       setTimeout(run, 1000);
     });
@@ -122,6 +125,22 @@ function publisher(key: Publishing, size: string) {
   run();
   return {
     reconnects,
+    /**
+     * The synthetic publisher is capped at 600 s. Rotate it between experiments,
+     * while everything is healthy, so its cap never lands inside a fault window
+     * (a republish during an API outage cannot authenticate). Not a reconnect.
+     */
+    async rotate(maxAgeMs: number) {
+      if (stopped || Date.now() - startedAt < maxAgeMs || !child) return false;
+      rotating = true;
+      const exited = new Promise((r) => child!.once("exit", r));
+      if (child.connected) child.send("stop");
+      else child.kill("SIGTERM");
+      await exited;
+      rotating = false;
+      run();
+      return true;
+    },
     async stop() {
       stopped = true;
       if (child && child.exitCode === null) {
@@ -471,22 +490,46 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
       after: () => Promise<Record<string, unknown>>,
     ) => {
       if (only.length && !only.includes(scenario)) return;
-      const waitedMs = await waitAdmissible(scenario);
-      const before = Object.fromEntries(
-        targets.map((t) => [t, container(serviceOf[t]!)]),
-      );
-      for (const t of targets)
-        if (scenario !== "traffic-surge")
-          expect(before[t]!.status).toBe("running");
-        else expect(before[t]!.status).not.toBe("running");
-      const framesBefore = viewer.snapshot();
+      let rotated = false;
+      for (const p of publishers) rotated = (await p.rotate(300000)) || rotated;
+      if (rotated) {
+        const mark = viewer.snapshot();
+        await expect
+          .poll(() => viewer.state.frames - mark.frames, {
+            timeout: 60000,
+            intervals: [1000],
+          })
+          .toBeGreaterThan(30);
+      }
+      let waitedMs = 0;
+      let before: Record<string, ReturnType<typeof container>>;
+      let framesBefore: ReturnType<typeof viewer.snapshot>;
       const id = randomUUID();
-      const r = await write(admin, csrf, "/monitoring/chaos/experiments", {
-        id,
-        scenario,
-        confirmation,
-      });
-      expect(r.status(), scenario + " admission").toBe(201);
+      // Admission is re-checked server-side at POST time; a component that
+      // flaps between the poll and the POST is refused (409) and we wait again.
+      for (let tries = 1; ; tries++) {
+        waitedMs += await waitAdmissible(scenario);
+        before = Object.fromEntries(
+          targets.map((t) => [t, container(serviceOf[t]!)]),
+        );
+        for (const t of targets)
+          if (scenario !== "traffic-surge")
+            expect(before[t]!.status).toBe("running");
+          else expect(before[t]!.status).not.toBe("running");
+        framesBefore = viewer.snapshot();
+        const r = await write(admin, csrf, "/monitoring/chaos/experiments", {
+          id,
+          scenario,
+          confirmation,
+        });
+        if (r.status() === 201) break;
+        const body = await r.text();
+        console.log(scenario, "admission", r.status(), body.slice(0, 300));
+        expect(
+          r.status() === 409 && tries < 4,
+          scenario + " admission " + r.status() + " " + body.slice(0, 300),
+        ).toBe(true);
+      }
       const find = async () =>
         (await chaos()).experiments.find((x) => x.id === id)!;
       const visible = await during(find);
