@@ -19,6 +19,10 @@ for (const args of [
     "api",
     "api-2",
     "observer",
+    "origin-primary",
+    "origin-standby",
+    "edge-1",
+    "edge-2",
   ],
 ]) {
   try {

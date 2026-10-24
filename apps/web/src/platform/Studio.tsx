@@ -82,16 +82,49 @@ function StreamEditor({ stream }: { stream: Stream }) {
             ? "Player estimate unavailable"
             : `${presence.data.count} approximate active players`}{" "}
           ·{" "}
-          <a className="text-link" href={"/watch/" + stream.id}>
+          <a
+            className="text-link"
+            href={"/watch/" + stream.id}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             Share/watch link
           </a>
         </p>
       )}
       {config.VITE_DYNAMIC_MODE && stream.lifecycle !== "ended" && (
-        <BrowserStudio streamId={stream.id} live={stream.status === "live"} />
+        <BrowserStudio
+          streamId={stream.id}
+          live={stream.status === "live"}
+          onNotice={setNotice}
+        />
       )}
       <div className="studio-actions">
-        <Link className="button secondary" to={"/watch/" + stream.id}>
+        <button
+          className="button secondary"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(
+                new URL("/watch/" + stream.id, window.location.origin).href,
+              );
+              setNotice(
+                "Watch link copied. Viewers can open this same link in another browser.",
+              );
+            } catch {
+              setNotice(
+                "Clipboard unavailable. Copy the Open watch page link address.",
+              );
+            }
+          }}
+        >
+          Copy Watch Link
+        </button>
+        <Link
+          className="button secondary"
+          to={"/watch/" + stream.id}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           Open watch page <Icon name="arrow" />
         </Link>
         {stream.lifecycle !== "ended" && (

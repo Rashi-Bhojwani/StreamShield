@@ -19,6 +19,7 @@ import {
   streamUpdate,
   avatarColorSchema,
   categorySchema,
+  cancelPublishingSchema,
 } from "@streamshield/shared";
 import type { Config } from "../config.js";
 import type { PlatformConfig } from "./config.js";
@@ -496,32 +497,48 @@ export async function createPlatform(
       streamKey: row.media_path + "?user=" + row.id + "&pass=" + key,
     });
   });
-  route("post", "/studio/streams/:id/end", async (req, res) => {
-    const auth = await requireUser(r, req);
-    await writeLimit(req, auth.user.id);
-    const row = await catalog.owned(id(req.params.id), auth.user.id);
-    await r.db.query(
-      "UPDATE streams SET publish_hash=NULL,lifecycle='ended',broadcast_state=$2,ended_at=now(),updated_at=now() WHERE id=$1",
-      [row.id, c.DYNAMIC_ENABLED ? "ENDING" : "ENDED"],
+  for (const guarded of [false, true])
+    route(
+      "post",
+      "/studio/streams/:id/" + (guarded ? "publishing/cancel" : "end"),
+      async (req, res) => {
+        const auth = await requireUser(r, req);
+        await writeLimit(req, auth.user.id);
+        const row = await catalog.owned(id(req.params.id), auth.user.id);
+        const expectedHash = guarded
+          ? digest(input(cancelPublishingSchema, req.body).key)
+          : null;
+        // Atomic credential guard: an obsolete browser must never revoke/kick its replacement.
+        // Ending the row also prevents a racing key installation before the targeted kick.
+        const stopped = await r.db.query(
+          "UPDATE streams SET publish_hash=NULL,lifecycle='ended',broadcast_state=$2,ended_at=now(),updated_at=now() WHERE id=$1 AND ($3::text IS NULL OR publish_hash=$3) RETURNING id",
+          [row.id, c.DYNAMIC_ENABLED ? "ENDING" : "ENDED", expectedHash],
+        );
+        if (!stopped.rowCount) {
+          res.json({ ok: true, stopped: false });
+          return;
+        }
+        catalog.invalidate(row.media_path);
+        await kickPublisher(media, row.media_path, c.DYNAMIC_ENABLED);
+        if (c.DYNAMIC_ENABLED) {
+          await r.db.query(
+            "INSERT INTO broadcast_events(stream_id,state,reason) VALUES($1,'ENDING',$2)",
+            [
+              row.id,
+              guarded ? "publishing_attempt_stopped" : "owner_requested",
+            ],
+          );
+          await catalog.get(String(row.id));
+          catalog.notifyDiscovery({
+            version: 1,
+            streamId: String(row.id),
+            state: "ENDED",
+            at: new Date().toISOString(),
+          });
+        }
+        res.json({ ok: true, ...(guarded ? { stopped: true } : {}) });
+      },
     );
-    catalog.invalidate(row.media_path);
-    await kickPublisher(media, row.media_path, c.DYNAMIC_ENABLED);
-    if (c.DYNAMIC_ENABLED) {
-      await r.db.query(
-        "INSERT INTO broadcast_events(stream_id,state,reason) VALUES($1,'ENDING','owner_requested')",
-        [row.id],
-      );
-      await catalog.get(String(row.id));
-    }
-    if (c.DYNAMIC_ENABLED)
-      catalog.notifyDiscovery({
-        version: 1,
-        streamId: String(row.id),
-        state: "ENDED",
-        at: new Date().toISOString(),
-      });
-    res.json({ ok: true });
-  });
   route("get", "/streams/:id/chat", async (req, res) => {
     const streamId = id(req.params.id);
     await catalog.get(streamId);
