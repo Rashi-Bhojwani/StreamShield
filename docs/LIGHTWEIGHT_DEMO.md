@@ -14,7 +14,7 @@ those changes (including an untracked `findstr`) untouched:
 ```powershell
 cd E:\StreamShield\StreamShield
 git fetch origin feature/lightweight-self-healing-demo
-git worktree add --detach ..\StreamShield-lightweight-demo origin/feature/lightweight-self-healing-demo
+git worktree add --detach ..\StreamShield-lightweight-demo FETCH_HEAD
 cd ..\StreamShield-lightweight-demo
 ```
 
