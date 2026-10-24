@@ -14,6 +14,8 @@ import { useStreams } from "../streaming/useStreams";
 import { LivePlayer } from "../streaming/LivePlayer";
 import "./chaos.css";
 import { useChaos } from "./useChaos";
+import { primaryDemoScenarios, parseChaosSnapshot } from "@streamshield/shared";
+import { chaosReadiness, scenarioDenial } from "./chaos-readiness";
 const done = (s: string) =>
   ["COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED"].includes(s);
 const time = (s: string | null) =>
@@ -54,6 +56,14 @@ export function Confirmation({
     setPending(true);
     setError("");
     try {
+      const latest = parseChaosSnapshot(
+        await call<unknown>("/monitoring/chaos"),
+      );
+      const denial = scenarioDenial(
+        latest.scenarios.find((s) => s.id === scenario.id),
+        chaosReadiness(latest),
+      );
+      if (denial) throw new Error(denial);
       let result: ChaosExperiment | undefined;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
@@ -317,7 +327,9 @@ function ScenarioCard({
   live,
   launch,
   index,
+  reason,
 }: {
+  reason: string | null;
   s: ChaosScenario;
   live: boolean;
   launch: (s: ChaosScenario) => void;
@@ -330,7 +342,7 @@ function ScenarioCard({
     >
       <div className="chaos-card-top">
         <span className="chaos-card-symbol" aria-hidden="true">
-          {["A1", "E1", "P1", "R", "NET", "API", "DB", "SRC"][index]}
+          {["API", "REDIS", "VIDEO", "NET", "LOAD"][index]}
         </span>
         <span className={"chaos-risk chaos-risk-" + s.risk}>
           {s.risk} disruption
@@ -340,7 +352,11 @@ function ScenarioCard({
       <h2>{s.name}</h2>
       <p>{s.failure}</p>
       <div className="chaos-card-recovery">
-        <strong>Independent recovery</strong>
+        <strong>
+          {s.kind === "resilience"
+            ? "Controlled cleanup / reconnection"
+            : "Independent recovery"}
+        </strong>
         <p>{s.recovery}</p>
       </div>
       <p className="chaos-prerequisites">{s.prerequisites}</p>
@@ -362,7 +378,7 @@ function ScenarioCard({
       </div>
       {(s.reason || !live) && (
         <small className="chaos-denial">
-          {s.reason || "Controller status unconfirmed."}
+          {scenarioDenial(s, reason) || "Controller status unconfirmed."}
         </small>
       )}
     </article>
@@ -392,16 +408,24 @@ export function CompactChaos() {
           value={chosen}
           onChange={(e) => setChosen(e.target.value)}
         >
-          {q.data?.scenarios
-            .filter((s) => s.supported)
-            .map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
+          {primaryDemoScenarios(q.data?.scenarios || []).map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
         </select>
       </label>
+      {q.reason && (
+        <p role="status" className="chaos-denial">
+          {q.reason}
+        </p>
+      )}
       <p>{policy?.failure}</p>
+      {policy && (
+        <p className="chaos-prerequisites">
+          Prerequisites: {policy.prerequisites} Recovery: {policy.recovery}
+        </p>
+      )}
       <button
         className="chaos-inject"
         disabled={!q.live || !policy?.available}
@@ -409,7 +433,9 @@ export function CompactChaos() {
       >
         Configure selected failure
       </button>
-      {policy?.reason && <p className="chaos-denial">{policy.reason}</p>}
+      {scenarioDenial(policy, q.reason) && (
+        <p className="chaos-denial">{scenarioDenial(policy, q.reason)}</p>
+      )}
       {!q.live && (
         <p className="chaos-denial">
           Current local controller admission is unconfirmed.
@@ -476,7 +502,7 @@ export function ChaosLab() {
           <p>
             {q.live
               ? "Administrator authorization · one concurrent experiment · independent Healer"
-              : "Fresh controller evidence is unavailable. History does not establish live health."}
+              : q.reason}
           </p>
         </div>
         <span className="chaos-policy-tag">LOCAL DEVELOPMENT</span>
@@ -485,7 +511,7 @@ export function ChaosLab() {
         <div>
           <span>Supported scenarios</span>
           <strong>
-            {q.data?.scenarios.filter((s) => s.supported).length ?? "—"}
+            {primaryDemoScenarios(q.data?.scenarios || []).length}
             <small>Real infrastructure faults</small>
           </strong>
         </div>
@@ -512,6 +538,11 @@ export function ChaosLab() {
           </strong>
         </div>
       </div>
+      {q.reason && (
+        <p role="status" className="chaos-denial">
+          {q.reason}
+        </p>
+      )}
       {active && (
         <section aria-label="Current experiment">
           <Experiment e={active} />
@@ -525,16 +556,17 @@ export function ChaosLab() {
         <span className="cc-unit">Exact-target confirmation required</span>
       </div>
       {q.isError ? (
-        <p role="alert">Chaos controller unavailable. Injection is disabled.</p>
+        <p role="alert">{q.reason}</p>
       ) : q.isPending ? (
         <p>Loading authenticated experiment policy…</p>
       ) : (
         <div className="chaos-scenarios">
-          {q.data?.scenarios.map((s, i) => (
+          {primaryDemoScenarios(q.data?.scenarios || []).map((s, i) => (
             <ScenarioCard
               key={s.id}
               s={s}
               index={i}
+              reason={q.reason}
               live={q.live}
               launch={setSelection}
             />
@@ -725,16 +757,19 @@ export function ChaosDemo({
               value={scenario}
               onChange={(e) => setScenario(e.target.value)}
             >
-              {q.data?.scenarios
-                .filter((s) => s.supported)
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
+              {primaryDemoScenarios(q.data?.scenarios || []).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
             </select>
           </label>
           <p>{policy?.failure}</p>
+          {policy && (
+            <p className="chaos-prerequisites">
+              Prerequisites: {policy.prerequisites} Recovery: {policy.recovery}
+            </p>
+          )}
           <button
             className="chaos-inject"
             disabled={!q.live || !policy?.available}
@@ -742,7 +777,9 @@ export function ChaosDemo({
           >
             Configure selected failure
           </button>
-          {policy?.reason && <p className="chaos-denial">{policy.reason}</p>}
+          {scenarioDenial(policy, q.reason) && (
+            <p className="chaos-denial">{scenarioDenial(policy, q.reason)}</p>
+          )}
           {experiment ? (
             <Experiment e={experiment} compact />
           ) : (

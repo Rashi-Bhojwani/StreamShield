@@ -1,3 +1,4 @@
+import { observationFreshness } from "@streamshield/shared";
 import { readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { z } from "zod";
@@ -119,8 +120,19 @@ export class Verifier {
     );
     const f = frameSchema.parse(raw) as unknown as Frame;
     if (
-      Date.now() - f.lastCompleted >
-      Number(process.env.OBS_STALE_MS || 12000)
+      observationFreshness(
+        f.lastCompleted,
+        Date.now(),
+        Number(process.env.OBS_STALE_MS || 12000),
+      ) !== "fresh" ||
+      f.components.some(
+        (c) =>
+          observationFreshness(
+            c.observedAt,
+            Date.now(),
+            Number(process.env.OBS_STALE_MS || 12000),
+          ) !== "fresh",
+      )
     )
       throw new Error("observer_stale");
     return f;

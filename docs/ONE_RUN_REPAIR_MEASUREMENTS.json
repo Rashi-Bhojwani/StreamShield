@@ -1,0 +1,114 @@
+{
+  "baseCommit": "2cfea8c2f9ee9fc3f4e96d8cbc795adfa71d2688",
+  "gitDelivery": "Initial repair was uncommitted and unpushed; subsequent explicit user approval authorized delivery on feature/final-self-healing-presentation",
+  "coverage": "isolated actual Observer/PostgreSQL and dependency-network mechanisms; not all five full-stack scenarios",
+  "evidence": {
+    "runId": "8b060490",
+    "status": "PASS",
+    "startedAt": "2026-10-24T09:00:07.491Z",
+    "checks": {
+      "migrations": 7,
+      "observerIdentity": "streamshield_observer (existing restricted grants)",
+      "baseline": {
+        "components": [
+          {
+            "id": "postgres",
+            "state": "HEALTHY",
+            "code": "probe_ok"
+          },
+          {
+            "id": "demo-dependency",
+            "state": "HEALTHY",
+            "code": "probe_ok"
+          }
+        ],
+        "persistence": true
+      },
+      "persistenceLock": {
+        "probesAdvancedMs": 1043,
+        "snapshotLatencyMs": 6.920361000000412,
+        "components": [
+          {
+            "id": "postgres",
+            "state": "HEALTHY"
+          },
+          {
+            "id": "demo-dependency",
+            "state": "HEALTHY"
+          }
+        ],
+        "persistence": false
+      },
+      "persistenceRecovered": true,
+      "bufferedRealFailure": {
+        "confirmedAt": "2026-10-24T09:00:27.177Z",
+        "incidentCount": 1,
+        "finalState": "RESOLVED",
+        "mechanism": "Isolated fixture pause/unpause tests evidence persistence only; not a Healer recovery claim"
+      },
+      "actualStatementTimeout": "57014",
+      "indexes": [
+        "healing_attempts_episode_key",
+        "healing_attempts_pkey",
+        "healing_history",
+        "healing_incident",
+        "monitoring_incident_history",
+        "monitoring_incidents_pkey",
+        "monitoring_one_active"
+      ],
+      "activeIncidentPlan": [
+        {
+          "Plan": {
+            "Node Type": "LockRows",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 0.14,
+            "Total Cost": 8.17,
+            "Plan Rows": 1,
+            "Plan Width": 302,
+            "Plans": [
+              {
+                "Node Type": "Index Scan",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Scan Direction": "Forward",
+                "Index Name": "monitoring_one_active",
+                "Relation Name": "monitoring_incidents",
+                "Alias": "monitoring_incidents",
+                "Startup Cost": 0.14,
+                "Total Cost": 8.16,
+                "Plan Rows": 1,
+                "Plan Width": 302,
+                "Filter": "((resolved_at IS NULL) AND (source <> 'healer-capacity-v1'::text))"
+              }
+            ]
+          }
+        }
+      ],
+      "network": {
+        "id": "c820a6e0-c087-4c7b-89a5-0b5e10d76f30",
+        "scenario": "network-timeout",
+        "injectedAt": "2026-10-24T09:00:32.550Z",
+        "confirmedAt": "2026-10-24T09:00:32.578Z",
+        "cleanupAt": "2026-10-24T09:00:40.971Z",
+        "cleanup": "COMPLETED",
+        "timeouts": 2,
+        "circuit": {
+          "state": "CLOSED",
+          "failures": 0,
+          "rejected": 1,
+          "requests": 4,
+          "lastSuccessAt": "2026-10-24T09:00:41.253Z"
+        },
+        "mechanism": "Real bounded Toxiproxy latency; adapter expiry cleanup and circuit half-open safe reads. No Redis/container restart claimed."
+      },
+      "userEnvUnchanged": true
+    },
+    "limitations": [
+      "Isolated real Observer/PostgreSQL and dependency-network checks only; not the complete five-scenario deployment or the user's Windows machine."
+    ],
+    "cleanedFixtures": 3,
+    "finishedAt": "2026-10-24T09:00:43.948Z"
+  }
+}

@@ -1,5 +1,7 @@
 # StreamShield Live + Control
 
+**One-run repair:** [current five-scenario scope, actual checks, Windows pull/run instructions and remaining blockers](docs/ONE_RUN_REPAIR_RESULTS.md). This repair does not claim all five live scenarios were exercised; historical final-demo results below are separate.
+
 ## Final presentation build
 
 Five-plus **genuinely Healer-driven** repairs that the audience can see in the

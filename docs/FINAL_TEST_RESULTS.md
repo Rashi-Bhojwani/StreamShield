@@ -1,5 +1,7 @@
 # Final test results
 
+> **Current one-run repair:** the five primary choices are `crash-api`, `crash-redis`, `crash-video-gateway`, `network-timeout` and `traffic-surge`. See [current repair, evidence, limitations and Windows commands](ONE_RUN_REPAIR_RESULTS.md). Earlier scenario rankings, instructions and measurements below describe the previous extended demonstration; they are historical evidence, not a passing run of this repair. For configuration-preserving troubleshooting, use the new guide rather than `final:up`.
+
 Every command below was run on branch `feature/final-self-healing-presentation`
 at the commit named in each section, on the host described in
 [SELF_HEALING_RECOVERY_EVIDENCE.md](SELF_HEALING_RECOVERY_EVIDENCE.md). Pass/fail

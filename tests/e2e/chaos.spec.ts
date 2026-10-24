@@ -808,7 +808,7 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
       await expect(
         control.getByRole("heading", { name: "Chaos Laboratory", exact: true }),
       ).toBeVisible();
-      await expect(control.locator("[data-scenario]")).toHaveCount(8);
+      await expect(control.locator("[data-scenario]")).toHaveCount(5);
       await expect(
         control.locator('[data-experiment="' + last.id + '"]'),
       ).toBeVisible();

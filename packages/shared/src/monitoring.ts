@@ -70,6 +70,9 @@ export interface MonitoringSnapshot {
   staleAfterMs: number;
   stale: boolean;
   persistence: boolean;
+  incidentHistoryAvailable?: boolean;
+  durableObservedAt?: string | null;
+  serverTime?: string;
   components: ComponentObservation[];
   incidents: Incident[];
   openCount: number;

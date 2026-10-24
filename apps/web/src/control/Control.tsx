@@ -1,3 +1,7 @@
+import {
+  observationFreshness,
+  parseMonitoringSnapshot,
+} from "@streamshield/shared";
 import { Presentation } from "./Presentation";
 import { Analysis, ExperimentAnalysis, RecoveryReport } from "./Analysis";
 import { CapacityPage, ThreeStreamDemo } from "./Capacity";
@@ -101,14 +105,25 @@ function Chart({ series }: { series: MetricSeries }) {
     </article>
   );
 }
-function useSnapshot() {
+function useSnapshot(now?: { wall: number; monotonic: number }) {
   const { call } = useAuth();
-  return useQuery({
+  const q = useQuery({
     queryKey: ["monitoring", "snapshot"],
-    queryFn: () => call<MonitoringSnapshot>("/monitoring/snapshot"),
+    queryFn: async () => ({
+      ...parseMonitoringSnapshot(await call<unknown>("/monitoring/snapshot")),
+      receivedAtMonotonic: performance.now(),
+    }),
     refetchInterval: config.VITE_STREAM_POLL_MS,
     retry: false,
   });
+  return {
+    ...q,
+    freshNow:
+      q.data?.serverTime && now
+        ? Date.parse(q.data.serverTime) +
+          Math.max(0, now.monotonic - q.data.receivedAtMonotonic)
+        : (now?.wall ?? q.dataUpdatedAt),
+  };
 }
 function useIncidents(filters = "") {
   const { call } = useAuth();
@@ -700,12 +715,18 @@ function Console() {
   const auth = useAuth(),
     query = useQueryClient(),
     [transport, setTransport] = useState("Connecting"),
-    [now, setNow] = useState(() => Date.now());
-  const snapshot = useSnapshot();
+    [now, setNow] = useState(() => ({
+      wall: Date.now(),
+      monotonic: performance.now(),
+    }));
+  const snapshot = useSnapshot(now);
   const csrf = auth.csrf,
     refresh = auth.refresh;
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(
+      () => setNow({ wall: Date.now(), monotonic: performance.now() }),
+      1000,
+    );
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
@@ -760,8 +781,16 @@ function Console() {
     stale =
       !s ||
       s.stale ||
-      !s.observedAt ||
-      now - Date.parse(s.observedAt) > s.staleAfterMs ||
+      observationFreshness(s.observedAt, snapshot.freshNow, s.staleAfterMs) !==
+        "fresh" ||
+      s.components.some(
+        (c) =>
+          observationFreshness(
+            c.observedAt,
+            snapshot.freshNow,
+            s.staleAfterMs,
+          ) !== "fresh",
+      ) ||
       snapshot.isError;
   const counts = {
     HEALTHY: 0,
@@ -811,7 +840,12 @@ function Console() {
             <span>⌘</span>Infrastructure
           </NavLink>
           <NavLink to="/control/incidents">
-            <span>◷</span>Incidents <b>{s?.openCount ?? "—"}</b>
+            <span>◷</span>Incidents{" "}
+            <b>
+              {s?.incidentHistoryAvailable === false
+                ? "—"
+                : (s?.openCount ?? "—")}
+            </b>
           </NavLink>
           <NavLink to="/control/metrics">
             <span>⌁</span>Metrics
@@ -897,7 +931,14 @@ function Console() {
                   ? "Telemetry stale or unavailable"
                   : "Observations current"}
               </strong>
-              <span>Last persisted {shortTime(s?.observedAt)}</span>
+              <span>
+                Last probe {shortTime(s?.observedAt)} · Durable checkpoint{" "}
+                {shortTime(
+                  s?.durableObservedAt === undefined
+                    ? s?.observedAt
+                    : s.durableObservedAt,
+                )}
+              </span>
             </div>
             <span>
               {s?.persistence
@@ -906,6 +947,19 @@ function Console() {
               · read-only operations
             </span>
           </div>
+          {s && !s.persistence && (
+            <p role="status" className="cc-notice">
+              Monitoring persistence is unavailable or behind. Component states
+              below are independent probe results; new fault admission remains
+              disabled.
+            </p>
+          )}
+          {s?.incidentHistoryAvailable === false && (
+            <p role="status" className="cc-notice">
+              Durable incident history/counts are unavailable or stale. Retained
+              rows do not establish current recovery.
+            </p>
+          )}
           {stale && (
             <p role="alert" className="cc-notice">
               Live health cannot be confirmed. All component states are UNKNOWN
@@ -930,12 +984,16 @@ function Console() {
               ],
               [
                 "Open incidents",
-                s?.openCount ?? "—",
+                s?.incidentHistoryAvailable === false
+                  ? "—"
+                  : (s?.openCount ?? "—"),
                 "Durable detection records",
               ],
               [
                 "Verified restorations",
-                s?.verifiedCount ?? "—",
+                s?.incidentHistoryAvailable === false
+                  ? "—"
+                  : (s?.verifiedCount ?? "—"),
                 "Consecutive probe evidence",
               ],
             ].map(([label, value, note]) => (

@@ -19,6 +19,8 @@ export const dynamicComposeArgs = [
     : []),
   "-f",
   ".local/dynamic/compose.yml",
+  "-f",
+  "infrastructure/chaos/repair-policy.yml",
 ];
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const child = spawn(

@@ -131,7 +131,7 @@ describe("chaos authority and admission", () => {
     expect(engine.reason("crash-api")).toContain("Fresh");
     engine.healer!.enabled = true;
     engine.frame!.lastCompleted -= 13000;
-    expect(engine.reason("crash-api")).toContain("Fresh");
+    expect(engine.reason("crash-api")).toContain("stale");
   });
   it("blocks admission while terminal fault cleanup remains owned by adapter", () => {
     const { engine } = fixture();
@@ -642,7 +642,9 @@ describe("traffic surge", () => {
     const load = startSurge({
       url: "http://api-gateway:8080",
       users: 3,
-      durationMs: 60,
+      durationMs: 150,
+      rps: 1000,
+      maxRequests: 100,
       thinkMs: 5,
       fetcher,
     });
@@ -657,7 +659,12 @@ describe("traffic surge", () => {
     const { engine } = fixture();
     expect(engine.reason("traffic-surge")).toContain("spare API-3");
     engine.frame!.components = [
-      { id: "api-3", state: "UNKNOWN", code: "spare_standby" },
+      {
+        id: "api-3",
+        state: "UNKNOWN",
+        code: "spare_standby",
+        observedAt: new Date().toISOString(),
+      },
     ] as never;
     expect(engine.reason("traffic-surge")).toBeNull();
     engine.healer!.budgets!["api-3"] = {
@@ -667,4 +674,67 @@ describe("traffic surge", () => {
     };
     expect(engine.reason("traffic-surge")).toContain("api-3");
   });
+});
+
+describe("monitoring denial evidence", () => {
+  it.each([
+    "observer-future",
+    "component-future",
+    "healer-future",
+    "persistence",
+    "adapter",
+    "audit",
+  ])("rejects %s evidence before any fault", (kind) => {
+    const { engine, store } = fixture();
+    if (kind === "observer-future")
+      engine.frame!.lastCompleted = Date.now() + 60000;
+    if (kind === "component-future")
+      engine.frame!.components = [
+        {
+          id: "api-1",
+          state: "HEALTHY",
+          observedAt: new Date(Date.now() + 60000).toISOString(),
+        },
+      ] as never;
+    if (kind === "healer-future")
+      engine.healer!.observedAt = new Date(Date.now() + 60000).toISOString();
+    if (kind === "persistence") engine.frame!.persistence = false;
+    if (kind === "adapter") engine.controlAvailable = false;
+    if (kind === "audit") store.available = false;
+    expect(engine.reason("crash-api")).toBeTruthy();
+  });
+});
+
+it("does not admit another fault on a restart receipt without completed functional verification", async () => {
+  const { engine, e, j } = await submitted();
+  e.state = "FAILED";
+  e.injectedAt = new Date().toISOString();
+  e.faultConfirmedAt = e.injectedAt;
+  e.finishedAt = e.injectedAt;
+  j.save(e);
+  engine.healer!.attempts = [
+    {
+      component: "api-1",
+      state: "VERIFYING",
+      evidence: { controlReceipt: "docker_start_accepted" },
+    },
+  ] as never;
+  expect(engine.reason("crash-redis")).toContain("progress");
+  engine.healer!.attempts = [
+    {
+      component: "api-1",
+      state: "ESCALATED",
+      evidence: { controlReceipt: "docker_start_accepted" },
+    },
+  ] as never;
+  expect(engine.reason("crash-redis")).toContain("unverified");
+  engine.healer!.attempts = [
+    {
+      component: "api-1",
+      state: "VERIFIED",
+      finishedAt: new Date().toISOString(),
+      evidence: { controlReceipt: "docker_start_accepted" },
+    },
+  ] as never;
+  expect(engine.reason("crash-redis")).toBeNull();
 });

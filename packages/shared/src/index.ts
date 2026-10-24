@@ -121,3 +121,5 @@ export * from "./chaos";
 export * from "./demo.js";
 
 export * from "./dynamic.js";
+
+export * from "./operations";

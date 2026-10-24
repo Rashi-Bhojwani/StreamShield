@@ -75,6 +75,7 @@
     "dynamic:down": "node infrastructure/dynamic/compose.mjs down",
     "dynamic:status": "node infrastructure/dynamic/compose.mjs ps",
     "test:dynamic": "node scripts/dynamic-integration.mjs",
+    "test:repair": "node --import tsx scripts/repair-validation.mjs",
     "test:final": "node scripts/final-integration.mjs",
     "final:up": "node scripts/final-cli.mjs up",
     "final:status": "node scripts/final-cli.mjs status",

@@ -5,6 +5,7 @@ import type { Resources } from "../platform/resources.js";
 import type { PlatformConfig } from "../platform/config.js";
 import type { Config } from "../config.js";
 import { checkCsrf, PlatformError } from "../platform/security.js";
+import { parseChaosSnapshot } from "@streamshield/shared";
 import { scenarios } from "./config.js";
 /** Mounted after fresh administrator authorization. APIs have no Docker/Healer control credentials. */
 export function chaosRoutes(
@@ -43,21 +44,41 @@ export function chaosRoutes(
   router.get("/chaos", async (_q, res, next) => {
     try {
       try {
-        res.json(await forward("/state"));
+        res.json(parseChaosSnapshot(await forward("/state")));
         return;
-      } catch {
-        const rows = process.env.CHAOS_URL
-          ? (
+      } catch (error) {
+        const unavailableReason =
+          error instanceof PlatformError && [401, 403].includes(error.status)
+            ? "Internal controller authorization was rejected; check the configured service credentials."
+            : error instanceof z.ZodError
+              ? "Controller response violates the monitoring contract; align service versions and timestamps."
+              : "Controller is not configured or its request failed. Retained history is not live evidence.";
+        let databaseAvailable = false;
+        let rows: { body: unknown }[] = [];
+        try {
+          if (process.env.CHAOS_URL) {
+            rows = (
               await r.db.query(
                 "SELECT body FROM chaos_experiments ORDER BY created_at DESC LIMIT 100",
               )
-            ).rows
-          : [];
+            ).rows;
+            databaseAvailable = true;
+          }
+        } catch {
+          databaseAvailable = false;
+        }
         res.json({
           version: 1,
           available: false,
           enabled: false,
-          databaseAvailable: true,
+          databaseAvailable,
+          serverTime: new Date().toISOString(),
+          staleAfterMs: Number(process.env.OBS_STALE_MS || 12000),
+          unavailableReason:
+            unavailableReason +
+            (process.env.CHAOS_URL && !databaseAvailable
+              ? " Experiment history persistence is also unavailable."
+              : ""),
           observedAt: null,
           activeId: null,
           faultDurationMs: 0,

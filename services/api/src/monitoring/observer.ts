@@ -10,7 +10,18 @@ import type {
   MediaObservation,
 } from "@streamshield/shared";
 import { evaluate, failedProbe, tierOverloaded, type Probe } from "./policy.js";
+import {
+  observationFreshness,
+  type MonitoringSnapshot,
+} from "@streamshield/shared";
 import { persist, durableSnapshot } from "./store.js";
+import {
+  CoalescingWriter,
+  unrecordedFailures,
+  acknowledgeFailures,
+} from "./writer.js";
+import { promValue } from "./prom-value.js";
+import { liveSnapshot } from "./snapshot.js";
 import { equal } from "../platform/security.js";
 import { createMetrics } from "./metrics.js";
 const number = (min: number, max: number, value: number) =>
@@ -121,6 +132,12 @@ let media: MediaObservation[] = [],
   stopped = false,
   lastCompleted = 0,
   lastMedia = 0;
+let lastPersistedAt = 0;
+let cachedHistory: MonitoringSnapshot | undefined;
+let historyReadable = false;
+const persistenceFresh = () =>
+  persistence &&
+  observationFreshness(lastPersistedAt, Date.now(), c.OBS_STALE_MS) === "fresh";
 const failureClocks = new Map<string, number>();
 // Append-only history of thresholded state transitions, buffered across DB loss.
 const lastRecorded = new Map<string, string>();
@@ -143,6 +160,7 @@ async function flushTransitions() {
 let chaosRevision = "";
 let recoveryRevision = "";
 const pendingEvidence = new Map<string, ComponentObservation>();
+const recordedFailures = new Map<string, string>();
 const mediaSeen = new Map<
   string,
   { uri: string; changed: number; advanced: boolean }
@@ -163,13 +181,7 @@ async function promScalar(query: string) {
   url.searchParams.set("query", query);
   const r = await request(url.href);
   if (!r.ok) throw new Error("metrics");
-  const body = (await r.json()) as {
-    status: string;
-    data?: { result?: { value?: [number, string] }[] };
-  };
-  if (body.status !== "success") throw new Error("metrics");
-  const v = Number(body.data?.result?.[0]?.value?.[1]);
-  return Number.isFinite(v) ? v : 0;
+  return promValue(await r.json());
 }
 /**
  * Logical API-tier load from real metrics already scraped from every API.
@@ -185,10 +197,12 @@ async function tierProbe(started: number): Promise<Probe> {
         'histogram_quantile(0.95,sum by(le)(rate(streamshield_http_request_duration_seconds_bucket{job="api"}[20s])))*1000',
       ),
       promScalar(
-        '100*sum(rate(streamshield_http_requests_total{job="api",category="5xx"}[20s]))/clamp_min(sum(rate(streamshield_http_requests_total{job="api"}[20s])),0.000001)',
+        '100*(sum(rate(streamshield_http_requests_total{job="api",category="5xx"}[20s])) or vector(0))/clamp_min(sum(rate(streamshield_http_requests_total{job="api"}[20s])),0.000001)',
       ),
       promScalar('sum(rate(streamshield_http_requests_total{job="api"}[20s]))'),
-      promScalar('sum(rate(streamshield_http_limited_total{job="api"}[20s]))'),
+      promScalar(
+        'sum(rate(streamshield_http_limited_total{job="api"}[20s])) or vector(0)',
+      ),
     ]);
     const overloaded = tierOverloaded(
       { p95Ms: p95, errorPct: errors, rps },
@@ -413,7 +427,7 @@ new Gauge({
   help: "Last observer cycle durable persistence availability",
   registers: [metrics.registry],
   collect() {
-    this.set(persistence ? 1 : 0);
+    this.set(persistenceFresh() ? 1 : 0);
   },
 });
 const app = express();
@@ -421,9 +435,13 @@ app.disable("x-powered-by");
 app.get("/health", (_req, res) =>
   res
     .status(
-      lastCompleted && Date.now() - lastCompleted < c.OBS_STALE_MS ? 200 : 503,
+      lastCompleted &&
+        observationFreshness(lastCompleted, Date.now(), c.OBS_STALE_MS) ===
+          "fresh"
+        ? 200
+        : 503,
     )
-    .json({ alive: true, persistence }),
+    .json({ alive: true, persistence: persistenceFresh() }),
 );
 app.use((req, res, next) => {
   if (!equal(req.headers.authorization || "", "Bearer " + c.OBS_SECRET)) {
@@ -436,30 +454,140 @@ app.get("/metrics", async (_req, res) =>
   res.type(metrics.registry.contentType).send(await metrics.registry.metrics()),
 );
 app.get("/observations", (_req, res) =>
-  res.json({ components, persistence, lastCompleted, mediaAvailable, media }),
+  res.json({
+    components,
+    persistence: persistenceFresh(),
+    lastCompleted,
+    mediaAvailable,
+    media,
+  }),
 );
-app.get("/snapshot", async (_req, res) => {
-  try {
-    const snapshot = await durableSnapshot(db);
-    res.json({
-      ...snapshot,
-      components,
-      media,
-      mediaAvailable,
-      persistence,
-      stale: Date.now() - lastCompleted > c.OBS_STALE_MS,
-    });
-  } catch {
-    res.status(503).json({
-      error: {
-        code: "PERSISTENCE_UNAVAILABLE",
-        message:
-          "Incident persistence unavailable; no durable snapshot can be confirmed.",
+app.get("/snapshot", (_req, res) => {
+  res.json(
+    liveSnapshot(
+      {
+        components,
+        media,
+        mediaAvailable,
+        lastCompleted,
+        persistence: persistenceFresh(),
+        staleAfterMs: c.OBS_STALE_MS,
       },
-    });
-  }
+      cachedHistory,
+      Date.now(),
+      historyReadable,
+    ),
+  );
 });
 const server = app.listen(c.OBS_PORT, "0.0.0.0");
+let lastMaintenance = Date.now();
+const writer = new CoalescingWriter<{
+  components: ComponentObservation[];
+  media: MediaObservation[];
+  mediaAvailable: boolean;
+  evidence: Map<string, ComponentObservation>;
+  observedAt: string;
+}>(
+  async (value) => {
+    const failureEvidence = unrecordedFailures(
+      value.evidence,
+      recordedFailures,
+    );
+    const sequence = await persist(
+      db,
+      value.components,
+      value.media,
+      value.mediaAvailable,
+      policy,
+      c.OBS_STALE_MS,
+      c.OBS_RETENTION_DAYS,
+      failureEvidence,
+      value.observedAt,
+    );
+    persistence = true;
+    lastPersistedAt = Date.parse(value.observedAt);
+    try {
+      cachedHistory = await durableSnapshot(db);
+      historyReadable = true;
+    } catch {
+      historyReadable = false;
+      log.warn(
+        { code: "history_read_unavailable" },
+        "Durable write succeeded; incident-history refresh unavailable",
+      );
+    }
+    acknowledgeFailures(pendingEvidence, failureEvidence, recordedFailures);
+    await flushTransitions().catch(() =>
+      log.warn(
+        { code: "state_history_unavailable" },
+        "State transitions buffered for a later cycle",
+      ),
+    );
+    let kind = "snapshot_changed";
+    try {
+      const revision =
+        (
+          await db.query(
+            "SELECT max(updated_at)::text AS revision FROM healing_attempts",
+          )
+        ).rows[0]?.revision || "";
+      if (revision && revision !== recoveryRevision) kind = "recovery_changed";
+      recoveryRevision = revision;
+    } catch {
+      /* Older deployments still reconcile ordinary snapshots. */
+    }
+    try {
+      const revision =
+        (
+          await db.query(
+            "SELECT max(updated_at)::text AS revision FROM chaos_experiments",
+          )
+        ).rows[0]?.revision || "";
+      if (revision && revision !== chaosRevision) kind = "chaos_changed";
+      chaosRevision = revision;
+    } catch {
+      /* Prior compositions remain compatible. */
+    }
+    if (redis.isReady)
+      await redis
+        .publish(
+          "monitoring:" + String(process.env.REDIS_DB || 0),
+          JSON.stringify({
+            version: 1,
+            sequence,
+            at: new Date().toISOString(),
+            kind,
+          }),
+        )
+        .catch(() =>
+          log.warn(
+            { code: "event_delivery_unavailable" },
+            "Persisted state will reconcile through REST",
+          ),
+        );
+    if (Date.now() - lastMaintenance > 60000) {
+      lastMaintenance = Date.now();
+      await db
+        .query(
+          "DELETE FROM monitoring_incidents WHERE id IN (SELECT id FROM monitoring_incidents WHERE resolved_at<now()-($1*interval '1 day') LIMIT 100)",
+          [c.OBS_RETENTION_DAYS],
+        )
+        .catch(() =>
+          log.warn(
+            { code: "retention_unavailable" },
+            "Optional monitoring retention deferred",
+          ),
+        );
+    }
+  },
+  () => {
+    persistence = false;
+    log.warn(
+      { code: "persistence_unavailable" },
+      "Monitoring persistence failed; independent health probes continue",
+    );
+  },
+);
 async function start() {
   try {
     const rows = (
@@ -529,76 +657,14 @@ async function start() {
           failureState: pending.failureState,
         });
     }
-    try {
-      const sequence = await persist(
-        db,
-        components,
-        media,
-        mediaAvailable,
-        policy,
-        c.OBS_STALE_MS,
-        c.OBS_RETENTION_DAYS,
-        pendingEvidence,
-      );
-      persistence = true;
-      pendingEvidence.clear();
-      await flushTransitions().catch(() =>
-        log.warn(
-          { code: "state_history_unavailable" },
-          "State transitions buffered for a later cycle",
-        ),
-      );
-      let kind = "snapshot_changed";
-      try {
-        const revision =
-          (
-            await db.query(
-              "SELECT max(updated_at)::text AS revision FROM healing_attempts",
-            )
-          ).rows[0]?.revision || "";
-        if (revision && revision !== recoveryRevision)
-          kind = "recovery_changed";
-        recoveryRevision = revision;
-      } catch {
-        /* Older deployments still reconcile ordinary snapshots. */
-      }
-      try {
-        const revision =
-          (
-            await db.query(
-              "SELECT max(updated_at)::text AS revision FROM chaos_experiments",
-            )
-          ).rows[0]?.revision || "";
-        if (revision && revision !== chaosRevision) kind = "chaos_changed";
-        chaosRevision = revision;
-      } catch {
-        /* Prior compositions remain compatible. */
-      }
-      if (redis.isReady)
-        await redis
-          .publish(
-            "monitoring:" + String(process.env.REDIS_DB || 0),
-            JSON.stringify({
-              version: 1,
-              sequence,
-              at: new Date().toISOString(),
-              kind,
-            }),
-          )
-          .catch(() =>
-            log.warn(
-              { code: "event_delivery_unavailable" },
-              "Persisted state will reconcile through REST",
-            ),
-          );
-    } catch {
-      persistence = false;
-      log.warn(
-        { code: "persistence_unavailable" },
-        "Observation cycle not fully persisted/published",
-      );
-    }
     lastCompleted = Date.now();
+    writer.offer({
+      components: structuredClone(components),
+      media: structuredClone(media),
+      mediaAvailable,
+      evidence: new Map(pendingEvidence),
+      observedAt: new Date(lastCompleted).toISOString(),
+    });
     const remaining = Math.max(
       50,
       c.OBS_INTERVAL_MS - (performance.now() - started) + Math.random() * 200,
@@ -624,6 +690,7 @@ void start().catch(() => {
 });
 const stop = () => {
   stopped = true;
+  writer.stop();
   server.close();
   void Promise.allSettled([
     db.end(),

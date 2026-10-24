@@ -13,8 +13,9 @@ export class Circuit {
     private resetMs: number,
     private random: () => number = Math.random,
   ) {}
-  async execute<T>(read: () => Promise<T>, now = Date.now()): Promise<T> {
-    if ((this.state === "OPEN" && now < this.until) || this.busy) {
+  async execute<T>(read: () => Promise<T>, now?: number): Promise<T> {
+    const clock = () => now ?? Date.now();
+    if ((this.state === "OPEN" && clock() < this.until) || this.busy) {
       this.rejected++;
       throw new Error("circuit_open");
     }
@@ -40,7 +41,7 @@ export class Circuit {
         const jitter = this.reopenCount
           ? Math.floor(this.random() * this.resetMs * 0.25)
           : 0;
-        this.until = now + Math.min(delay + jitter, 60000);
+        this.until = clock() + Math.min(delay + jitter, 60000);
         this.reopenCount = Math.min(this.reopenCount + 1, 6);
       }
       throw new Error("dependency_unavailable");

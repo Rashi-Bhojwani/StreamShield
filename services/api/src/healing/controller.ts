@@ -1,3 +1,4 @@
+import { observationFreshness } from "@streamshield/shared";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "pino";
 import type {
@@ -81,8 +82,11 @@ export class Healer {
       available:
         this.available &&
         !!this.lastFrame &&
-        Date.now() - this.lastFrame.lastCompleted <
+        observationFreshness(
+          this.lastFrame.lastCompleted,
+          Date.now(),
           Number(process.env.OBS_STALE_MS || 12000),
+        ) === "fresh",
       enabled: this.c.enabled,
       budgets: this.budgets,
       leader: !!this.lease && this.lease.expires > Date.now(),

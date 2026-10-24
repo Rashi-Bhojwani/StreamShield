@@ -1,3 +1,4 @@
+import { parseMonitoringSnapshot } from "@streamshield/shared";
 import { capacityAdminRoutes } from "../demo/routes.js";
 import { chaosRoutes } from "../chaos/routes.js";
 import type { PlatformConfig } from "../platform/config.js";
@@ -78,7 +79,7 @@ export function monitoringRouter(
             signal: AbortSignal.timeout(2000),
           });
           if (!response.ok) throw new Error("observer");
-          snapshot = await response.json();
+          snapshot = parseMonitoringSnapshot(await response.json());
         } catch {
           snapshot = { ...(await durableSnapshot(r.db)), stale: true };
         }
@@ -93,7 +94,7 @@ export function monitoringRouter(
         snapshot.playback = {
           reports: counts.reduce((a, b) => a + b, 0),
           advancing: counts.reduce((a, b) => a + b, 0),
-          standby: counts[1],
+          standby: counts[1]!,
           checkedAt: new Date().toISOString(),
           label:
             "Recent browser-reported advancing players · approximate, 30s leases",

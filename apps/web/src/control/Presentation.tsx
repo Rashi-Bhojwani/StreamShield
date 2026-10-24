@@ -24,6 +24,8 @@ import {
 } from "./evidence";
 import { TopologyGraph } from "./TopologyGraph";
 import { useChaos } from "./useChaos";
+import { primaryDemoScenarios } from "@streamshield/shared";
+import { scenarioDenial } from "./chaos-readiness";
 import { useRecovery } from "./useRecovery";
 import { useTimeline, type TimelineData } from "./useEvidence";
 import "./presentation.css";
@@ -363,14 +365,16 @@ function Tiles({
 function ScenarioButton({
   s,
   onPick,
+  denial = null,
 }: {
   s: ChaosScenario;
+  denial?: string | null;
   onPick: (s: ChaosScenario) => void;
 }) {
   return (
     <button
       className={"scenario-button kind-" + s.kind}
-      disabled={!s.available}
+      disabled={!!scenarioDenial(s, denial)}
       onClick={() => onPick(s)}
       data-scenario={s.id}
     >
@@ -379,11 +383,16 @@ function ScenarioButton({
         Target <code>{s.target}</code>
       </span>
       <span>{s.audienceSees}</span>
+      <span>Prerequisites: {s.prerequisites}</span>
+      <span>Recovery: {s.recovery}</span>
+      {!scenarioDenial(s, denial) && (
+        <span className="scenario-ready">Ready for admission</span>
+      )}
       <span className="scenario-cause">
         Real-world cause: {s.realWorldCause}
       </span>
-      {!s.available && s.reason && (
-        <span className="scenario-denied">{s.reason}</span>
+      {scenarioDenial(s, denial) && (
+        <span className="scenario-denied">{scenarioDenial(s, denial)}</span>
       )}
     </button>
   );
@@ -415,7 +424,7 @@ export function Presentation({
   const overall: HealthTone = stale
     ? "unknown"
     : (band.data?.overall.at(-1)?.tone ?? "unknown");
-  const scenarios = chaos.data?.scenarios || [];
+  const scenarios = primaryDemoScenarios(chaos.data?.scenarios || []);
   return (
     <div className={"presentation tone-" + overall} data-overall={overall}>
       <header className="presentation-head">
@@ -515,34 +524,25 @@ export function Presentation({
           </p>
         </section>
         <aside className="presentation-console" aria-label="Experiment console">
-          <h2>Healer scenarios</h2>
-          {!chaos.live && (
-            <p className="cc-note">
-              Chaos controller unavailable or stale: buttons stay disabled.
+          <h2>Five controlled failure scenarios</h2>
+          {chaos.reason && (
+            <p role="status" className="chaos-denial">
+              {chaos.reason}
             </p>
           )}
-          {scenarios
-            .filter((s) => s.kind === "healer")
-            .map((s) => (
-              <ScenarioButton key={s.id} s={s} onPick={setSelection} />
-            ))}
-          <h3>
-            Resilience experiments — timed fault cleanup, not Healer repair
-          </h3>
-          {scenarios
-            .filter((s) => s.kind === "resilience")
-            .map((s) => (
-              <ScenarioButton key={s.id} s={s} onPick={setSelection} />
-            ))}
-          <h3>Disabled</h3>
-          {scenarios
-            .filter((s) => s.kind === "disabled")
-            .map((s) => (
-              <div key={s.id} className="scenario-disabled">
-                <strong>{s.name}</strong>
-                <span>{s.reason}</span>
-              </div>
-            ))}
+          {scenarios.map((s) => (
+            <ScenarioButton
+              key={s.id}
+              s={s}
+              denial={chaos.reason}
+              onPick={setSelection}
+            />
+          ))}
+          <p className="cc-note">
+            Network expiry is controlled cleanup; Redis uses the supported
+            service crash/restart substitute. Other backend scenarios remain
+            available through the documented administrator API.
+          </p>
         </aside>
       </div>
       {shown ? (

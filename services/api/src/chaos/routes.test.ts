@@ -96,3 +96,32 @@ it("rejects arbitrary service commands even with correct CSRF and local gate", a
   expect(r.status).toBe(400);
   expect(fetch).not.toHaveBeenCalled();
 });
+
+it("returns honest unavailable metadata when both controller forwarding and history persistence fail", async () => {
+  vi.stubEnv("CHAOS_URL", "http://controller:4030");
+  vi.stubEnv("CHAOS_SECRET", "x".repeat(43));
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("timeout")));
+  const response = await request(app()).get("/chaos");
+  expect(response.status).toBe(200);
+  expect(response.body.available).toBe(false);
+  expect(response.body.databaseAvailable).toBe(false);
+  expect(response.body.observedAt).toBeNull();
+  expect(response.body.unavailableReason).toContain("persistence");
+});
+it("distinguishes private controller authorization from an expired browser login", async () => {
+  vi.stubEnv("CHAOS_URL", "http://controller:4030");
+  vi.stubEnv("CHAOS_SECRET", "x".repeat(43));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ code: "unauthorized" }), { status: 401 }),
+    ),
+  );
+  const response = await request(app()).get("/chaos");
+  expect(response.status).toBe(200);
+  expect(response.body.available).toBe(false);
+  expect(response.body.unavailableReason).toContain(
+    "Internal controller authorization",
+  );
+});

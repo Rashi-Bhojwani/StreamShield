@@ -1,3 +1,4 @@
+import { observationFreshness } from "@streamshield/shared";
 import type {
   ChaosExperiment,
   ChaosScenario,
@@ -58,7 +59,7 @@ export function stages(
         ? "MEDIA"
         : "API";
   const rows: [string, string, string | null, HealthTone][] = [
-    ["healthy", "HEALTHY", e.createdAt, "healthy"],
+    ["healthy", "HEALTHY", eventAt(e, "INJECTING") || e.injectedAt, "healthy"],
     ["fault", "FAULT CONFIRMED", e.faultConfirmedAt, "injected"],
     ["detected", "INCIDENT DETECTED", e.incidentDetectedAt, "failed"],
     ["diagnosed", "DIAGNOSED", diagnosed ?? null, "failed"],
@@ -83,6 +84,20 @@ export function stages(
       "recovered",
     ],
   ];
+  if (["network-timeout", "external-api"].includes(e.scenario)) {
+    rows.splice(
+      3,
+      5,
+      ["action", "CIRCUIT PROTECTION", eventAt(e, "CIRCUIT_OPEN"), "degraded"],
+      [
+        "cleanup",
+        "OWNED FAULT CLEANUP",
+        eventAt(e, "CLEANUP_COMPLETED"),
+        "degraded",
+      ],
+      ["verified", "DEPENDENCY VERIFIED", e.verifiedAt, "recovered"],
+    );
+  }
   const injected = t(e.injectedAt);
   const out: Stage[] = rows.map(([id, label, at, tone]) => ({
     id,
@@ -157,7 +172,7 @@ export function componentTone(
       (a) =>
         a.state === "VERIFIED" &&
         a.actionStartedAt &&
-        now - t(a.finishedAt) < RECOVERED_MS,
+        observationFreshness(a.finishedAt, now, RECOVERED_MS) === "fresh",
     )
   )
     return "recovered";

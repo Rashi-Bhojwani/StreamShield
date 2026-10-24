@@ -7,6 +7,7 @@ import type {
   ExperimentState,
   ExperimentEventKind,
 } from "@streamshield/shared";
+import { observationFreshness } from "@streamshield/shared";
 import { availableParallelism } from "node:os";
 import { startSurge } from "./load.js";
 import { standby } from "../monitoring/policy.js";
@@ -79,19 +80,50 @@ export class ChaosEngine {
     if (!r.ok) throw Error(data.code || "fault_control_unavailable");
     return data;
   }
+  availabilityReason(): string | null {
+    if (!this.frame)
+      return "Observer status is unknown; no observation received.";
+    if (
+      observationFreshness(
+        this.frame.lastCompleted,
+        Date.now(),
+        this.c.OBS_STALE_MS,
+      ) !== "fresh"
+    )
+      return "Observer observations are stale, invalid or future-dated.";
+    if (
+      this.frame.components.some(
+        (c) =>
+          observationFreshness(
+            c.observedAt,
+            Date.now(),
+            this.c.OBS_STALE_MS,
+          ) !== "fresh",
+      )
+    )
+      return "A component observation is stale, invalid or future-dated.";
+    if (!this.frame.persistence)
+      return "Monitoring persistence is unavailable; durable failure/recovery evidence is required.";
+    if (!this.healer?.available || !this.healer.enabled)
+      return "Fresh enabled independent Healer evidence is required.";
+    if (!this.healer.databaseAvailable)
+      return "Healer audit persistence is unavailable.";
+    if (!this.healer.leader)
+      return "Independent Healer has no active leader lease.";
+    if (
+      observationFreshness(
+        this.healer.observedAt,
+        Date.now(),
+        this.c.OBS_STALE_MS,
+      ) !== "fresh"
+    )
+      return "Healer observation is stale, invalid or future-dated.";
+    if (!this.controlAvailable)
+      return "Fault adapter availability is unconfirmed.";
+    return null;
+  }
   current() {
-    return (
-      !!this.frame &&
-      this.frame.persistence &&
-      Date.now() - this.frame.lastCompleted < 12000 &&
-      !!this.healer?.available &&
-      this.healer.enabled &&
-      this.healer.databaseAvailable &&
-      this.healer.leader &&
-      !!this.healer.observedAt &&
-      Date.now() - Date.parse(this.healer.observedAt) < 12000 &&
-      this.controlAvailable
-    );
+    return this.availabilityReason() === null;
   }
   reason(id: ChaosScenarioId) {
     const s = scenarioFor(id);
@@ -99,8 +131,7 @@ export class ChaosEngine {
     if (!this.c.enabled) return "Explicit local chaos enablement is required.";
     if (!this.c.allowed.includes(id))
       return "Scenario disabled by deployment policy.";
-    if (!this.current())
-      return "Fresh observer, Healer leader and fault adapter are required.";
+    if (!this.current()) return this.availabilityReason();
     if (!this.store.available)
       return "Experiment audit storage is unavailable.";
     if (this.journal.all().some((e) => !terminal(e.state)))
@@ -110,15 +141,68 @@ export class ChaosEngine {
     if (this.adapterActive)
       return "An owned fault still awaits adapter cleanup.";
     if (
+      this.healer!.attempts.some((a) =>
+        ["SCHEDULED", "EXECUTING", "VERIFYING", "RETRY_WAIT"].includes(a.state),
+      )
+    )
+      return "Previous recovery is still in progress; wait for functional verification.";
+    const unverified = this.journal
+      .all()
+      .find(
+        (e) =>
+          terminal(e.state) &&
+          e.faultConfirmedAt &&
+          !e.verifiedAt &&
+          !temporary(e.scenario) &&
+          !generated(e.scenario) &&
+          scenarioFor(e.scenario).targets.some(
+            (target) =>
+              !this.healer!.attempts.some(
+                (a) =>
+                  a.component === target &&
+                  a.state === "VERIFIED" &&
+                  a.evidence.controlReceipt ===
+                    scenarioFor(e.scenario).expectedReceipt &&
+                  !!a.finishedAt &&
+                  Date.parse(a.finishedAt) >= Date.parse(e.injectedAt!) &&
+                  Date.parse(a.finishedAt) <= Date.now(),
+              ),
+          ),
+      );
+    if (unverified)
+      return (
+        "Previous injected fault recovery is unverified (" +
+        unverified.target +
+        "). Inspect the incident/recovery and obtain functional verification before another demo."
+      );
+
+    if (
       this.frame!.components.some((c) => c.state !== "HEALTHY" && !standby(c))
     )
-      return "All monitored components must return to a healthy baseline.";
+      return (
+        "All monitored components must return to a healthy baseline: " +
+        this.frame!.components.filter(
+          (c) => c.state !== "HEALTHY" && !standby(c),
+        )
+          .map((c) => c.id + " (" + c.state + ", " + c.code + ")")
+          .join(", ")
+      );
     if (
       generated(id) &&
       this.frame!.components.find((c) => c.id === "api-3")?.code !==
         "spare_standby"
     )
       return "The spare API-3 must exist and be stopped (run final:up) before a surge.";
+    if (
+      this.journal
+        .all()
+        .some(
+          (e) => generated(e.scenario) && terminal(e.state) && e.injectedAt,
+        ) &&
+      this.frame!.components.find((c) => c.id === "api-3")?.code !==
+        "spare_standby"
+    )
+      return "Previous traffic experiment has not returned to the stopped-spare baseline; inspect scale-in recovery.";
     const allowed = (
       process.env.HEALER_ALLOWED_SERVICES || managed.join(",")
     ).split(",");
@@ -173,6 +257,9 @@ export class ChaosEngine {
     return {
       version: 1,
       available: this.current(),
+      serverTime: new Date().toISOString(),
+      staleAfterMs: this.c.OBS_STALE_MS,
+      unavailableReason: this.availabilityReason(),
       enabled: this.c.enabled,
       databaseAvailable: this.store.available,
       observedAt: this.lastCompleted
@@ -429,6 +516,16 @@ export class ChaosEngine {
     }
     this.journal.prune(this.c.CHAOS_RETENTION_DAYS);
   }
+  private async dependencyReady() {
+    try {
+      const value = JSON.parse(
+        await this.verifier.text(process.env.HEALER_DEPENDENCY_URL!),
+      );
+      return value.status === "available" && value.simulated === true;
+    } catch {
+      return false;
+    }
+  }
   private async advance(e: ChaosExperiment) {
     if (e.cancelRequestedBy) {
       await this.finish(
@@ -495,7 +592,7 @@ export class ChaosEngine {
       this.journal.synced(e);
       if (this.journal.get(e.id)?.cancelRequestedBy) return;
       if (generated(e.scenario)) {
-        this.startLoad(e);
+        await this.startLoad(e);
         return;
       }
       try {
@@ -686,9 +783,7 @@ export class ChaosEngine {
         verified =
           this.healer!.circuit.state === "CLOSED" &&
           e.cleanup === "COMPLETED" &&
-          (
-            await this.verifier.text(process.env.HEALER_DEPENDENCY_URL!)
-          ).includes('"available"');
+          (await this.dependencyReady());
       else
         for (const a of attempts)
           verified &&= (await this.verifier.verify(a, this.frame!)).ok;
@@ -771,7 +866,7 @@ export class ChaosEngine {
     }
     await this.finish(e, "COMPLETED", "Restoration independently verified");
   }
-  private startLoad(e: ChaosExperiment) {
+  private async startLoad(e: ChaosExperiment) {
     const users = Math.min(
       this.c.CHAOS_SURGE_USERS,
       this.c.CHAOS_SURGE_MAX_USERS,
@@ -781,9 +876,16 @@ export class ChaosEngine {
       users,
       durationMs: this.c.CHAOS_SURGE_DURATION_MS,
       thinkMs: this.c.CHAOS_SURGE_THINK_MS,
+      rps: this.c.CHAOS_SURGE_RPS,
+      maxRequests: this.c.CHAOS_SURGE_MAX_REQUESTS,
     });
     this.surges.set(e.id, load);
-    const now = new Date().toISOString();
+    const now = await load.started;
+    if (!now) {
+      await load.stop();
+      this.surges.delete(e.id);
+      throw new Error("No load request was dispatched; fault not confirmed");
+    }
     e.injectedAt = now;
     e.faultConfirmedAt = now;
     e.cleanup = "PENDING";

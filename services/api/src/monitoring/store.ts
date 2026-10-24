@@ -5,6 +5,7 @@ import type {
   MediaObservation,
   MonitoringSnapshot,
 } from "@streamshield/shared";
+import { observationFreshness } from "@streamshield/shared";
 import { duration } from "./policy.js";
 export async function persist(
   db: Pool,
@@ -13,27 +14,36 @@ export async function persist(
   mediaAvailable: boolean,
   policy: { failures: number; successes: number },
   staleAfterMs: number,
-  retentionDays: number,
+  _retentionDays: number,
   pendingEvidence: Map<string, ComponentObservation> = new Map(),
+  observedAt?: string,
 ) {
   const client = await db.connect();
   const now = new Date().toISOString();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock(52005001)");
+    await client.query("SET LOCAL lock_timeout='250ms'");
+    const lock = await client.query(
+      "SELECT pg_try_advisory_xact_lock(52005001) AS locked",
+    );
+    if (!lock.rows[0]?.locked) throw new Error("observer_writer_lock_busy");
+    await client.query(
+      "INSERT INTO monitoring_components(id,observation) SELECT id,observation FROM jsonb_to_recordset($1::jsonb) AS t(id text,observation jsonb) ON CONFLICT(id) DO UPDATE SET observation=EXCLUDED.observation",
+      [
+        JSON.stringify(
+          components.map((observation) => ({
+            id: observation.id,
+            observation,
+          })),
+        ),
+      ],
+    );
+    const openRows = await client.query(
+      "SELECT * FROM monitoring_incidents WHERE resolved_at IS NULL AND source<>'healer-capacity-v1' ORDER BY component FOR UPDATE",
+    );
     for (const observed of components) {
       const c = pendingEvidence.get(observed.id) || observed;
-      await client.query(
-        "INSERT INTO monitoring_components(id,observation) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET observation=EXCLUDED.observation",
-        [observed.id, observed],
-      );
-      let active = (
-        await client.query(
-          // Capacity changes recorded by the Healer are not availability incidents.
-          "SELECT * FROM monitoring_incidents WHERE component=$1 AND resolved_at IS NULL AND source<>'healer-capacity-v1' FOR UPDATE",
-          [c.id],
-        )
-      ).rows[0];
+      let active = openRows.rows.find((row) => row.component === c.id);
       const event = async (
         id: string,
         state: string,
@@ -147,14 +157,9 @@ export async function persist(
     const row = (
       await client.query(
         "INSERT INTO monitoring_state(id,sequence,observed_at,snapshot) VALUES('observer',1,$1,$2) ON CONFLICT(id) DO UPDATE SET sequence=monitoring_state.sequence+1,observed_at=$1,snapshot=$2 RETURNING sequence::text",
-        [now, snapshot],
+        [observedAt || now, snapshot],
       )
     ).rows[0];
-    // Bounded maintenance; never remove open incidents. Events cascade only with resolved parent.
-    await client.query(
-      "DELETE FROM monitoring_incidents WHERE id IN (SELECT id FROM monitoring_incidents WHERE resolved_at<now()-($1*interval '1 day') LIMIT 100)",
-      [retentionDays],
-    );
     await client.query("COMMIT");
     return row.sequence as string;
   } catch (e) {
@@ -188,7 +193,11 @@ export async function durableSnapshot(db: Pool): Promise<MonitoringSnapshot> {
     staleAfterMs: s?.staleAfterMs || 12000,
     stale:
       !state ||
-      Date.now() - state.observed_at.getTime() > (s?.staleAfterMs || 12000),
+      observationFreshness(
+        state.observed_at.getTime(),
+        Date.now(),
+        s?.staleAfterMs || 12000,
+      ) !== "fresh",
     persistence: true,
     components: s?.components || [],
     incidents,

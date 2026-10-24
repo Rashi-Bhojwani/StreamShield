@@ -1,5 +1,7 @@
 # StreamShield final demo guide (Hinglish)
 
+> **Current one-run repair:** the five primary choices are `crash-api`, `crash-redis`, `crash-video-gateway`, `network-timeout` and `traffic-surge`. See [current repair, evidence, limitations and Windows commands](ONE_RUN_REPAIR_RESULTS.md). Earlier scenario rankings, instructions and measurements below describe the previous extended demonstration; they are historical evidence, not a passing run of this repair. For configuration-preserving troubleshooting, use the new guide rather than `final:up`.
+
 Yeh guide aapko poora demo chalane mein madad karegi: system kya hai, kaise
 kaam karta hai, aur stage par exactly kya bolna aur dikhana hai.
 

@@ -1,0 +1,16 @@
+# Read existing .env values; do not regenerate or overwrite credentials/configuration.
+x-observation: &observation
+  OBS_STALE_MS: ${OBS_STALE_MS:-12000}
+x-load: &load
+  <<: *observation
+  CHAOS_SURGE_RPS: ${CHAOS_SURGE_RPS:-50}
+  CHAOS_SURGE_MAX_REQUESTS: ${CHAOS_SURGE_MAX_REQUESTS:-3000}
+services:
+  observer:
+    environment: *observation
+  healer:
+    environment: *observation
+  chaos-controller:
+    environment: *load
+  chaos-fault-adapter:
+    environment: *load

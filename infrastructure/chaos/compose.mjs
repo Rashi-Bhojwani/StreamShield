@@ -19,6 +19,8 @@ const child = spawn(
     ...(existsSync(".local/chaos/cloud-vfs.yml")
       ? ["-f", ".local/chaos/cloud-vfs.yml"]
       : []),
+    "-f",
+    "infrastructure/chaos/repair-policy.yml",
     ...process.argv.slice(2),
   ],
   { stdio: "inherit" },

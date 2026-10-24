@@ -119,6 +119,9 @@ export interface ChaosSnapshot {
   enabled: boolean;
   databaseAvailable: boolean;
   observedAt: string | null;
+  serverTime?: string;
+  staleAfterMs?: number;
+  unavailableReason?: string | null;
   activeId: string | null;
   faultDurationMs: number;
   timeoutMs: number;

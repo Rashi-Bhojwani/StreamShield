@@ -135,3 +135,31 @@ describe("component tone", () => {
     ).toEqual({ "api-1": "Healer verifying", "api-2": "Healer starting" });
   });
 });
+
+it("does not paint an admitted but unvalidated baseline green", () => {
+  expect(
+    stages(
+      { ...base, state: "CREATED", injectedAt: null, faultConfirmedAt: null },
+      [],
+    ).some((s) => s.at),
+  ).toBe(false);
+});
+it("shows circuit/expiry events separately from Healer starts", () => {
+  const e = {
+    ...base,
+    scenario: "network-timeout",
+    target: "demo-dependency",
+    events: [
+      { kind: "CIRCUIT_OPEN", at: at(13), detail: "measured" },
+      { kind: "CLEANUP_COMPLETED", at: at(25), detail: "owned expiry" },
+    ],
+  } as ChaosExperiment;
+  const rows = stages(e, []);
+  expect(rows.find((r) => r.id === "action")).toMatchObject({
+    label: "CIRCUIT PROTECTION",
+    at: at(13),
+  });
+  expect(rows.some((r) => r.label === "HEALING STARTED")).toBe(false);
+  expect(rows.find((r) => r.id === "cleanup")?.at).toBe(at(25));
+  expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
+});
