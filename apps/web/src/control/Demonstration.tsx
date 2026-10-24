@@ -5,6 +5,7 @@ import {
   primaryDemoScenarios,
   primaryDemoIds,
   idleLoadObservation,
+  observationFreshness,
   type ChaosScenario,
   type ComponentObservation,
 } from "@streamshield/shared";
@@ -18,6 +19,7 @@ import {
   demoNames,
   demoProgress,
   demoTerminal,
+  scenarioPresentationState,
 } from "./demo-model";
 import "./demonstration.css";
 const clock = (at: string | null | undefined) =>
@@ -26,10 +28,12 @@ export function Demonstration({
   components = [],
   stale = false,
   advanced,
+  crashOnly = false,
 }: {
   components?: ComponentObservation[];
   stale?: boolean;
   advanced?: ReactNode;
+  crashOnly?: boolean;
 }) {
   const q = useChaos(),
     cache = useQueryClient(),
@@ -42,9 +46,28 @@ export function Demonstration({
   const scenarios = primaryDemoScenarios(q.data?.scenarios || []);
   const policy = scenarios.find((s) => s.id === selected);
   const experiment =
-    q.data?.experiments.find((e) => !demoTerminal(e)) || q.data?.experiments[0];
+    q.data?.experiments.find((e) => !demoTerminal(e)) ||
+    q.data?.experiments.find(
+      (e) =>
+        !crashOnly || ["crash-api", "crash-video-gateway"].includes(e.scenario),
+    );
+  const functional = q.data?.crashBaseline;
+  const functionalDenial =
+    crashOnly &&
+    (!functional ||
+      observationFreshness(
+        functional.observedAt,
+        q.serverNow,
+        q.data?.staleAfterMs,
+      ) !== "fresh" ||
+      !functional.api ||
+      !functional.gateway)
+      ? functional?.reason ||
+        "BLOCKED: independent API and gateway streaming baseline is not verified. Keep a live source running and wait for fresh functional checks."
+      : null;
   const denial =
     scenarioDenial(policy, q.reason) ||
+    functionalDenial ||
     (stale
       ? "Monitoring data is stale; wait for current health probes."
       : null);
@@ -66,6 +89,8 @@ export function Demonstration({
       : progress.active
         ? "Recovering"
         : q.reason ||
+            functionalDenial ||
+            (functional && (!functional.api || !functional.gateway)) ||
             stale ||
             components.some(
               (c) =>
@@ -114,16 +139,85 @@ export function Demonstration({
           }
           role="status"
         >
-          System status: {status}
+          {crashOnly && status === "Healthy"
+            ? "SYSTEM HEALTHY"
+            : "System status: " + status}
         </span>
       </header>
-      <div className="demo-scenario-grid" aria-label="Four failure scenarios">
-        {primaryDemoIds.map((id, index) => {
+      {crashOnly && (
+        <p>
+          Only API and video gateway crashes are offered here. Keep OBS/Studio
+          or the labelled generated sample source running before starting.
+        </p>
+      )}
+      <div
+        className={"demo-scenario-grid" + (crashOnly ? " crash-only" : "")}
+        aria-label={
+          crashOnly ? "Two crash scenarios" : "Four failure scenarios"
+        }
+      >
+        {(crashOnly
+          ? (["crash-api", "crash-video-gateway"] as const)
+          : primaryDemoIds
+        ).map((id, index) => {
           const s = scenarios.find((s) => s.id === id);
           const reason =
             scenarioDenial(s, q.reason) ||
+            functionalDenial ||
             (stale ? "Monitoring data is stale." : null);
           const copy = demoNames[id];
+          const scenarioResult = q.data?.experiments.find(
+            (e) => e.scenario === id,
+          );
+          // A cooldown blocks another injection; it does not make a recovered
+          // service unhealthy. Current health and admission are separate facts.
+          const targetIds = [
+            ...(s?.targets || []),
+            ...(id === "crash-edge" ? ["edge-2"] : []),
+          ];
+          const scenarioStatus = scenarioPresentationState(
+            scenarioResult,
+            targetIds.length > 0 &&
+              targetIds.every((target) =>
+                components.some(
+                  (c) => c.id === target && c.state === "HEALTHY",
+                ),
+              ),
+            q.live && !stale,
+          );
+          if (crashOnly)
+            return (
+              <article
+                key={id}
+                data-scenario={id}
+                className={
+                  "demo-choice demo-crash-choice" +
+                  (selected === id ? " selected" : "")
+                }
+              >
+                <span className="demo-number">0{index + 1}</span>
+                <strong>{copy[0]}</strong>
+                <span>{copy[1]}</span>
+                <span className={reason ? "demo-unavailable" : "demo-ready"}>
+                  {reason ? "BLOCKED" : "Ready"}
+                </span>
+                {reason && <small>{reason}</small>}
+                <button
+                  className="chaos-inject"
+                  disabled={!!reason || !s}
+                  onClick={() => {
+                    if (s) {
+                      setSelected(id);
+                      setConfirmation(s);
+                    }
+                  }}
+                >
+                  {id === "crash-api"
+                    ? "Simulate API Crash"
+                    : "Simulate Video Gateway Crash"}
+                </button>
+              </article>
+            );
           return (
             <button
               type="button"
@@ -136,8 +230,14 @@ export function Demonstration({
               <span className="demo-number">0{index + 1}</span>
               <strong>{copy[0]}</strong>
               <span>{copy[1]}</span>
-              <span className={reason ? "demo-unavailable" : "demo-ready"}>
-                {reason ? "Blocked" : "Ready"}
+              <span
+                className={
+                  ["HEALTHY", "HEALED"].includes(scenarioStatus)
+                    ? "demo-ready"
+                    : "demo-unavailable"
+                }
+              >
+                {scenarioStatus}
               </span>
               {reason && <small>{reason}</small>}
             </button>
@@ -157,13 +257,15 @@ export function Demonstration({
             <p>{policy?.failure}</p>
           </details>
         </div>
-        <button
-          className="chaos-inject"
-          disabled={!!denial || !policy}
-          onClick={() => policy && setConfirmation(policy)}
-        >
-          Run failure demonstration
-        </button>
+        {!crashOnly && (
+          <button
+            className="chaos-inject"
+            disabled={!!denial || !policy}
+            onClick={() => policy && setConfirmation(policy)}
+          >
+            Run failure demonstration
+          </button>
+        )}
       </section>
       {denial && (
         <div className="demo-blocked" role={q.isError ? "alert" : "status"}>
@@ -226,6 +328,23 @@ export function Demonstration({
         )}
       </section>
       <section className="demo-result" aria-label="Demonstration result">
+        {crashOnly && failed && (
+          <p role="status">
+            <strong>RECOVERY FAILED</strong>: {experiment.reason}
+          </p>
+        )}
+        {crashOnly &&
+          experiment?.state === "COMPLETED" &&
+          progress.stages[5]?.at &&
+          experiment.evidence.independentBehaviorVerified === true && (
+            <p className="demo-ready" role="status">
+              {experiment.scenario === "crash-api"
+                ? "API RECOVERED"
+                : experiment.scenario === "crash-video-gateway"
+                  ? "VIDEO GATEWAY RECOVERED"
+                  : "RECOVERED"}
+            </p>
+          )}
         <h2>
           {failed
             ? safelyRestored
@@ -288,6 +407,12 @@ export function Demonstration({
         </dl>
         {experiment?.scenario === "network-timeout" && (
           <p>
+            Dependency read attempts since injection:{" "}
+            {String(
+              experiment.evidence.dependencyReadAttempts ?? "Not observed",
+            )}{" "}
+            · Circuit:{" "}
+            {String(experiment.evidence.lastCircuitState ?? "Not observed")} ·{" "}
             Measured network baseline:{" "}
             {fmt(Number(experiment.evidence.networkBaselineMs) || null)} ·
             Restored latency:{" "}
@@ -297,8 +422,52 @@ export function Demonstration({
             expiry is cleanup, not a container restart.
           </p>
         )}
+        {experiment?.scenario === "crash-edge" && (
+          <p>
+            Serving edge before failure:{" "}
+            {String(experiment.evidence.edgeBefore || "Not observed")} · Backup
+            serving a real live manifest:{" "}
+            {String(experiment.evidence.edgeAfter || "Not verified")} · Failover
+            verified:{" "}
+            {clock(
+              typeof experiment.evidence.edgeFailoverObservedAt === "string"
+                ? experiment.evidence.edgeFailoverObservedAt
+                : null,
+            )}
+          </p>
+        )}
         {error && <p role="alert">{error}</p>}
       </section>
+      {experiment && (
+        <section
+          className="demo-live"
+          aria-label="Timestamped controller events"
+        >
+          <h2>Actual controller events</h2>
+          <p>Current phase: {experiment.state.replaceAll("_", " ")}</p>
+          <p>
+            Failed probe:{" "}
+            {String(
+              experiment.evidence.unavailableProbe ||
+                experiment.evidence.failureCode ||
+                "Not observed",
+            )}
+          </p>
+          <p>
+            Healer receipt:{" "}
+            {String(experiment.evidence.healerReceipt || "Not observed")}
+          </p>
+          <ol className="demo-event-log">
+            {experiment.events.map((event, index) => (
+              <li key={index}>
+                <time>{clock(event.at)}</time>
+                <strong>{event.kind.replaceAll("_", " ")}</strong>
+                <span>{event.detail}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
       <section className="demo-health" aria-label="Live component health">
         <h2>Live component health</h2>
         {components.length ? (
@@ -353,4 +522,10 @@ export function Demonstration({
       )}
     </section>
   );
+}
+export function CrashDemonstration(props: {
+  components?: ComponentObservation[];
+  stale?: boolean;
+}) {
+  return <Demonstration {...props} crashOnly />;
 }

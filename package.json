@@ -84,8 +84,11 @@
     "final:watch": "node scripts/final-watch.mjs",
     "final:healer-log": "node scripts/final-healer-log.mjs",
     "demo:diagnose": "node scripts/demo-diagnose.mjs",
+    "test:two-live": "node --import tsx scripts/two-scenario-live.mjs",
     "test:four-live": "node --import tsx scripts/four-scenario-live.mjs",
-    "test:four-ui": "node --import tsx scripts/four-scenario-ui.mjs"
+    "test:four-ui": "node --import tsx scripts/four-scenario-ui.mjs",
+    "demo:light": "node --import tsx scripts/light-demo.mjs --interactive",
+    "test:light-four": "node --import tsx scripts/light-demo.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

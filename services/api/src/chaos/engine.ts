@@ -6,6 +6,7 @@ import type {
   HealingSnapshot,
   ExperimentState,
   ExperimentEventKind,
+  CrashBaselineObservation,
 } from "@streamshield/shared";
 import {
   observationFreshness,
@@ -64,6 +65,8 @@ export class ChaosEngine {
   controlAvailable = false;
   adapterActive = 0;
   lastCompleted = 0;
+  crashBaseline: CrashBaselineObservation | undefined;
+  private nextCrashBaseline = 0;
   private nextSync = 0;
   private stable = new Map<string, number>();
   private surges = new Map<string, ReturnType<typeof startSurge>>();
@@ -155,10 +158,17 @@ export class ChaosEngine {
       Date.parse(at) >= Date.parse(e.finishedAt || e.injectedAt || e.createdAt)
     );
   }
-  baselineReason(id: ChaosScenarioId): string | null {
+  baselineReason(id: ChaosScenarioId, requireFunctional = true): string | null {
     const components = this.frame?.components || [];
     const required = ["postgres", "redis", "api-1", "api-2", "api-gateway"];
-    if (["crash-edge", "crash-video-gateway", "crash-primary"].includes(id))
+    if (
+      [
+        "crash-api",
+        "crash-edge",
+        "crash-video-gateway",
+        "crash-primary",
+      ].includes(id)
+    )
       required.push(
         "relay",
         "origin-primary",
@@ -189,7 +199,12 @@ export class ChaosEngine {
           .join(", ")
       );
     if (
-      ["crash-edge", "crash-video-gateway", "crash-primary"].includes(id) &&
+      [
+        "crash-api",
+        "crash-edge",
+        "crash-video-gateway",
+        "crash-primary",
+      ].includes(id) &&
       (!this.frame?.mediaAvailable ||
         !this.frame.media.some(
           (p) =>
@@ -208,7 +223,60 @@ export class ChaosEngine {
         ))
     )
       return "Start a real live source and wait for progressing primary and standby media before a media failure.";
+    if (
+      requireFunctional &&
+      ["crash-api", "crash-video-gateway"].includes(id)
+    ) {
+      if (
+        !this.crashBaseline ||
+        observationFreshness(
+          this.crashBaseline.observedAt,
+          Date.now(),
+          this.c.OBS_STALE_MS,
+        ) !== "fresh"
+      )
+        return "API and video functional baseline has not been verified recently; wait for independent catalog and HLS checks.";
+      if (!this.crashBaseline.api || !this.crashBaseline.gateway)
+        return (
+          this.crashBaseline.reason ||
+          "API/catalog or gateway streaming checks failed; no crash is permitted."
+        );
+    }
     return null;
+  }
+  async refreshCrashBaseline() {
+    if (Date.now() < this.nextCrashBaseline) return;
+    this.nextCrashBaseline =
+      Date.now() + Math.min(3000, this.c.OBS_STALE_MS / 3);
+    let reason =
+      this.availabilityReason() || this.baselineReason("crash-api", false);
+    const unavailable = () => ({
+      observedAt: new Date().toISOString(),
+      api: false,
+      gateway: false,
+      sourceCount: 0,
+      progressingPaths: 0,
+      reason,
+    });
+    if (reason) {
+      this.crashBaseline = unavailable();
+      return;
+    }
+    try {
+      const result = await this.verifier.crashBaseline();
+      this.crashBaseline = {
+        ...result,
+        observedAt: new Date().toISOString(),
+        reason:
+          result.api && result.gateway
+            ? null
+            : "Waiting for actual valid gateway segments to advance. Keep the live source running.",
+      };
+    } catch {
+      reason =
+        "Functional baseline check failed: verify both API catalog reads and real gateway HLS playlists/init/media segments.";
+      this.crashBaseline = unavailable();
+    }
   }
   reason(id: ChaosScenarioId) {
     const s = scenarioFor(id);
@@ -337,6 +405,7 @@ export class ChaosEngine {
       serverTime: new Date().toISOString(),
       staleAfterMs: this.c.OBS_STALE_MS,
       unavailableReason: this.availabilityReason(),
+      crashBaseline: this.crashBaseline,
       observationWindowMs: this.c.CHAOS_OBSERVATION_WINDOW_MS,
       enabled: this.c.enabled,
       databaseAvailable: this.store.available,
@@ -431,7 +500,12 @@ export class ChaosEngine {
         {
           kind: "CREATED",
           at: now,
-          detail: "Administrator confirmed " + scenarioFor(scenario).target,
+          detail:
+            scenario === "crash-api"
+              ? "API CRASH REQUESTED"
+              : scenario === "crash-video-gateway"
+                ? "VIDEO GATEWAY CRASH REQUESTED"
+                : "Administrator confirmed " + scenarioFor(scenario).target,
         },
       ],
       measurements: {
@@ -570,6 +644,7 @@ export class ChaosEngine {
     } catch {
       this.controlAvailable = false;
     }
+    await this.refreshCrashBaseline();
     this.lastCompleted = Date.now();
     for (const e of this.journal.work()) {
       if (!terminal(e.state))
@@ -780,10 +855,17 @@ export class ChaosEngine {
         const baseline = Math.max(...samples);
         e.evidence.networkBaselineMs = baseline;
         e.evidence.networkBaselineSamples = samples.length;
+        e.evidence.circuitRequestsBefore = this.healer!.circuit.requests;
         e.evidence.networkToleranceMs = Math.max(
           this.c.CHAOS_NETWORK_TOLERANCE_MS,
           baseline * 3,
         );
+      }
+      if (e.scenario === "crash-edge") {
+        const route = await this.verifier.edgeRoute("edge-1");
+        if (!route) return;
+        e.evidence.edgeBefore = route.edge;
+        e.evidence.edgeBeforeAt = route.observedAt;
       }
       this.transition(
         e,
@@ -829,6 +911,30 @@ export class ChaosEngine {
       }
       return;
     }
+    if (
+      e.scenario === "crash-edge" &&
+      e.faultConfirmedAt &&
+      !e.evidence.edgeFailoverObservedAt
+    ) {
+      try {
+        const failed = await this.verifier.unavailable("edge-1");
+        if (failed.unavailable) {
+          const route = await this.verifier.edgeRoute("edge-2");
+          if (route && e.evidence.edgeBefore === "edge-1") {
+            e.evidence.edgeAfter = route.edge;
+            e.evidence.edgeFailoverObservedAt = route.observedAt;
+            this.event(
+              e,
+              "EDGE_FAILOVER_VERIFIED",
+              "Live manifest served by edge-2 while edge-1 was unavailable",
+              route.observedAt,
+            );
+          }
+        }
+      } catch {
+        // A failed request is never proof of successful failover.
+      }
+    }
     if (e.state === "FAULT_CONFIRMED") {
       this.transition(
         e,
@@ -853,6 +959,16 @@ export class ChaosEngine {
         );
     }
     if (!this.current()) return;
+    if (temporary(e.scenario)) {
+      const before = e.evidence.circuitRequestsBefore;
+      const requests = this.healer!.circuit.requests;
+      if (
+        typeof before === "number" &&
+        Number.isFinite(requests) &&
+        requests >= before
+      )
+        e.evidence.dependencyReadAttempts = requests - before;
+    }
     if (
       temporary(e.scenario) &&
       e.evidence.lastCircuitState !== this.healer!.circuit.state
@@ -979,7 +1095,16 @@ export class ChaosEngine {
         return;
       }
     }
+    if (
+      ["crash-api", "crash-video-gateway"].includes(e.scenario) &&
+      (!e.incidentDetectedAt ||
+        e.evidence.incidentPredatesFault === true ||
+        Date.parse(e.incidentDetectedAt) > Date.now())
+    )
+      return;
     if (!e.verifiedAt) {
+      if (e.scenario === "crash-edge" && !e.evidence.edgeFailoverObservedAt)
+        return;
       let verified = true;
       if (temporary(e.scenario))
         verified =
@@ -1366,7 +1491,7 @@ export class ChaosEngine {
     e.faultConfirmedAt = f.confirmedAt;
     e.faultExpiresAt = temporary(e.scenario) ? f.expiresAt : null;
     e.cleanup = f.cleanup;
-    e.evidence = { ...f.evidence };
+    e.evidence = { ...e.evidence, ...f.evidence };
     if (f.state !== "CONFIRMED" && f.state !== "CLOSED") {
       this.transition(
         e,
@@ -1374,6 +1499,33 @@ export class ChaosEngine {
         "Fault injection unconfirmed; no replay permitted",
       );
       return;
+    }
+    if (["crash-api", "crash-video-gateway"].includes(e.scenario)) {
+      e.evidence.adapterConfirmedAt = f.confirmedAt;
+      e.faultConfirmedAt = null;
+      if (
+        f.evidence.killAccepted !== true ||
+        f.evidence.stoppedObserved !== true
+      ) {
+        this.event(
+          e,
+          "FAULT_PROBE_PENDING",
+          "An actual stopped target has not been confirmed by the restricted adapter.",
+        );
+        return;
+      }
+      const probe = await this.verifier.unavailable(e.target);
+      e.evidence.unavailableProbe = probe.code;
+      e.evidence.unavailableProbeAt = probe.observedAt;
+      if (!probe.unavailable) {
+        this.event(
+          e,
+          "FAULT_PROBE_PENDING",
+          "The target still answers or the probe is unauthorized; actual unavailability is not confirmed.",
+        );
+        return;
+      }
+      e.faultConfirmedAt = probe.observedAt;
     }
     if (e.scenario === "hang-api") {
       const probe = await this.hangProbe(e.target);

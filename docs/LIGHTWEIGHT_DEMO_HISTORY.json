@@ -1,0 +1,123 @@
+[
+  {
+    "id": "a5ec83a3",
+    "status": "PASS",
+    "verifiedScenarios": 4,
+    "error": null,
+    "failure": null,
+    "occupiedPortStartupProbe": {
+      "exitCode": 1,
+      "timedOut": false,
+      "diagnostic": {
+        "level": 60,
+        "time": 1792874450881,
+        "pid": 134,
+        "hostname": "11bd20bd86c1",
+        "event": "api_startup_failed",
+        "stage": "public_listener",
+        "instanceId": "api-1",
+        "failures": [
+          {
+            "type": "StartupFailure",
+            "message": "API startup failed at public_listener",
+            "stack": "StartupFailure: API startup failed at public_listener\n    at startupStep (/app/services/api/src/startup.ts:29:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async main (/app/services/api/src/server.ts:80:5)"
+          },
+          {
+            "type": "Error",
+            "message": "listen EADDRINUSE: address already in use 0.0.0.0:4000",
+            "code": "EADDRINUSE",
+            "stack": "Error: listen EADDRINUSE: address already in use 0.0.0.0:4000\n    at Server.setupListenHandle [as _listen2] (node:net:2390:16)\n    at listenInCluster (node:net:2499:12)\n    at node:net:2728:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)"
+          }
+        ],
+        "msg": "Platform startup failed"
+      }
+    }
+  },
+  {
+    "id": "3cfc65f0",
+    "status": "FAIL",
+    "verifiedScenarios": 4,
+    "error": "startup_conflict_not_safely_reported",
+    "failure": {
+      "stage": "browser-video-progress",
+      "at": "2026-10-24T20:45:15.567Z",
+      "error": {
+        "name": "Error",
+        "message": "startup_conflict_not_safely_reported"
+      }
+    },
+    "occupiedPortStartupProbe": {
+      "exitCode": null,
+      "timedOut": true
+    }
+  },
+  {
+    "id": "dd756a25",
+    "status": "PASS",
+    "verifiedScenarios": 4,
+    "error": null,
+    "failure": null,
+    "occupiedPortStartupProbe": {
+      "exitCode": 1,
+      "timedOut": false,
+      "diagnostic": {
+        "level": 60,
+        "time": 1792875009565,
+        "pid": 151,
+        "hostname": "8df45b489386",
+        "event": "api_startup_failed",
+        "stage": "public_listener",
+        "instanceId": "api-1",
+        "failures": [
+          {
+            "type": "StartupFailure",
+            "message": "API startup failed at public_listener",
+            "stack": "StartupFailure: API startup failed at public_listener\n    at startupStep (/app/services/api/src/startup.ts:29:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async main (/app/services/api/src/fixture-startup-probe.ts:80:5)"
+          },
+          {
+            "type": "Error",
+            "message": "listen EADDRINUSE: address already in use 0.0.0.0:4000",
+            "code": "EADDRINUSE",
+            "stack": "Error: listen EADDRINUSE: address already in use 0.0.0.0:4000\n    at Server.setupListenHandle [as _listen2] (node:net:2390:16)\n    at listenInCluster (node:net:2499:12)\n    at node:net:2728:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)"
+          }
+        ],
+        "msg": "Platform startup failed"
+      },
+      "trace": "probe:resources:start\nprobe:resources:ready\n{\"event\":\"api_startup_failed\",\"stage\":\"public_listener\",\"instanceId\":\"api-1\",\"failures\":[{\"type\":\"StartupFailure\",\"message\":\"API startup failed at public_listener\",\"stack\":\"StartupFailure: API startup failed at public_listener\\n    at startupStep (/app/services/api/src/startup.ts:29:11)\\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\\n    at async main (/app/services/api/src/fixture-startup-probe.ts:80:5)\"},{\"type\":\"Error\",\"message\":\"listen EADDRINUSE: address already in use 0.0.0.0:4000\",\"code\":\"EADDRINUSE\",\"stack\":\"Error: listen EADDRINUSE: address already in use 0.0.0.0:4000\\n    at Server.setupListenHandle [as _listen2] (node:net:2390:16)\\n    at listenInCluster (node:net:2499:12)\\n    at node:net:2728:7\\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\"}]}\nprobe:cleanup:0:start\nprobe:cleanup:0:done\nprobe:cleanup:1:start\nprobe:cleanup:1:done\nprobe:cleanup:2:start\nprobe:cleanup:2:done\nprobe:cleanup:3:start\nprobe:cleanup:3:done\nprobe:cleanup:4:start\nprobe:cleanup:4:done\n"
+    }
+  },
+  {
+    "id": "a109af7b",
+    "status": "PASS",
+    "verifiedScenarios": 4,
+    "error": null,
+    "occupiedPortStartupProbe": {
+      "exitCode": 1,
+      "timedOut": false,
+      "diagnostic": {
+        "level": 60,
+        "time": 1792875401733,
+        "pid": 148,
+        "hostname": "32de6d3b028a",
+        "event": "api_startup_failed",
+        "stage": "public_listener",
+        "instanceId": "api-1",
+        "failures": [
+          {
+            "type": "StartupFailure",
+            "message": "API startup failed at public_listener",
+            "stack": "StartupFailure: API startup failed at public_listener\n    at startupStep (/app/services/api/src/startup.ts:29:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async main (/app/services/api/src/fixture-startup-probe.ts:80:5)"
+          },
+          {
+            "type": "Error",
+            "message": "listen EADDRINUSE: address already in use 0.0.0.0:4000",
+            "code": "EADDRINUSE",
+            "stack": "Error: listen EADDRINUSE: address already in use 0.0.0.0:4000\n    at Server.setupListenHandle [as _listen2] (node:net:2390:16)\n    at listenInCluster (node:net:2499:12)\n    at node:net:2728:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)"
+          }
+        ],
+        "msg": "Platform startup failed"
+      },
+      "trace": "probe:resources:start\nprobe:resources:ready\n{\"event\":\"api_startup_failed\",\"stage\":\"public_listener\",\"instanceId\":\"api-1\",\"failures\":[{\"type\":\"StartupFailure\",\"message\":\"API startup failed at public_listener\",\"stack\":\"StartupFailure: API startup failed at public_listener\\n    at startupStep (/app/services/api/src/startup.ts:29:11)\\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\\n    at async main (/app/services/api/src/fixture-startup-probe.ts:80:5)\"},{\"type\":\"Error\",\"message\":\"listen EADDRINUSE: address already in use 0.0.0.0:4000\",\"code\":\"EADDRINUSE\",\"stack\":\"Error: listen EADDRINUSE: address already in use 0.0.0.0:4000\\n    at Server.setupListenHandle [as _listen2] (node:net:2390:16)\\n    at listenInCluster (node:net:2499:12)\\n    at node:net:2728:7\\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\"}]}\nprobe:cleanup:0:start\nprobe:cleanup:0:done\nprobe:cleanup:1:start\nprobe:cleanup:1:done\nprobe:cleanup:2:start\nprobe:cleanup:2:done\nprobe:cleanup:3:start\nprobe:cleanup:3:done\nprobe:cleanup:4:start\nprobe:cleanup:4:done\n"
+    }
+  }
+]

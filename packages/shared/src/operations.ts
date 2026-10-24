@@ -128,6 +128,16 @@ export const chaosSnapshotSchema = z.object({
   staleAfterMs: z.number().int().min(6000).max(120000).optional(),
   unavailableReason: z.string().nullable().optional(),
   activeId: z.uuid().nullable(),
+  crashBaseline: z
+    .object({
+      observedAt: stamp,
+      api: z.boolean(),
+      gateway: z.boolean(),
+      sourceCount: z.number().int().min(0).max(5),
+      progressingPaths: z.number().int().min(0).max(5),
+      reason: z.string().nullable(),
+    })
+    .optional(),
   observationWindowMs: z.number().int().min(5000).max(60000).optional(),
   faultDurationMs: z.number().nonnegative(),
   timeoutMs: z.number().nonnegative(),

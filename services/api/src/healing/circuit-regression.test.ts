@@ -1,6 +1,30 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { Circuit } from "./circuit.js";
 afterEach(() => vi.useRealTimers());
+it("backs off failed probes exponentially, caps the delay, and needs two real successes to close", async () => {
+  const c = new Circuit(1, 1000, () => 0);
+  const failed = vi.fn(async () => {
+    throw Error("request timeout");
+  });
+  let now = 0;
+  for (const delay of [1000, 2000, 4000, 8000, 16000, 32000, 60000, 60000]) {
+    await expect(c.execute(failed, now)).rejects.toThrow(
+      "dependency_unavailable",
+    );
+    const count = failed.mock.calls.length;
+    await expect(c.execute(failed, now + delay - 1)).rejects.toThrow(
+      "circuit_open",
+    );
+    expect(failed).toHaveBeenCalledTimes(count);
+    now += delay;
+  }
+  const healthy = vi.fn(async () => ({ status: "available" }));
+  await c.execute(healthy, now);
+  expect(c.state).toBe("HALF_OPEN");
+  await c.execute(healthy, now);
+  expect(c.state).toBe("CLOSED");
+  expect(c.snapshot().requests).toBe(10);
+});
 it("starts the open interval after a slow failure, not before the request", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(0);

@@ -2,6 +2,7 @@ import { Pool } from "pg";
 import { createClient } from "redis";
 import type { Logger } from "pino";
 import type { PlatformConfig } from "./config.js";
+import { startupStep } from "../startup.js";
 export function createResources(c: PlatformConfig, logger: Logger) {
   const db = new Pool({
     host: c.POSTGRES_HOST,
@@ -52,8 +53,10 @@ export function createResources(c: PlatformConfig, logger: Logger) {
     pub,
     sub,
     async start() {
-      await db.query("SELECT 1");
-      await Promise.all([redis.connect(), pub.connect(), sub.connect()]);
+      await startupStep("postgres", () => db.query("SELECT 1"));
+      await startupStep("redis", () =>
+        Promise.all([redis.connect(), pub.connect(), sub.connect()]),
+      );
     },
     async close() {
       await Promise.allSettled([

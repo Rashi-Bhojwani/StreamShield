@@ -1,3 +1,4 @@
+import { CrashDemonstration, Demonstration } from "./Demonstration";
 import { beforeAll, afterAll, expect, it, vi } from "vitest";
 import {
   render,
@@ -8,7 +9,11 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import type { ChaosSnapshot, ChaosExperiment } from "@streamshield/shared";
+import type {
+  ChaosSnapshot,
+  ChaosExperiment,
+  ComponentObservation,
+} from "@streamshield/shared";
 import { primaryDemoIds } from "@streamshield/shared";
 import { AuthContext, type Auth } from "../platform/auth-context";
 import { RequestError } from "../platform/request";
@@ -339,4 +344,135 @@ it("keeps a safely closed failed demo failed while allowing a new verified-ready
     "data-verified",
     "false",
   );
+});
+
+it("shows verified healthy recovery during cooldown while keeping injection disabled", async () => {
+  const f = fixture();
+  await f.call("/monitoring/chaos/experiments", {
+    method: "POST",
+    body: JSON.stringify({
+      id: crypto.randomUUID(),
+      scenario: "crash-api",
+      confirmation: "api-1",
+    }),
+  });
+  const e = f.state.experiments[0]!,
+    at = new Date().toISOString();
+  e.state = "COMPLETED";
+  e.verifiedAt = at;
+  e.finishedAt = at;
+  e.evidence.independentBehaviorVerified = true;
+  f.state = {
+    ...f.state,
+    activeId: null,
+    scenarios: f.state.scenarios.map((s) =>
+      s.id === "crash-api"
+        ? { ...s, available: false, reason: "Target cooldown remains active" }
+        : s,
+    ),
+  };
+  f.mount(
+    <Demonstration
+      components={[
+        {
+          id: "api-1",
+          name: "API-1",
+          state: "HEALTHY",
+        } as ComponentObservation,
+      ]}
+    />,
+  );
+  await screen.findByText("HEALED", { exact: true });
+  expect(
+    screen.getByRole("button", { name: "Run failure demonstration" }),
+  ).toBeDisabled();
+});
+
+it("offers only the two explicitly labelled crash actions on the focused page", async () => {
+  const f = fixture();
+  f.state = {
+    ...f.state,
+    crashBaseline: {
+      observedAt: new Date().toISOString(),
+      api: true,
+      gateway: true,
+      sourceCount: 1,
+      progressingPaths: 1,
+      reason: null,
+    },
+  };
+  const { container } = f.mount(<CrashDemonstration />);
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Simulate API Crash" }),
+    ).toBeEnabled(),
+  );
+  expect(
+    screen.getByRole("button", { name: "Simulate Video Gateway Crash" }),
+  ).toBeEnabled();
+  expect(
+    [...container.querySelectorAll("[data-scenario]")].map((n) =>
+      n.getAttribute("data-scenario"),
+    ),
+  ).toEqual(["crash-api", "crash-video-gateway"]);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Simulate Video Gateway Crash" }),
+  );
+  expect(screen.getByRole("dialog")).toHaveTextContent("video-gateway");
+  expect(
+    f.call.mock.calls.some(([, options]) => options?.method === "POST"),
+  ).toBe(false);
+});
+it.each(["missing", "stale", "invalid-media"])(
+  "blocks both crash actions on %s functional baseline",
+  async (kind) => {
+    const f = fixture();
+    if (kind !== "missing")
+      f.state = {
+        ...f.state,
+        crashBaseline: {
+          observedAt: new Date(
+            Date.now() - (kind === "stale" ? 20000 : 0),
+          ).toISOString(),
+          api: true,
+          gateway: kind !== "invalid-media",
+          sourceCount: 1,
+          progressingPaths: kind === "invalid-media" ? 0 : 1,
+          reason: "Gateway streaming is not verified",
+        },
+      };
+    f.mount(<CrashDemonstration />);
+    await waitFor(() => expect(f.call).toHaveBeenCalled());
+    expect(
+      screen.getByRole("button", { name: "Simulate API Crash" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Simulate Video Gateway Crash" }),
+    ).toBeDisabled();
+    expect(screen.queryByText("SYSTEM HEALTHY")).not.toBeInTheDocument();
+  },
+);
+
+it("shows the actual failed recovery reason without a recovered label on the focused page", async () => {
+  const f = fixture();
+  await f.call("/monitoring/chaos/experiments", {
+    method: "POST",
+    body: JSON.stringify({
+      id: crypto.randomUUID(),
+      scenario: "crash-api",
+      confirmation: "api-1",
+    }),
+  });
+  const e = f.state.experiments[0]!;
+  e.state = "TIMED_OUT";
+  e.injectedAt = new Date().toISOString();
+  e.finishedAt = e.injectedAt;
+  e.reason = "Actual catalog verification did not recover before the deadline";
+  f.mount(<CrashDemonstration />);
+  await screen.findByText("RECOVERY FAILED");
+  expect(
+    screen.getByText("RECOVERY FAILED").closest('[role="status"]'),
+  ).toHaveTextContent(e.reason);
+  expect(screen.queryByText("API RECOVERED")).not.toBeInTheDocument();
+  expect(screen.queryByText("SYSTEM HEALTHY")).not.toBeInTheDocument();
 });

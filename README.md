@@ -1,5 +1,7 @@
 # StreamShield Live + Control
 
+**Lightweight four-scenario self-healing demo:** `npm.cmd run demo:light` starts the existing site with real API/gateway recovery, separate active/backup edges and scoped network timeouts, without Grafana or Prometheus. `npm.cmd run test:light-four` verifies the four scenarios sequentially. [Windows setup and safe GitHub checkout](docs/LIGHTWEIGHT_DEMO.md) · [Verified Linux results and screenshots](docs/LIGHTWEIGHT_DEMO_RESULTS.md). The full telemetry test remains optional with its original disk guard.
+
 **Current four-scenario repair:** [UI, safe stale-recovery reconciliation, actual checks, Windows diagnosis/run instructions and remaining blockers](docs/FOUR_SCENARIO_REPAIR_RESULTS.md). Full live acceptance is PARTIAL; mocked UI screenshots and historical final-demo measurements are separate evidence.
 
 ## Final presentation build

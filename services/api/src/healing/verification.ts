@@ -1,3 +1,5 @@
+import { validHlsInit, validHlsSegment } from "./media-bytes.js";
+import { failedProbe } from "../monitoring/policy.js";
 import { observationFreshness } from "@streamshield/shared";
 import { readFileSync } from "node:fs";
 import { connect } from "node:net";
@@ -94,7 +96,7 @@ export class Verifier {
     }
     return r;
   }
-  async text(url: string, headers: Record<string, string> = {}) {
+  async bytes(url: string, headers: Record<string, string> = {}) {
     const r = await this.response(url, headers);
     const reader = r.body!.getReader();
     const chunks: Uint8Array[] = [];
@@ -110,7 +112,10 @@ export class Verifier {
     } finally {
       await reader.cancel();
     }
-    return Buffer.concat(chunks).toString("utf8");
+    return Buffer.concat(chunks);
+  }
+  async text(url: string, headers: Record<string, string> = {}) {
+    return (await this.bytes(url, headers)).toString("utf8");
   }
   async frame(): Promise<Frame> {
     const raw = JSON.parse(
@@ -208,7 +213,21 @@ export class Verifier {
       if (!last) throw new Error("segment_missing");
       const segment = new URL(last.trim(), variant);
       this.safe(segment, root);
-      if (!(await this.text(segment.href, headers)).length)
+      if (component === "video-gateway") {
+        const map = playlist
+          .split("\n")
+          .find((line) => line.startsWith("#EXT-X-MAP:"));
+        if (map) {
+          const uri = /URI="([^"]+)"/.exec(map)?.[1];
+          if (!uri) throw new Error("gateway_hls_init_missing");
+          const init = new URL(uri, variant);
+          this.safe(init, root);
+          if (!validHlsInit(await this.bytes(init.href, headers)))
+            throw new Error("gateway_hls_init_invalid");
+        }
+        if (!validHlsSegment(await this.bytes(segment.href, headers), !!map))
+          throw new Error("gateway_hls_segment_invalid");
+      } else if (!(await this.text(segment.href, headers)).length)
         throw new Error("segment_empty");
       const key = component + ":" + source + ":" + path,
         old = this.segments.get(key),
@@ -226,6 +245,68 @@ export class Verifier {
       paths: paths.length,
       progressing: good,
     };
+  }
+  async crashBaseline() {
+    for (const component of ["api-1", "api-2"]) {
+      const ready = JSON.parse(await this.text(this.url(component)));
+      if (ready.status !== "ready") throw new Error("api_readiness_unverified");
+      const catalog = JSON.parse(
+        await this.text(this.url(component, "/api/v1/streams")),
+      );
+      if (!Array.isArray(catalog.streams))
+        throw new Error("api_catalog_unverified");
+    }
+    const catalog = JSON.parse(
+      await this.text(this.url("api-gateway", "/api/v1/streams")),
+    );
+    if (!Array.isArray(catalog.streams))
+      throw new Error("gateway_catalog_unverified");
+    const paths = await this.paths();
+    if (!paths.length) throw new Error("live_source_required");
+    const result = await this.hls("video-gateway", paths);
+    return {
+      api: true,
+      gateway: result.ok && result.progressing > 0,
+      sourceCount: paths.length,
+      progressingPaths: result.progressing,
+    };
+  }
+  async unavailable(component: string) {
+    const observedAt = new Date().toISOString();
+    try {
+      const r = await fetch(this.url(component), {
+        redirect: "error",
+        signal: AbortSignal.timeout(this.c.HEALER_PROBE_TIMEOUT_MS),
+      });
+      await r.body?.cancel();
+      return {
+        unavailable: !r.ok && ![401, 403].includes(r.status),
+        code: "http_" + r.status,
+        observedAt,
+      };
+    } catch (error) {
+      const probe = failedProbe(error, 0);
+      return {
+        unavailable: probe.state !== "UNKNOWN",
+        code: probe.code,
+        observedAt,
+      };
+    }
+  }
+  /** Serving identity is accepted only with a successful real live manifest. */
+  async edgeRoute(expected: "edge-1" | "edge-2") {
+    const paths = await this.paths();
+    if (!paths.length) return null;
+    for (let i = 0; i < 3; i++) {
+      const r = await this.response(
+        this.url("video-gateway", "/primary/" + paths[0] + "/index.m3u8"),
+      );
+      const edge = r.headers.get("x-edge-id");
+      const text = await r.text();
+      if (edge === expected && text.startsWith("#EXTM3U"))
+        return { edge, observedAt: new Date().toISOString() };
+    }
+    return null;
   }
   private safe(value: URL, root: URL) {
     if (

@@ -1,6 +1,10 @@
 import { expect, it } from "vitest";
 import type { ChaosExperiment } from "@streamshield/shared";
-import { demoProgress, blockedNextStep } from "./demo-model";
+import {
+  demoProgress,
+  blockedNextStep,
+  scenarioPresentationState,
+} from "./demo-model";
 const now = Date.now();
 const experiment = {
   state: "VERIFYING",
@@ -14,6 +18,24 @@ const experiment = {
   evidence: { observationWindowMs: 15000 },
   events: [],
 } as unknown as ChaosExperiment;
+it("never labels unverified, stale, or failed recovery HEALED", () => {
+  expect(scenarioPresentationState(undefined, true, true)).toBe("HEALTHY");
+  expect(scenarioPresentationState(experiment, false, true)).toBe("RECOVERING");
+  const healed = {
+    ...experiment,
+    state: "COMPLETED" as const,
+    verifiedAt: new Date(now).toISOString(),
+    evidence: { independentBehaviorVerified: true },
+  };
+  expect(scenarioPresentationState(healed, true, true)).toBe("HEALED");
+  expect(
+    scenarioPresentationState({ ...healed, verifiedAt: null }, true, true),
+  ).toBe("DEGRADED");
+  expect(scenarioPresentationState(healed, true, false)).toBe("DEGRADED");
+  expect(
+    scenarioPresentationState({ ...healed, state: "TIMED_OUT" }, true, true),
+  ).toBe("DEGRADED");
+});
 it("does not turn elapsed observation time into verified recovery", () => {
   const p = demoProgress(experiment, now);
   expect(p.observationRemainingMs).toBe(0);

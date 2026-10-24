@@ -40,7 +40,13 @@ function fixture() {
       sync: vi.fn().mockResolvedValue(undefined),
       check: vi.fn().mockResolvedValue(undefined),
     };
-  const verifier = {} as Verifier;
+  const verifier = {
+    unavailable: vi.fn().mockResolvedValue({
+      unavailable: true,
+      code: "probe_unreachable",
+      observedAt: new Date().toISOString(),
+    }),
+  } as unknown as Verifier;
   const engine = new ChaosEngine(
     chaosConfig(env),
     j,
@@ -108,6 +114,14 @@ function fixture() {
     ),
   } as unknown as HealingSnapshot;
   engine.controlAvailable = true;
+  engine.crashBaseline = {
+    observedAt: new Date().toISOString(),
+    api: true,
+    gateway: true,
+    sourceCount: 1,
+    progressingPaths: 1,
+    reason: null,
+  };
   return { engine, j, store };
 }
 async function submitted() {
@@ -389,6 +403,10 @@ describe("durable chaos lifecycle", () => {
       .fn()
       .mockResolvedValueOnce({ ok: false })
       .mockResolvedValue({ ok: true });
+    engine.verifier.edgeRoute = vi.fn().mockResolvedValue({
+      edge: "edge-1",
+      observedAt: new Date().toISOString(),
+    });
     const control = vi.spyOn(engine, "control").mockResolvedValue({
       state: "CONFIRMED",
       injectedAt: new Date().toISOString(),
@@ -431,6 +449,27 @@ describe("durable chaos lifecycle", () => {
       e.events.filter((x) => x.kind.startsWith("CIRCUIT_")).map((x) => x.kind),
     ).toEqual(["CIRCUIT_OPEN", "CIRCUIT_HALF_OPEN", "CIRCUIT_OPEN"]);
   });
+  it.each([false, true])(
+    "records backup serving only while the failed edge is independently unavailable (%s)",
+    async (unavailable) => {
+      const { engine, e } = await submitted();
+      e.scenario = "crash-edge";
+      e.target = "edge-1";
+      e.state = "FAULT_CONFIRMED";
+      e.faultConfirmedAt = new Date().toISOString();
+      e.evidence.edgeBefore = "edge-1";
+      engine.verifier.unavailable = vi.fn().mockResolvedValue({ unavailable });
+      engine.verifier.edgeRoute = vi.fn().mockResolvedValue({
+        edge: "edge-2",
+        observedAt: new Date().toISOString(),
+      });
+      await engine["advance"](e);
+      expect(!!e.evidence.edgeFailoverObservedAt).toBe(unavailable);
+      expect(e.events.some((x) => x.kind === "EDGE_FAILOVER_VERIFIED")).toBe(
+        unavailable,
+      );
+    },
+  );
 });
 
 const attempt = (
@@ -481,6 +520,8 @@ async function settle(engine: ChaosEngine, id: string, j: ChaosJournal) {
     for (const c of engine.frame!.components)
       c.observedAt = new Date(at).toISOString();
     engine.healer!.observedAt = new Date(at).toISOString();
+    if (engine.crashBaseline)
+      engine.crashBaseline.observedAt = new Date(at).toISOString();
     await engine["advance"](j.get(id)!);
   }
 }

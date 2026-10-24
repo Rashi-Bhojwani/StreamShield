@@ -1,3 +1,4 @@
+import { CrashDemonstration } from "./Demonstration";
 import {
   observationFreshness,
   idleLoadObservation,
@@ -860,6 +861,9 @@ function Console() {
           <NavLink to="/control/capacity">
             <span>⌁</span>Capacity
           </NavLink>
+          <NavLink to="/control/self-healing">
+            <span>↻</span>API + video demo
+          </NavLink>
           <NavLink to="/control/chaos">
             <span>ϟ</span>Chaos Lab
           </NavLink>
@@ -1033,6 +1037,12 @@ function Console() {
               <Route
                 path="three-stream-demo"
                 element={<ThreeStreamDemo snapshot={s} />}
+              />
+              <Route
+                path="self-healing"
+                element={
+                  <CrashDemonstration components={s.components} stale={stale} />
+                }
               />
               <Route
                 path="chaos"

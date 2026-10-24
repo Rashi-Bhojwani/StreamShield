@@ -66,6 +66,7 @@ export type ExperimentEventKind =
   | "BASELINE_REVERIFIED"
   | "FAULT_PROBE_PENDING"
   | "TARGET_VERIFIED"
+  | "EDGE_FAILOVER_VERIFIED"
   | "BROADCASTER_CLIENT_RECONNECTED"
   | "BROADCASTER_NOT_RETURNED"
   | "BROWSER_EVIDENCE"
@@ -125,9 +126,20 @@ export interface ChaosSnapshot {
   staleAfterMs?: number;
   unavailableReason?: string | null;
   activeId: string | null;
+  crashBaseline?: CrashBaselineObservation;
   observationWindowMs?: number;
   faultDurationMs: number;
   timeoutMs: number;
   scenarios: ChaosScenario[];
   experiments: ChaosExperiment[];
+}
+
+/** Independent read checks for the focused API + gateway demonstration. */
+export interface CrashBaselineObservation {
+  observedAt: string;
+  api: boolean;
+  gateway: boolean;
+  sourceCount: number;
+  progressingPaths: number;
+  reason: string | null;
 }

@@ -20,6 +20,25 @@ export const demoNames = {
 const completed = (e: ChaosExperiment) =>
   ["COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state);
 export const demoTerminal = completed;
+export function scenarioPresentationState(
+  e: ChaosExperiment | undefined,
+  healthy: boolean,
+  fresh: boolean,
+) {
+  if (!fresh) return "DEGRADED";
+  if (e && !completed(e))
+    return e.actionStartedAt || e.state === "VERIFYING" || !e.faultConfirmedAt
+      ? "RECOVERING"
+      : "FAILED";
+  if (e && ["FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state))
+    return "DEGRADED";
+  if (!healthy) return "DEGRADED";
+  if (e?.state === "COMPLETED")
+    return e.verifiedAt && e.evidence.independentBehaviorVerified === true
+      ? "HEALED"
+      : "DEGRADED";
+  return "HEALTHY";
+}
 export function demoProgress(
   e: ChaosExperiment | undefined,
   now: number,
