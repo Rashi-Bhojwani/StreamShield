@@ -50,6 +50,7 @@ function fixture() {
     serverTime: stamp,
     staleAfterMs: 12000,
     activeId: null,
+    observationWindowMs: 15000,
     faultDurationMs: 8000,
     timeoutMs: 180000,
     scenarios: scenarios.map((s) => ({
@@ -136,7 +137,7 @@ function fixture() {
     },
   };
 }
-it("renders exactly the same five primary scenarios on Chaos, Demo and Presentation", async () => {
+it("renders exactly the same four primary scenarios on Chaos, Demo and Presentation", async () => {
   for (const page of [
     <ChaosLab />,
     <ChaosDemo components={[]} stale={false} topology={null} />,
@@ -145,25 +146,16 @@ it("renders exactly the same five primary scenarios on Chaos, Demo and Presentat
     const f = fixture(),
       { container } = f.mount(page);
     await waitFor(() => expect(f.call).toHaveBeenCalled());
-    if (container.querySelector(".chaos-demo")) {
-      await waitFor(() =>
-        expect(
-          screen.getByRole("combobox", { name: "Demo failure scenario" })
-            .children,
-        ).toHaveLength(5),
-      );
-      const select = screen.getByRole("combobox", {
-        name: "Demo failure scenario",
-      }) as HTMLSelectElement;
-      expect([...select.options].map((o) => o.value)).toEqual(primaryDemoIds);
-    } else
-      await waitFor(() =>
-        expect(
-          [...container.querySelectorAll("[data-scenario]")].map((n) =>
-            n.getAttribute("data-scenario"),
-          ),
-        ).toEqual(primaryDemoIds),
-      );
+    await waitFor(() =>
+      expect(
+        [...container.querySelectorAll("[data-scenario]")].map((n) =>
+          n.getAttribute("data-scenario"),
+        ),
+      ).toEqual(primaryDemoIds),
+    );
+    expect(
+      screen.getAllByRole("button", { name: "Run failure demonstration" }),
+    ).toHaveLength(1);
     cleanup();
   }
 });
@@ -185,20 +177,23 @@ it("disables all Presentation buttons on stale data even when old scenario avail
   };
   const { container } = f.mount(<Presentation components={[]} stale={false} />);
   await waitFor(() =>
-    expect(container.querySelectorAll("button[data-scenario]")).toHaveLength(5),
+    expect(container.querySelectorAll("button[data-scenario]")).toHaveLength(4),
   );
-  for (const button of container.querySelectorAll("button[data-scenario]"))
-    expect(button).toBeDisabled();
   expect(
-    screen.getAllByText(/Monitoring data is stale/).length,
-  ).toBeGreaterThan(0);
+    screen.getByRole("button", { name: "Run failure demonstration" }),
+  ).toBeDisabled();
+  await waitFor(() =>
+    expect(
+      screen.getAllByText(/Monitoring data is stale/).length,
+    ).toBeGreaterThan(0),
+  );
 });
 async function configure() {
-  fireEvent.click(
-    (
-      await screen.findAllByRole("button", { name: /Configure experiment/ })
-    )[0]!,
-  );
+  const run = await screen.findByRole("button", {
+    name: "Run failure demonstration",
+  });
+  await waitFor(() => expect(run).toBeEnabled());
+  fireEvent.click(run);
   expect(screen.getByRole("dialog")).toBeVisible();
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.change(screen.getByLabelText("Confirm target"), {
@@ -215,7 +210,11 @@ it("opens exact-target configuration and displays validating without claiming in
   await waitFor(() =>
     expect(f.call.mock.calls.some(([, o]) => o?.method === "POST")).toBe(true),
   );
-  await screen.findByText("VALIDATING");
+  await screen.findByText("Awaiting actual fault confirmation");
+  expect(document.querySelector('[data-stage="1"]')).toHaveAttribute(
+    "data-verified",
+    "false",
+  );
   expect(screen.queryByText("FAULT CONFIRMED")).not.toBeInTheDocument();
 });
 it("rechecks freshness when confirming an already-open dialog", async () => {
@@ -251,4 +250,93 @@ it("retains a server denial and never creates a false injected state", async () 
   );
   await screen.findByText("Previous recovery is not verified");
   expect(screen.queryByText("FAULT CONFIRMED")).not.toBeInTheDocument();
+});
+
+it("prevents duplicate confirmation submissions with a single durable experiment ID", async () => {
+  const f = fixture();
+  f.mount(<ChaosLab />);
+  await configure();
+  const button = screen.getByRole("button", {
+    name: "Inject controlled failure",
+  });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(
+      f.call.mock.calls.filter(([, o]) => o?.method === "POST"),
+    ).toHaveLength(1),
+  );
+});
+it("reconnects a refreshed view to the active experiment without opening a new fault", async () => {
+  const f = fixture();
+  const id = crypto.randomUUID();
+  await f.call("/monitoring/chaos/experiments", {
+    method: "POST",
+    body: JSON.stringify({ id, scenario: "crash-api", confirmation: "api-1" }),
+  });
+  f.call.mockClear();
+  f.mount(<ChaosLab />);
+  await screen.findByText("Experiment " + id);
+  expect(
+    screen.getByRole("button", { name: "Run failure demonstration" }),
+  ).toBeDisabled();
+  expect(f.call.mock.calls.some(([, o]) => o?.method === "POST")).toBe(false);
+});
+it("keeps polling readiness without a WebSocket connection", async () => {
+  const f = fixture();
+  f.mount(<ChaosLab />);
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Run failure demonstration" }),
+    ).toBeEnabled(),
+  );
+  f.state = {
+    ...f.state,
+    available: false,
+    unavailableReason: "Independent Healer is reconnecting",
+  };
+  await waitFor(
+    () =>
+      expect(
+        screen.getByRole("button", { name: "Run failure demonstration" }),
+      ).toBeDisabled(),
+    { timeout: 4500 },
+  );
+  expect(
+    f.call.mock.calls.filter(([path]) => path === "/monitoring/chaos").length,
+  ).toBeGreaterThan(1);
+});
+it("keeps a safely closed failed demo failed while allowing a new verified-ready scenario", async () => {
+  const f = fixture();
+  await f.call("/monitoring/chaos/experiments", {
+    method: "POST",
+    body: JSON.stringify({
+      id: crypto.randomUUID(),
+      scenario: "crash-api",
+      confirmation: "api-1",
+    }),
+  });
+  const e = f.state.experiments[0]!,
+    at = new Date().toISOString();
+  e.state = "TIMED_OUT";
+  e.injectedAt = at;
+  e.finishedAt = at;
+  e.evidence.terminalBaselineReverifiedAt = at;
+  e.events.push({
+    kind: "BASELINE_REVERIFIED",
+    at,
+    detail: "Independent safe baseline checks passed",
+  });
+  f.state = { ...f.state, activeId: null, experiments: [e] };
+  f.mount(<ChaosLab />);
+  await screen.findByRole("heading", {
+    name: "Previous demo failed; safe baseline reverified",
+  });
+  expect(
+    screen.getByRole("button", { name: "Run failure demonstration" }),
+  ).toBeEnabled();
+  expect(document.querySelector('[data-stage="6"]')).toHaveAttribute(
+    "data-verified",
+    "false",
+  );
 });

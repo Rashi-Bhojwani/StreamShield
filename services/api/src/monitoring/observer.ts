@@ -192,14 +192,22 @@ async function tierProbe(started: number): Promise<Probe> {
   if (!process.env.PROMETHEUS_URL)
     return { state: "UNKNOWN", code: "metrics_unavailable", latencyMs: null };
   try {
-    const [p95, errors, rps, limited] = await Promise.all([
+    const rps = await promScalar(
+      'sum(rate(streamshield_http_requests_total{job="api"}[20s]))',
+    );
+    if (rps === 0)
+      return {
+        state: "UNKNOWN",
+        code: "metrics_no_requests",
+        latencyMs: Math.round(performance.now() - started),
+      };
+    const [p95, errors, limited] = await Promise.all([
       promScalar(
         'histogram_quantile(0.95,sum by(le)(rate(streamshield_http_request_duration_seconds_bucket{job="api"}[20s])))*1000',
       ),
       promScalar(
         '100*(sum(rate(streamshield_http_requests_total{job="api",category="5xx"}[20s])) or vector(0))/clamp_min(sum(rate(streamshield_http_requests_total{job="api"}[20s])),0.000001)',
       ),
-      promScalar('sum(rate(streamshield_http_requests_total{job="api"}[20s]))'),
       promScalar(
         'sum(rate(streamshield_http_limited_total{job="api"}[20s])) or vector(0)',
       ),

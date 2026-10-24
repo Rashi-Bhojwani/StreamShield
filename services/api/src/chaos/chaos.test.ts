@@ -16,6 +16,7 @@ const env = {
   CHAOS_CONTROL_SECRET: "b".repeat(43),
   CHAOS_ENABLED: "true",
   CHAOS_ENVIRONMENT: "local-development",
+  CHAOS_OBSERVATION_WINDOW_MS: "5000",
 };
 const journals: ChaosJournal[] = [];
 const dirs: string[] = [];
@@ -47,8 +48,39 @@ function fixture() {
     verifier,
   );
   engine.frame = {
-    components: [],
-    media: [],
+    components: [
+      "postgres",
+      "redis",
+      "api-1",
+      "api-2",
+      "api-gateway",
+      "relay",
+      "origin-primary",
+      "origin-standby",
+      "edge-1",
+      "edge-2",
+      "video-gateway",
+      "demo-dependency",
+    ].map((id) => ({
+      id,
+      state: "HEALTHY",
+      observedAt: new Date().toISOString(),
+      code: "probe_ok",
+    })) as never,
+    media: [
+      {
+        path: "live",
+        publisher: true,
+        checkedAt: new Date().toISOString(),
+        sources: ["primary", "standby"].map((id) => ({
+          id,
+          manifest: true,
+          segment: true,
+          fresh: true,
+          code: "verified",
+        })),
+      },
+    ] as never,
     mediaAvailable: true,
     lastCompleted: Date.now(),
     persistence: true,
@@ -443,10 +475,14 @@ async function injected(
 async function settle(engine: ChaosEngine, id: string, j: ChaosJournal) {
   // Two observations 2 s apart satisfy the stability window.
   const now = Date.now();
-  vi.spyOn(Date, "now").mockReturnValue(now);
-  await engine["advance"](j.get(id)!);
-  vi.spyOn(Date, "now").mockReturnValue(now + 2500);
-  await engine["advance"](j.get(id)!);
+  for (const at of [now, now + 6000]) {
+    vi.spyOn(Date, "now").mockReturnValue(at);
+    engine.frame!.lastCompleted = at;
+    for (const c of engine.frame!.components)
+      c.observedAt = new Date(at).toISOString();
+    engine.healer!.observedAt = new Date(at).toISOString();
+    await engine["advance"](j.get(id)!);
+  }
 }
 describe("final self-healing scenarios", () => {
   it("lists the core five first, each with a real-world cause and expected receipt", () => {
@@ -659,6 +695,7 @@ describe("traffic surge", () => {
     const { engine } = fixture();
     expect(engine.reason("traffic-surge")).toContain("spare API-3");
     engine.frame!.components = [
+      ...engine.frame!.components,
       {
         id: "api-3",
         state: "UNKNOWN",
@@ -737,4 +774,189 @@ it("does not admit another fault on a restart receipt without completed function
     },
   ] as never;
   expect(engine.reason("crash-redis")).toBeNull();
+});
+
+it("rejects missing critical observations and idle media before any injection", () => {
+  const { engine } = fixture();
+  engine.frame!.components = engine.frame!.components.filter(
+    (c) => c.id !== "api-2",
+  );
+  expect(engine.reason("crash-api")).toContain("api-2");
+  const f = fixture();
+  f.engine.frame!.media = [];
+  expect(f.engine.reason("crash-video-gateway")).toContain("real live source");
+  expect(f.engine.reason("crash-edge")).toContain("real live source");
+});
+it("keeps idle logical load UNKNOWN without blocking a healthy API crash baseline", () => {
+  const { engine } = fixture();
+  engine.frame!.components.push({
+    id: "api-tier",
+    state: "UNKNOWN",
+    code: "metrics_no_requests",
+    observedAt: new Date().toISOString(),
+  } as never);
+  expect(engine.reason("crash-api")).toBeNull();
+  expect(engine.reason("traffic-surge")).toContain("baseline");
+  engine.frame!.components.at(-1)!.code = "metrics_unavailable";
+  expect(engine.reason("crash-api")).toContain("metrics_unavailable");
+});
+it("separates genuine recovery duration from the persisted minimum observation window", async () => {
+  vi.useFakeTimers();
+  try {
+    const { engine, e, j } = await injected("hang-api", "api-2");
+    engine.healer!.attempts = [
+      attempt("api-2", {
+        playbook: "api-restart-unresponsive",
+        action: "restart_unresponsive_service",
+        evidence: { controlReceipt: "docker_restart_accepted" },
+      }),
+    ];
+    await engine["advance"](j.get(e.id)!);
+    await vi.advanceTimersByTimeAsync(2500);
+    await engine["advance"](j.get(e.id)!);
+    const early = j.get(e.id)!;
+    expect(early.state).toBe("VERIFYING");
+    expect(early.verifiedAt).toBeTruthy();
+    expect(early.measurements.restorationMs).toBe(2500);
+    expect(early.measurements.demonstrationMs).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(3000);
+    await engine["advance"](j.get(e.id)!);
+    expect(j.get(e.id)).toMatchObject({
+      state: "COMPLETED",
+      measurements: { restorationMs: 2500, demonstrationMs: 5500 },
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("does not finish the observation window if subsequent behavioral verification fails", async () => {
+  vi.useFakeTimers();
+  try {
+    const { engine, e, j } = await injected("hang-api", "api-2");
+    engine.healer!.attempts = [
+      attempt("api-2", {
+        playbook: "api-restart-unresponsive",
+        action: "restart_unresponsive_service",
+        evidence: { controlReceipt: "docker_restart_accepted" },
+      }),
+    ];
+    await engine["advance"](j.get(e.id)!);
+    await vi.advanceTimersByTimeAsync(2500);
+    await engine["advance"](j.get(e.id)!);
+    expect(j.get(e.id)!.verifiedAt).toBeTruthy();
+    vi.mocked(engine.verifier.verify).mockResolvedValue({
+      ok: false,
+      evidence: {},
+    });
+    await vi.advanceTimersByTimeAsync(3000);
+    await engine["advance"](j.get(e.id)!);
+    expect(j.get(e.id)!.state).not.toBe("COMPLETED");
+    expect(j.get(e.id)!.verifiedAt).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("retains the precise admission reason when a prerequisite changes after the browser refresh", async () => {
+  const { engine } = fixture();
+  engine.frame!.components.find((c) => c.id === "api-2")!.state = "DEGRADED";
+  await expect(
+    engine.submit(randomUUID(), randomUUID(), "crash-api", "api-1"),
+  ).rejects.toMatchObject({
+    message: "prerequisites_unavailable",
+    reason: expect.stringContaining("api-2"),
+  });
+});
+
+it("expires stale recovery state and admits a new scenario only after durable independent baseline reverification", async () => {
+  vi.useFakeTimers();
+  try {
+    const { engine, e, j } = await submitted();
+    e.state = "VERIFYING";
+    e.injectedAt = new Date(Date.now() - 180001).toISOString();
+    e.faultConfirmedAt = e.injectedAt;
+    e.deadline = Date.now() - 1;
+    j.save(e);
+    vi.spyOn(engine, "control").mockResolvedValue({ cleanup: "NOT_REQUIRED" });
+    engine.verifier.verify = vi.fn().mockResolvedValue({
+      ok: true,
+      evidence: { applicationReadVerified: true },
+    });
+    await engine["advance"](j.get(e.id)!);
+    expect(j.get(e.id)!.state).toBe("TIMED_OUT");
+    expect(engine.reason("crash-video-gateway")).toContain("unverified");
+    await engine.reconcileTerminalBaseline();
+    expect(engine.reason("crash-video-gateway")).toContain("unverified");
+    await vi.advanceTimersByTimeAsync(2500);
+    await engine.reconcileTerminalBaseline();
+    const closed = j.get(e.id)!;
+    expect(closed).toMatchObject({
+      state: "TIMED_OUT",
+      verifiedAt: null,
+      databasePersisted: true,
+    });
+    expect(closed.events.some((x) => x.kind === "BASELINE_REVERIFIED")).toBe(
+      true,
+    );
+    expect(engine.verifier.verify).toHaveBeenCalledTimes(2);
+    expect(engine.reason("crash-video-gateway")).toBeNull();
+    await expect(
+      engine.submit(
+        randomUUID(),
+        randomUUID(),
+        "crash-video-gateway",
+        "video-gateway",
+      ),
+    ).resolves.toMatchObject({ state: "CREATED" });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it.each([
+  "failed-probe",
+  "cleanup-pending",
+  "healer-busy",
+  "persistence-failed",
+  "stale-observation",
+])("does not clear a terminal safety lock with %s", async (kind) => {
+  vi.useFakeTimers();
+  try {
+    const { engine, e, j, store } = await submitted();
+    e.state = "FAILED";
+    e.injectedAt = new Date().toISOString();
+    e.faultConfirmedAt = e.injectedAt;
+    e.finishedAt = e.injectedAt;
+    j.save(e);
+    engine.verifier.verify = vi
+      .fn()
+      .mockResolvedValue({ ok: kind !== "failed-probe", evidence: {} });
+    if (kind === "cleanup-pending") {
+      e.cleanup = "PENDING";
+      j.save(e);
+    }
+    if (kind === "healer-busy")
+      engine.healer!.attempts = [{ state: "VERIFYING" }] as never;
+    if (kind === "persistence-failed") store.available = false;
+    if (kind === "stale-observation")
+      engine.frame!.lastCompleted = Date.now() - 13000;
+    await engine.reconcileTerminalBaseline();
+    await vi.advanceTimersByTimeAsync(2500);
+    await engine.reconcileTerminalBaseline();
+    expect(j.get(e.id)!.evidence.terminalBaselineReverifiedAt).toBeUndefined();
+    expect(engine.reason("crash-video-gateway")).not.toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("does not treat terminal bookkeeping or a foreign stale baseline marker as verification", async () => {
+  const { engine, e, j } = await submitted();
+  e.state = "TIMED_OUT";
+  e.injectedAt = new Date().toISOString();
+  e.faultConfirmedAt = e.injectedAt;
+  e.finishedAt = e.injectedAt;
+  e.evidence.terminalBaselineReverifiedAt = e.injectedAt;
+  e.evidence.terminalBaselineIdentity = "different-fault";
+  j.save(e);
+  j.synced(e);
+  expect(engine.reason("crash-video-gateway")).toContain("unverified");
 });

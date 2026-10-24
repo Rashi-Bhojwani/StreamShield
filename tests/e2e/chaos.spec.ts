@@ -514,6 +514,7 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
     const control = await admin.newPage();
     await control.setViewportSize({ width: 1440, height: 1100 });
     await control.goto("/control/chaos");
+    await control.locator(".demo-advanced > summary").click();
     await expect(
       control.getByRole("heading", { name: "Chaos Laboratory", exact: true }),
     ).toBeVisible();
@@ -555,6 +556,7 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
         .toBe(true);
       if (scenario === "crash-edge") {
         await control.goto("/control/demo");
+        await control.locator(".demo-advanced > summary").click();
         await control
           .getByLabel("Demonstration stream")
           .selectOption(streams[0]!);
@@ -566,7 +568,9 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
       const samplers = await Promise.all(pages.map(samplePlayback));
       let id: string;
       if (scenario === "crash-api") {
-        const card = control.locator('[data-scenario="crash-api"]');
+        const card = control.locator(
+          '.demo-advanced [data-scenario="crash-api"]',
+        );
         await card.getByRole("button").click();
         const dialog = control.getByRole("dialog");
         await expect(dialog).toBeVisible();
@@ -779,6 +783,7 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
       (e) => e.scenario === "external-api",
     )!;
     await control.goto("/control/chaos");
+    await control.locator(".demo-advanced > summary").click();
     await control
       .locator('[data-experiment="' + last.id + '"]')
       .getByRole("link", { name: "Inspect correlated incident" })
@@ -788,6 +793,7 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
     ).toBeVisible();
     await expect.poll(() => chaosEvents, { timeout: 15000 }).toBeGreaterThan(0);
     await control.goto("/control/demo");
+    await control.locator(".demo-advanced > summary").click();
     await control.getByLabel("Demonstration stream").selectOption(streams[0]!);
     await advances(control, 640);
     const captures: string[] = [];
@@ -805,10 +811,13 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
       ).toBe(true);
       captures.push("demo-" + width + ".png");
       await control.goto("/control/chaos");
+      await control.locator(".demo-advanced > summary").click();
       await expect(
         control.getByRole("heading", { name: "Chaos Laboratory", exact: true }),
       ).toBeVisible();
-      await expect(control.locator("[data-scenario]")).toHaveCount(5);
+      await expect(
+        control.locator(".demo-advanced [data-scenario]"),
+      ).toHaveCount(4);
       await expect(
         control.locator('[data-experiment="' + last.id + '"]'),
       ).toBeVisible();
@@ -824,6 +833,7 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
       ).toBe(true);
       captures.push("lab-" + width + ".png");
       await control.goto("/control/demo");
+      await control.locator(".demo-advanced > summary").click();
       await control
         .getByLabel("Demonstration stream")
         .selectOption(streams[0]!);

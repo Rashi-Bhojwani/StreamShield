@@ -35,7 +35,7 @@ export interface ChaosScenario {
   /** Every Healer-managed component the fault touches (one receipt each). */
   targets: string[];
   kind: ChaosScenarioKind;
-  /** Core five first; lower sorts earlier in the console. */
+  /** Primary scenarios first; lower sorts earlier in the console. */
   order: number;
   /** One line: what the audience sees in the real product. */
   audienceSees: string;
@@ -63,6 +63,7 @@ export type ExperimentEventKind =
   | "RECEIPT_PENDING"
   | "SERVICE_VERIFIED"
   | "NO_ACCEPTED_FAULT"
+  | "BASELINE_REVERIFIED"
   | "FAULT_PROBE_PENDING"
   | "TARGET_VERIFIED"
   | "BROADCASTER_CLIENT_RECONNECTED"
@@ -111,6 +112,7 @@ export interface ChaosExperiment {
     actionMs: number | null;
     restorationMs: number | null;
     playbackInterruptionMs: number | null;
+    demonstrationMs?: number | null;
   };
 }
 export interface ChaosSnapshot {
@@ -123,6 +125,7 @@ export interface ChaosSnapshot {
   staleAfterMs?: number;
   unavailableReason?: string | null;
   activeId: string | null;
+  observationWindowMs?: number;
   faultDurationMs: number;
   timeoutMs: number;
   scenarios: ChaosScenario[];

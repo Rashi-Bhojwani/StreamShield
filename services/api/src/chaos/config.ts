@@ -153,7 +153,7 @@ const drafts: Draft[] = [
   healer({
     id: "crash-edge",
     order: 8,
-    name: "Crash video Edge-1 (invisible failover)",
+    name: "Edge Node Failure",
     target: "edge-1",
     targets: ["edge-1"],
     expectedReceipt: "docker_start_accepted",
@@ -280,6 +280,8 @@ export function chaosConfig(env: Record<string, string | undefined>) {
       CHAOS_PROBE_TIMEOUT_MS: integer(200, 3000, 1000),
       CHAOS_PORT: integer(1024, 65535, 4030),
       CHAOS_CONTROL_PORT: integer(1024, 65535, 4031),
+      CHAOS_OBSERVATION_WINDOW_MS: integer(5000, 60000, 15000),
+      CHAOS_NETWORK_TOLERANCE_MS: integer(100, 3000, 500),
       CHAOS_FAULT_DURATION_MS: integer(8000, 30000, 15000),
       CHAOS_TIMEOUT_MS: integer(30000, 300000, 180000),
       CHAOS_BROADCASTER_WAIT_MS: integer(5000, 120000, 60000),

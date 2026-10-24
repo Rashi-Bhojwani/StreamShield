@@ -23,10 +23,9 @@ export function observationFreshness(
 }
 export const primaryDemoIds = [
   "crash-api",
-  "crash-redis",
   "crash-video-gateway",
+  "crash-edge",
   "network-timeout",
-  "traffic-surge",
 ] as const satisfies readonly ChaosScenarioId[];
 export const primaryDemoScenarios = (rows: readonly ChaosScenario[]) =>
   primaryDemoIds.flatMap((id) => rows.filter((s) => s.id === id));
@@ -116,6 +115,7 @@ const experimentSchema = z.object({
     actionMs: z.number().nonnegative().nullable(),
     restorationMs: z.number().nonnegative().nullable(),
     playbackInterruptionMs: z.number().nonnegative().nullable(),
+    demonstrationMs: z.number().nonnegative().nullable().optional(),
   }),
 });
 export const chaosSnapshotSchema = z.object({
@@ -128,6 +128,7 @@ export const chaosSnapshotSchema = z.object({
   staleAfterMs: z.number().int().min(6000).max(120000).optional(),
   unavailableReason: z.string().nullable().optional(),
   activeId: z.uuid().nullable(),
+  observationWindowMs: z.number().int().min(5000).max(60000).optional(),
   faultDurationMs: z.number().nonnegative(),
   timeoutMs: z.number().nonnegative(),
   scenarios: z
@@ -238,3 +239,13 @@ export function parseMonitoringSnapshot(
     value,
   ) as import("./monitoring").MonitoringSnapshot;
 }
+
+/** A zero-request load signal remains unknown; it is not a failed physical service. */
+export const idleLoadObservation = (c: {
+  id: string;
+  state: string;
+  code: string;
+}) =>
+  c.id === "api-tier" &&
+  c.state === "UNKNOWN" &&
+  c.code === "metrics_no_requests";

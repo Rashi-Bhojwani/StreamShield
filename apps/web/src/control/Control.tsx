@@ -1,5 +1,6 @@
 import {
   observationFreshness,
+  idleLoadObservation,
   parseMonitoringSnapshot,
 } from "@streamshield/shared";
 import { Presentation } from "./Presentation";
@@ -801,7 +802,7 @@ function Console() {
   };
   // A stopped spare is standby capacity, not an unknown or failed component.
   s?.components
-    .filter((c) => c.code !== "spare_standby")
+    .filter((c) => c.code !== "spare_standby" && !idleLoadObservation(c))
     .forEach((c) => counts[effective(c, stale)]++);
   let state: HealthState = stale ? "UNKNOWN" : "HEALTHY";
   if (!stale && s) {
@@ -1033,7 +1034,10 @@ function Console() {
                 path="three-stream-demo"
                 element={<ThreeStreamDemo snapshot={s} />}
               />
-              <Route path="chaos" element={<ChaosLab />} />
+              <Route
+                path="chaos"
+                element={<ChaosLab components={s.components} stale={stale} />}
+              />
               <Route
                 path="demo"
                 element={

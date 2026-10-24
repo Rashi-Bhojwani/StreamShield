@@ -20,6 +20,7 @@ const schema = z.object({
   POSTGRES_PASSWORD: z.string().min(24),
   DB_POOL_MAX: int(1, 100),
   DEPENDENCY_TIMEOUT_MS: int(100, 30000),
+  READINESS_TIMEOUT_MS: int(100, 2000).default(750),
   REDIS_DB: int(0, 15).default(0),
   REDIS_HOST: z.string().min(1),
   REDIS_PORT: int(1, 65535),

@@ -363,6 +363,7 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
     const presentation = await rashiCtx.newPage();
     await presentation.setViewportSize({ width: 1920, height: 1080 });
     await presentation.goto("/control/presentation");
+    await presentation.locator(".demo-advanced > summary").click();
     await expect(
       presentation.getByRole("heading", { name: "Break it. Watch it heal." }),
     ).toBeVisible();
@@ -1177,6 +1178,7 @@ test("final: five-plus verified self-healing scenarios with visible user impact"
     }
     // History persists after reload.
     await presentation.goto("/control/presentation");
+    await presentation.locator(".demo-advanced > summary").click();
     await expect(
       presentation.locator(".presentation-report tbody tr").first(),
     ).toBeVisible({ timeout: 20000 });

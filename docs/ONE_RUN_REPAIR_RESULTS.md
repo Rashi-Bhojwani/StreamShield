@@ -1,3 +1,5 @@
+> Current primary scope is four scenarios: API, video gateway, edge and network. See [current repair and actual verification limits](FOUR_SCENARIO_REPAIR_RESULTS.md). The earlier scope/results below are historical.
+
 # One-run repair: actual results and Windows handoff
 
 **Status: PARTIAL for the complete five-scenario live acceptance.** Implementation, regression checks and isolated real PostgreSQL/Observer/Toxiproxy checks passed. The complete production-shaped five-scenario deployment and the user's Windows installation were not exercised in this run. Historical measurements under `docs/FINAL_*` are not results of this repair.

@@ -4,7 +4,7 @@ import pino from "pino";
 import { chaosConfig, scenarios } from "./config.js";
 import { ChaosJournal } from "./journal.js";
 import { ChaosStore } from "./store.js";
-import { ChaosEngine } from "./engine.js";
+import { ChaosEngine, ChaosAdmissionError } from "./engine.js";
 import { Verifier } from "../healing/verification.js";
 import { equal } from "../healing/authority.js";
 const c = chaosConfig(process.env),
@@ -110,7 +110,10 @@ app.use(
                 : known.includes(code)
                   ? 409
                   : 503,
-    ).json({ code: known.includes(code) ? code : "chaos_unavailable" });
+    ).json({
+      code: known.includes(code) ? code : "chaos_unavailable",
+      ...(e instanceof ChaosAdmissionError ? { reason: e.reason } : {}),
+    });
   },
 );
 let stopped = false;

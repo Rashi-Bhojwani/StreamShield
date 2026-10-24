@@ -82,7 +82,10 @@
     "final:demo": "node scripts/final-cli.mjs demo",
     "final:down": "node infrastructure/dynamic/compose.mjs down",
     "final:watch": "node scripts/final-watch.mjs",
-    "final:healer-log": "node scripts/final-healer-log.mjs"
+    "final:healer-log": "node scripts/final-healer-log.mjs",
+    "demo:diagnose": "node scripts/demo-diagnose.mjs",
+    "test:four-live": "node --import tsx scripts/four-scenario-live.mjs",
+    "test:four-ui": "node --import tsx scripts/four-scenario-ui.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

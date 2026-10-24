@@ -35,5 +35,8 @@ export function useChaos() {
     q.error,
     q.data ? now - q.data.receivedAtMonotonic : 0,
   );
-  return { ...q, live: !reason, reason };
+  const serverNow =
+    Date.parse(q.data?.serverTime || q.data?.observedAt || "") +
+    Math.max(0, q.data ? now - q.data.receivedAtMonotonic : 0);
+  return { ...q, live: !reason, reason, serverNow };
 }

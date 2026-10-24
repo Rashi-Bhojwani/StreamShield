@@ -1,3 +1,4 @@
+import { createReadiness } from "./readiness.js";
 import { demoRoutes } from "../demo/routes.js";
 import { ensureGuest } from "../demo/guests.js";
 import { monitoringRouter } from "../monitoring/routes.js";
@@ -687,15 +688,7 @@ export async function createPlatform(
     });
   };
   return {
-    ready: async () => {
-      try {
-        if (!r.redis.isReady || !r.pub.isReady || !r.sub.isReady) return false;
-        await r.db.query("SELECT 1");
-        return true;
-      } catch {
-        return false;
-      }
-    },
+    ready: createReadiness(r, c.READINESS_TIMEOUT_MS),
     router,
     errors,
     catalog,

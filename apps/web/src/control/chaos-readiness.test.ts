@@ -19,6 +19,7 @@ const snapshot = (): ChaosSnapshot => ({
   serverTime: new Date(now).toISOString(),
   staleAfterMs: 12000,
   activeId: null,
+  observationWindowMs: 15000,
   faultDurationMs: 8000,
   timeoutMs: 180000,
   scenarios: scenarios.map((s) => ({
@@ -139,4 +140,8 @@ describe("primary demo and admission", () => {
         null,
       ),
     ).toBe("Previous recovery not verified"));
+});
+it("does not admit a new demo against an older backend without observation-window capability", () => {
+  const old = { ...snapshot(), observationWindowMs: undefined };
+  expect(chaosReadiness(old, undefined, 0, now)).toContain("Backend version");
 });

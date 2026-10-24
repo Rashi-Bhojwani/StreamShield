@@ -1,3 +1,5 @@
+> Current primary scope is four scenarios: API, video gateway, edge and network. See [current repair and actual verification limits](FOUR_SCENARIO_REPAIR_RESULTS.md). The earlier scope/results below are historical.
+
 # Final demo scenarios
 
 > **Current one-run repair:** the five primary choices are `crash-api`, `crash-redis`, `crash-video-gateway`, `network-timeout` and `traffic-surge`. See [current repair, evidence, limitations and Windows commands](ONE_RUN_REPAIR_RESULTS.md). Earlier scenario rankings, instructions and measurements below describe the previous extended demonstration; they are historical evidence, not a passing run of this repair. For configuration-preserving troubleshooting, use the new guide rather than `final:up`.

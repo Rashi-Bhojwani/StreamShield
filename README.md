@@ -1,6 +1,6 @@
 # StreamShield Live + Control
 
-**One-run repair:** [current five-scenario scope, actual checks, Windows pull/run instructions and remaining blockers](docs/ONE_RUN_REPAIR_RESULTS.md). This repair does not claim all five live scenarios were exercised; historical final-demo results below are separate.
+**Current four-scenario repair:** [UI, safe stale-recovery reconciliation, actual checks, Windows diagnosis/run instructions and remaining blockers](docs/FOUR_SCENARIO_REPAIR_RESULTS.md). Full live acceptance is PARTIAL; mocked UI screenshots and historical final-demo measurements are separate evidence.
 
 ## Final presentation build
 

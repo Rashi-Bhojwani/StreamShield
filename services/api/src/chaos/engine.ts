@@ -7,7 +7,10 @@ import type {
   ExperimentState,
   ExperimentEventKind,
 } from "@streamshield/shared";
-import { observationFreshness } from "@streamshield/shared";
+import {
+  observationFreshness,
+  idleLoadObservation,
+} from "@streamshield/shared";
 import { availableParallelism } from "node:os";
 import { startSurge } from "./load.js";
 import { standby } from "../monitoring/policy.js";
@@ -50,6 +53,11 @@ const flat = (o: object) =>
       v && typeof v === "object" ? JSON.stringify(v) : (v ?? null),
     ]),
   ) as Record<string, string | number | boolean | null>;
+export class ChaosAdmissionError extends Error {
+  constructor(public readonly reason: string) {
+    super("prerequisites_unavailable");
+  }
+}
 export class ChaosEngine {
   frame: Frame | undefined;
   healer: HealingSnapshot | undefined;
@@ -125,6 +133,83 @@ export class ChaosEngine {
   current() {
     return this.availabilityReason() === null;
   }
+  private faultIdentity(e: ChaosExperiment) {
+    const at =
+      e.faultConfirmedAt ||
+      e.injectedAt ||
+      (!e.events.some((x) => x.kind === "NO_ACCEPTED_FAULT")
+        ? e.events.find((x) => x.kind === "INJECTING")?.at
+        : null);
+    return at ? e.id + ":" + at : null;
+  }
+  private safelyClosed(e: ChaosExperiment) {
+    const at = e.evidence.terminalBaselineReverifiedAt;
+    return (
+      terminal(e.state) &&
+      e.databasePersisted &&
+      ["COMPLETED", "NOT_REQUIRED"].includes(e.cleanup) &&
+      e.evidence.terminalBaselineIdentity === this.faultIdentity(e) &&
+      typeof at === "string" &&
+      Number.isFinite(Date.parse(at)) &&
+      Date.parse(at) <= Date.now() &&
+      Date.parse(at) >= Date.parse(e.finishedAt || e.injectedAt || e.createdAt)
+    );
+  }
+  baselineReason(id: ChaosScenarioId): string | null {
+    const components = this.frame?.components || [];
+    const required = ["postgres", "redis", "api-1", "api-2", "api-gateway"];
+    if (["crash-edge", "crash-video-gateway", "crash-primary"].includes(id))
+      required.push(
+        "relay",
+        "origin-primary",
+        "origin-standby",
+        "edge-1",
+        "edge-2",
+        "video-gateway",
+      );
+    if (temporary(id)) required.push("demo-dependency");
+    const missing = required.filter(
+      (id) => !components.some((c) => c.id === id),
+    );
+    if (missing.length)
+      return (
+        "Required health observations are missing: " + missing.join(", ") + "."
+      );
+    const failed = components.filter(
+      (c) =>
+        c.state !== "HEALTHY" &&
+        !standby(c) &&
+        !(!generated(id) && idleLoadObservation(c)),
+    );
+    if (failed.length)
+      return (
+        "Required services have not returned to a healthy baseline: " +
+        failed
+          .map((c) => c.id + " (" + c.state + ", " + c.code + ")")
+          .join(", ")
+      );
+    if (
+      ["crash-edge", "crash-video-gateway", "crash-primary"].includes(id) &&
+      (!this.frame?.mediaAvailable ||
+        !this.frame.media.some(
+          (p) =>
+            p.publisher &&
+            observationFreshness(
+              p.checkedAt,
+              Date.now(),
+              this.c.OBS_STALE_MS,
+            ) === "fresh" &&
+            ["primary", "standby"].every((id) =>
+              p.sources.some(
+                (s) =>
+                  s.id === id && s.manifest && s.segment && s.fresh === true,
+              ),
+            ),
+        ))
+    )
+      return "Start a real live source and wait for progressing primary and standby media before a media failure.";
+    return null;
+  }
   reason(id: ChaosScenarioId) {
     const s = scenarioFor(id);
     if (!s.supported) return s.reason;
@@ -151,23 +236,24 @@ export class ChaosEngine {
       .find(
         (e) =>
           terminal(e.state) &&
-          e.faultConfirmedAt &&
+          this.faultIdentity(e) &&
           !e.verifiedAt &&
-          !temporary(e.scenario) &&
+          !this.safelyClosed(e) &&
           !generated(e.scenario) &&
-          scenarioFor(e.scenario).targets.some(
-            (target) =>
-              !this.healer!.attempts.some(
-                (a) =>
-                  a.component === target &&
-                  a.state === "VERIFIED" &&
-                  a.evidence.controlReceipt ===
-                    scenarioFor(e.scenario).expectedReceipt &&
-                  !!a.finishedAt &&
-                  Date.parse(a.finishedAt) >= Date.parse(e.injectedAt!) &&
-                  Date.parse(a.finishedAt) <= Date.now(),
-              ),
-          ),
+          (temporary(e.scenario) ||
+            scenarioFor(e.scenario).targets.some(
+              (target) =>
+                !this.healer!.attempts.some(
+                  (a) =>
+                    a.component === target &&
+                    a.state === "VERIFIED" &&
+                    a.evidence.controlReceipt ===
+                      scenarioFor(e.scenario).expectedReceipt &&
+                    !!a.finishedAt &&
+                    Date.parse(a.finishedAt) >= Date.parse(e.injectedAt!) &&
+                    Date.parse(a.finishedAt) <= Date.now(),
+                ),
+            )),
       );
     if (unverified)
       return (
@@ -176,17 +262,8 @@ export class ChaosEngine {
         "). Inspect the incident/recovery and obtain functional verification before another demo."
       );
 
-    if (
-      this.frame!.components.some((c) => c.state !== "HEALTHY" && !standby(c))
-    )
-      return (
-        "All monitored components must return to a healthy baseline: " +
-        this.frame!.components.filter(
-          (c) => c.state !== "HEALTHY" && !standby(c),
-        )
-          .map((c) => c.id + " (" + c.state + ", " + c.code + ")")
-          .join(", ")
-      );
+    const baseline = this.baselineReason(id);
+    if (baseline) return baseline;
     if (
       generated(id) &&
       this.frame!.components.find((c) => c.id === "api-3")?.code !==
@@ -260,6 +337,7 @@ export class ChaosEngine {
       serverTime: new Date().toISOString(),
       staleAfterMs: this.c.OBS_STALE_MS,
       unavailableReason: this.availabilityReason(),
+      observationWindowMs: this.c.CHAOS_OBSERVATION_WINDOW_MS,
       enabled: this.c.enabled,
       databaseAvailable: this.store.available,
       observedAt: this.lastCompleted
@@ -318,7 +396,7 @@ export class ChaosEngine {
     if (confirmation !== scenarioFor(scenario).target)
       throw Error("confirmation_required");
     const reason = this.reason(scenario);
-    if (reason) throw Error("prerequisites_unavailable");
+    if (reason) throw new ChaosAdmissionError(reason);
     const now = new Date().toISOString();
     const e: ChaosExperiment = {
       id,
@@ -345,7 +423,10 @@ export class ChaosEngine {
       cleanup: temporary(scenario) ? "PENDING" : "NOT_REQUIRED",
       cancelRequestedBy: null,
       databasePersisted: false,
-      evidence: {},
+      evidence: {
+        observationWindowMs: this.c.CHAOS_OBSERVATION_WINDOW_MS,
+        baselineObservedAt: new Date(this.frame!.lastCompleted).toISOString(),
+      },
       events: [
         {
           kind: "CREATED",
@@ -401,6 +482,11 @@ export class ChaosEngine {
     reason: string,
   ) {
     this.stable.delete(e.id);
+    if (e.injectedAt)
+      e.measurements.demonstrationMs = Math.max(
+        0,
+        Date.now() - Date.parse(e.injectedAt),
+      );
     if (generated(e.scenario)) {
       const load = this.surges.get(e.id);
       if (load) {
@@ -514,7 +600,89 @@ export class ChaosEngine {
       }
       await this.sync(e);
     }
+    await this.reconcileTerminalBaseline();
     this.journal.prune(this.c.CHAOS_RETENTION_DAYS);
+  }
+  /** Close a stale safety lock with new behavioral evidence, never by rewriting
+   * failed history or pretending a Healer action occurred. At most one bounded
+   * reconciliation per tick; no fault injection or Docker action here. */
+  async reconcileTerminalBaseline() {
+    const busy =
+      !this.current() ||
+      !this.store.available ||
+      this.adapterActive ||
+      this.journal.all().some((e) => !terminal(e.state)) ||
+      this.healer!.attempts.some((a) =>
+        ["SCHEDULED", "EXECUTING", "VERIFYING", "RETRY_WAIT"].includes(a.state),
+      );
+    if (busy) {
+      for (const key of this.stable.keys())
+        if (key.startsWith("terminal:")) this.stable.delete(key);
+      return;
+    }
+    const e = this.journal
+      .all()
+      .find(
+        (e) =>
+          terminal(e.state) &&
+          this.faultIdentity(e) &&
+          !e.verifiedAt &&
+          !this.safelyClosed(e) &&
+          !generated(e.scenario),
+      );
+    if (!e) return;
+    const key = "terminal:" + e.id;
+    if (
+      !["COMPLETED", "NOT_REQUIRED"].includes(e.cleanup) ||
+      this.baselineReason(e.scenario)
+    ) {
+      this.stable.delete(key);
+      return;
+    }
+    try {
+      let verified = true;
+      if (temporary(e.scenario)) {
+        const latency = await this.dependencyLatency();
+        const tolerance =
+          Number(e.evidence.networkToleranceMs) ||
+          this.c.CHAOS_NETWORK_TOLERANCE_MS;
+        verified =
+          this.healer!.circuit.state === "CLOSED" && latency <= tolerance;
+        e.evidence.terminalNetworkVerifiedMs = latency;
+      } else
+        for (const component of scenarioFor(e.scenario).targets)
+          verified &&= (
+            await this.verifier.verify(
+              {
+                component,
+                action:
+                  e.scenario === "hang-api"
+                    ? "restart_unresponsive_service"
+                    : "start_stopped_service",
+              },
+              this.frame!,
+            )
+          ).ok;
+      if (!verified) {
+        this.stable.delete(key);
+        return;
+      }
+      const since = this.stable.get(key) ?? Date.now();
+      this.stable.set(key, since);
+      if (Date.now() - since < 2000) return;
+      e.evidence.terminalBaselineReverifiedAt = new Date().toISOString();
+      e.evidence.terminalBaselineIdentity = this.faultIdentity(e);
+      e.evidence.originalOutcomePreserved = true;
+      this.event(
+        e,
+        "BASELINE_REVERIFIED",
+        "Failed/cancelled/timed-out outcome retained; fresh probes and representative requests independently verified a safe baseline. This is not a successful automatic-healing claim.",
+      );
+      await this.sync(e);
+      this.stable.delete(key);
+    } catch {
+      this.stable.delete(key);
+    }
   }
   private async dependencyReady() {
     try {
@@ -525,6 +693,21 @@ export class ChaosEngine {
     } catch {
       return false;
     }
+  }
+  private async dependencyLatency() {
+    const started = performance.now();
+    if (!(await this.dependencyReady()))
+      throw new Error("dependency_behavior_unverified");
+    return Math.max(1, Math.round(performance.now() - started));
+  }
+  private async networkRestored(e: ChaosExperiment) {
+    const baseline = Number(e.evidence.networkBaselineMs);
+    const tolerance = Number(e.evidence.networkToleranceMs);
+    if (!(baseline > 0 && tolerance >= baseline)) return false;
+    const latency = await this.dependencyLatency();
+    e.evidence.networkVerifiedMs = latency;
+    e.evidence.networkWithinTolerance = latency <= tolerance;
+    return latency <= tolerance;
   }
   private async advance(e: ChaosExperiment) {
     if (e.cancelRequestedBy) {
@@ -560,16 +743,23 @@ export class ChaosEngine {
         !this.current() ||
         !this.store.available ||
         !this.healer?.enabled ||
-        this.frame!.components.some((c) => c.state !== "HEALTHY" && !standby(c))
+        this.baselineReason(e.scenario)
       ) {
         await this.finish(
           e,
           "FAILED",
-          "Baseline or independent healing authority unavailable; no fault injected",
+          (this.baselineReason(e.scenario) ||
+            this.availabilityReason() ||
+            "Independent healing authority or audit persistence is unavailable") +
+            "; no fault injected",
         );
         return;
       }
-      if (["crash-edge", "crash-primary"].includes(e.scenario)) {
+      if (
+        ["crash-edge", "crash-video-gateway", "crash-primary"].includes(
+          e.scenario,
+        )
+      ) {
         const paths = await this.verifier.paths();
         const safe =
           paths.length > 0 &&
@@ -582,6 +772,18 @@ export class ChaosEngine {
           );
           return;
         }
+      }
+      if (temporary(e.scenario)) {
+        const samples = [];
+        for (let i = 0; i < 3; i++)
+          samples.push(await this.dependencyLatency());
+        const baseline = Math.max(...samples);
+        e.evidence.networkBaselineMs = baseline;
+        e.evidence.networkBaselineSamples = samples.length;
+        e.evidence.networkToleranceMs = Math.max(
+          this.c.CHAOS_NETWORK_TOLERANCE_MS,
+          baseline * 3,
+        );
       }
       this.transition(
         e,
@@ -783,7 +985,7 @@ export class ChaosEngine {
         verified =
           this.healer!.circuit.state === "CLOSED" &&
           e.cleanup === "COMPLETED" &&
-          (await this.dependencyReady());
+          (await this.networkRestored(e));
       else
         for (const a of attempts)
           verified &&= (await this.verifier.verify(a, this.frame!)).ok;
@@ -864,7 +1066,53 @@ export class ChaosEngine {
         return;
       }
     }
-    await this.finish(e, "COMPLETED", "Restoration independently verified");
+    // Keep collecting actual behavioral evidence during the observation window.
+    // Restoration time remains the first successful stable verification time.
+    let stillVerified = temporary(e.scenario)
+      ? this.healer!.circuit.state === "CLOSED" &&
+        e.cleanup === "COMPLETED" &&
+        (await this.networkRestored(e))
+      : true;
+    if (!temporary(e.scenario))
+      for (const a of attempts)
+        stillVerified &&= (await this.verifier.verify(a, this.frame!)).ok;
+    if (!stillVerified) {
+      e.verifiedAt = null;
+      e.measurements.restorationMs = null;
+      e.evidence.independentBehaviorVerified = false;
+      this.stable.delete(e.id);
+      this.event(
+        e,
+        "OBSERVATION_UNAVAILABLE",
+        "Behavioral verification failed again; recovery is not complete",
+      );
+      return;
+    }
+    e.evidence.observationLastVerifiedAt = new Date().toISOString();
+    const windowMs = Number(
+      e.evidence.observationWindowMs ?? this.c.CHAOS_OBSERVATION_WINDOW_MS,
+    );
+    if (Date.now() - Date.parse(e.injectedAt!) < windowMs) {
+      if (e.state !== "VERIFYING")
+        this.transition(
+          e,
+          "VERIFYING",
+          "Recovery verified; continuing live observation",
+        );
+      this.journal.save(e);
+      return;
+    }
+    const baseline = this.baselineReason(e.scenario);
+    if (baseline) {
+      this.event(e, "OBSERVATION_UNAVAILABLE", baseline);
+      return;
+    }
+    e.evidence.baselineRestoredAt = new Date().toISOString();
+    await this.finish(
+      e,
+      "COMPLETED",
+      "Restoration independently verified and observation window completed",
+    );
   }
   private async startLoad(e: ChaosExperiment) {
     const users = Math.min(

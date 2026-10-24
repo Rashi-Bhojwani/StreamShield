@@ -14,7 +14,8 @@ import { tones, type HealthTone } from "../proof/health";
 import { getTelemetry, useTelemetry } from "../proof/telemetry";
 import { LivePlayer, type DeliveryHealth } from "../streaming/LivePlayer";
 import { useStreams } from "../streaming/useStreams";
-import { Confirmation } from "./Chaos";
+import { Confirmation } from "./Confirmation";
+import { Demonstration } from "./Demonstration";
 import {
   attemptsFor,
   experimentOverlay,
@@ -397,7 +398,7 @@ function ScenarioButton({
     </button>
   );
 }
-export function Presentation({
+function AdvancedPresentation({
   components,
   stale,
 }: {
@@ -644,5 +645,14 @@ export function Presentation({
         />
       )}
     </div>
+  );
+}
+
+export function Presentation(props: {
+  components: ComponentObservation[];
+  stale: boolean;
+}) {
+  return (
+    <Demonstration {...props} advanced={<AdvancedPresentation {...props} />} />
   );
 }

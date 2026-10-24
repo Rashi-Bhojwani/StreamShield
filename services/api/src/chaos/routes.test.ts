@@ -26,9 +26,10 @@ function app() {
       r: express.Response,
       _n: express.NextFunction,
     ) =>
-      r
-        .status(e instanceof PlatformError ? e.status : 500)
-        .json({ code: e instanceof PlatformError ? e.code : "error" }),
+      r.status(e instanceof PlatformError ? e.status : 500).json({
+        code: e instanceof PlatformError ? e.code : "error",
+        message: e instanceof PlatformError ? e.message : "error",
+      }),
   );
   return a;
 }
@@ -124,4 +125,38 @@ it("distinguishes private controller authorization from an expired browser login
   expect(response.body.unavailableReason).toContain(
     "Internal controller authorization",
   );
+});
+
+it("preserves the exact safe controller prerequisite reason on a rejected mutation", async () => {
+  vi.stubEnv("NODE_ENV", "development");
+  vi.stubEnv("CHAOS_ENABLED", "true");
+  vi.stubEnv("CHAOS_ENVIRONMENT", "local-development");
+  vi.stubEnv("CHAOS_URL", "http://controller:4030");
+  vi.stubEnv("CHAOS_SECRET", "x".repeat(43));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: "prerequisites_unavailable",
+            reason:
+              "Required services have not returned to a healthy baseline: api-2 (DEGRADED, http_503)",
+          }),
+          { status: 409 },
+        ),
+    ),
+  );
+  const r = await request(app())
+    .post("/chaos/experiments")
+    .set("Origin", origin)
+    .set("Cookie", "ss_csrf=" + nonce)
+    .set("X-CSRF-Token", csrfToken(nonce, c))
+    .send({
+      id: "c8e2077f-bafb-4e21-bc94-5e152f7b2aaf",
+      scenario: "crash-api",
+      confirmation: "api-1",
+    });
+  expect(r.status).toBe(409);
+  expect(r.body.message).toContain("api-2 (DEGRADED, http_503)");
 });

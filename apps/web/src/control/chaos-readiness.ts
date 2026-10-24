@@ -65,6 +65,8 @@ export function chaosReadiness(
     )
   )
     return "A previous fault still awaits verified cleanup.";
+  if (data.observationWindowMs === undefined)
+    return "Backend version does not support the verified observation window. Rebuild the frontend and restart API/controller services from the same branch.";
   return null;
 }
 export function scenarioDenial(

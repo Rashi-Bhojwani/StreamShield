@@ -37,7 +37,11 @@ export function chaosRoutes(
         response.status,
         String(value.code || "CHAOS_UNAVAILABLE"),
         "Experiment denied: " +
-          String(value.code || "chaos_unavailable").replaceAll("_", " "),
+          (value.code === "prerequisites_unavailable" &&
+          typeof value.reason === "string" &&
+          value.reason.length <= 2000
+            ? value.reason
+            : String(value.code || "chaos_unavailable").replaceAll("_", " ")),
       );
     return value;
   }

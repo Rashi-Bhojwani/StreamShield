@@ -270,7 +270,7 @@ export class Verifier {
       )
       .reduce((sum, l) => sum + Number(l.slice(l.lastIndexOf(" ") + 1)), 0);
   }
-  async verify(a: RecoveryAttempt, frame: Frame) {
+  async verify(a: Pick<RecoveryAttempt, "action" | "component">, frame: Frame) {
     const evidence: RecoveryAttempt["evidence"] = {
       browserPlaybackVerified: false,
     };
@@ -380,7 +380,7 @@ export class Verifier {
       evidence.mediaVerification = paths.length
         ? "authorized_segment_progression"
         : "idle_no_playback_claim";
-      return { ok: result.ok, evidence };
+      return { ok: paths.length > 0 && result.ok, evidence };
     }
     if (a.component === "video-gateway") {
       // Health alone is not enough: media must flow THROUGH the gateway.
@@ -394,7 +394,7 @@ export class Verifier {
       evidence.mediaVerification = paths.length
         ? "authorized_segment_progression_through_gateway"
         : "idle_no_playback_claim";
-      return { ok: result.ok, evidence };
+      return { ok: paths.length > 0 && result.ok, evidence };
     }
     if (a.component === "relay") {
       const paths = await this.paths(); // relay API answers with authentication
