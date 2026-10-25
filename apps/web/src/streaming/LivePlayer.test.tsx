@@ -216,3 +216,75 @@ describe("live player", () => {
     expect(onObservation).toHaveBeenCalledTimes(calls);
   });
 });
+
+describe("bounded origin switching", () => {
+  it("destroys the failed timeline, selects standby once, and requires real progress for recovery", async () => {
+    const observe = vi.fn();
+    const sources = [
+      { id: "primary" as const, url: "/media/primary/a/index.m3u8" },
+      { id: "standby" as const, url: "/media/standby/a/index.m3u8" },
+    ];
+    const { rerender, unmount } = render(
+      <LivePlayer
+        source={sources[0]!.url}
+        sourceId="a"
+        alternateSources={sources}
+        onObservation={observe}
+      />,
+    );
+    act(() =>
+      mock.handlers.get("error")?.("error", {
+        fatal: true,
+        type: "network",
+        details: "manifestLoadError",
+      }),
+    );
+    expect(mock.destroy).toHaveBeenCalledTimes(1);
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(mock.loadSource).toHaveBeenLastCalledWith(sources[1]!.url);
+    expect(screen.getByTestId("playback-state")).not.toHaveTextContent(
+      "playing",
+    );
+    expect(
+      observe.mock.calls.some(
+        ([o]) => o.event.kind === "alternate_source_selected",
+      ),
+    ).toBe(true);
+    const calls = mock.loadSource.mock.calls.length;
+    rerender(
+      <LivePlayer
+        source={sources[0]!.url}
+        sourceId="a"
+        alternateSources={[...sources]}
+        onObservation={observe}
+      />,
+    );
+    expect(mock.loadSource).toHaveBeenCalledTimes(calls);
+    act(() =>
+      mock.handlers.get("error")?.("error", {
+        fatal: true,
+        type: "network",
+        details: "manifestLoadError",
+      }),
+    );
+    await act(() => vi.advanceTimersByTimeAsync(200));
+    expect(mock.loadSource).toHaveBeenLastCalledWith(sources[1]!.url);
+    act(() =>
+      mock.handlers.get("error")?.("error", {
+        fatal: true,
+        type: "network",
+        details: "manifestLoadError",
+      }),
+    );
+    expect(screen.getByTestId("playback-state")).toHaveTextContent("error");
+    expect(
+      observe.mock.calls.filter(
+        ([o]) => o.event.kind === "alternate_source_selected",
+      ),
+    ).toHaveLength(1);
+    unmount();
+    const final = mock.loadSource.mock.calls.length;
+    await act(() => vi.advanceTimersByTimeAsync(60000));
+    expect(mock.loadSource).toHaveBeenCalledTimes(final);
+  });
+});

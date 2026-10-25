@@ -96,3 +96,61 @@ describe("configuration", () => {
     );
   });
 });
+
+it("supports blank monitoring defaults and a standalone protected scrape credential", () => {
+  expect(
+    parseConfig({ ...env, OBS_SECRET: "", OBS_URL: "", PROMETHEUS_URL: "" })
+      .OBS_URL,
+  ).toBeUndefined();
+  expect(
+    parseConfig({ ...env, OBS_SECRET: "x".repeat(43) }).OBS_SECRET,
+  ).toBeDefined();
+  expect(() =>
+    parseConfig({ ...env, OBS_URL: "http://observer:4010" }),
+  ).toThrow();
+  expect(() =>
+    parseConfig({
+      ...env,
+      OBS_URL: "http://user:password@observer:4010",
+      OBS_SECRET: "x".repeat(43),
+      PROMETHEUS_URL: "http://prometheus:9090",
+    }),
+  ).toThrow();
+});
+it("reports Phase 5 metadata only when the monitoring deployment is configured", async () => {
+  const app = createApp(
+    parseConfig({
+      ...env,
+      OBS_URL: "http://observer:4010",
+      OBS_SECRET: "x".repeat(43),
+      PROMETHEUS_URL: "http://prometheus:9090",
+    }),
+    { ready: true },
+  );
+  const info = systemInfoSchema.parse(
+    (await request(app).get("/api/v1/system/info").expect(200)).body,
+  );
+  expect(info.phase).toBe(5);
+  expect(info.version).toBe("0.5.0");
+});
+
+it("names the serving instance outside production and never in production", async () => {
+  const dev = parseConfig({ ...env, API_INSTANCE_ID: "api-2" });
+  const served = await request(createApp(dev, { ready: true }))
+    .get("/api/v1/health/live")
+    .expect(200);
+  expect(served.headers["x-served-by"]).toBe("api-2");
+  const prod = parseConfig({
+    ...env,
+    API_INSTANCE_ID: "api-2",
+    EXPOSE_SERVING_INSTANCE: "false",
+  });
+  const hidden = await request(createApp(prod, { ready: true }))
+    .get("/api/v1/health/live")
+    .expect(200);
+  expect(hidden.headers["x-served-by"]).toBeUndefined();
+  const anonymous = await request(createApp(config, { ready: true }))
+    .get("/api/v1/health/live")
+    .expect(200);
+  expect(anonymous.headers["x-served-by"]).toBeUndefined();
+});

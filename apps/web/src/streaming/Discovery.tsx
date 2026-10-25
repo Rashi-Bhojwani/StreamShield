@@ -1,4 +1,6 @@
-import { lazy, Suspense } from "react";
+import { DynamicDiscovery } from "./DynamicDiscovery";
+import { config } from "../config";
+import { lazy, Suspense, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { Stream } from "@streamshield/shared";
 import { useStreams } from "./useStreams";
@@ -67,22 +69,26 @@ function QuietState({
     </div>
   );
 }
-export function Discovery({
+function LegacyDiscovery({
   view = "home",
 }: {
   view?: "home" | "live" | "search";
 }) {
-  const query = useStreams();
   const [params] = useSearchParams();
   const term = params.get("q")?.trim() || "";
+  const identity = view + ":" + term;
+  const [page, setPage] = useState({ identity: "", offset: 0 });
+  const offset = page.identity === identity ? page.offset : 0;
+  const query = useStreams(view === "search" ? term : "", offset);
   const streams = query.isError ? [] : query.data?.streams || [];
   const live = streams.filter((stream) => stream.status === "live");
-  const featured = live[0] || streams[0];
-  const results = streams.filter((stream) =>
-    `${stream.title} ${stream.id}`
-      .toLocaleLowerCase()
-      .includes(term.toLocaleLowerCase()),
-  );
+  const featured =
+    live[0] ||
+    streams[0] ||
+    (query.isError
+      ? query.data?.streams.find((s) => s.status === "live")
+      : undefined);
+  const results = streams;
   const heading =
     view === "search"
       ? "Find your next stream."
@@ -125,7 +131,11 @@ export function Discovery({
           <div className="featured-media">
             {featured?.status === "live" ? (
               <Suspense fallback={<p role="status">Loading live preview…</p>}>
-                <Preview source={featured.playbackUrl} sourceId={featured.id} />
+                <Preview
+                  source={featured.playbackUrl}
+                  alternateSources={featured.playbackSources}
+                  sourceId={featured.id}
+                />
               </Suspense>
             ) : (
               <div className="featured-offline">
@@ -154,7 +164,9 @@ export function Discovery({
             <span className="feature-kicker">
               <Icon name={featured?.status === "live" ? "live" : "clock"} />
               {featured?.status === "live"
-                ? "Featured live stream"
+                ? query.isError
+                  ? "Playback continues · source status unknown"
+                  : "Featured live stream"
                 : "Between live moments"}
             </span>
             <h2>
@@ -167,8 +179,16 @@ export function Discovery({
                 ? "The source is available. Join the stream and see what’s happening."
                 : query.isError
                   ? "We couldn’t check the channels just now. Try again in a moment."
-                  : "No broadcaster is live right now. Explore the available channel, and drop in when the next broadcast begins."}
+                  : "No broadcaster is live right now. Explore the available channels, and drop in when the next broadcast begins."}
             </p>
+            {featured?.channelSlug && (
+              <Link
+                className="text-link"
+                to={"/channels/" + featured.channelSlug}
+              >
+                {featured.channelName} · @{featured.ownerUsername}
+              </Link>
+            )}
             <div className="featured-actions">
               {featured && (
                 <Link
@@ -287,6 +307,28 @@ export function Discovery({
           )}
         </>
       )}
+      <div className="pagination">
+        {offset > 0 && (
+          <button
+            className="button secondary"
+            onClick={() =>
+              setPage({ identity, offset: Math.max(0, offset - 24) })
+            }
+          >
+            Previous streams
+          </button>
+        )}
+        {query.data?.nextOffset != null && (
+          <button
+            className="button secondary"
+            onClick={() =>
+              setPage({ identity, offset: query.data!.nextOffset! })
+            }
+          >
+            More streams
+          </button>
+        )}
+      </div>
       {view === "home" && (
         <section className="explore-banner">
           <span className="explore-symbol">
@@ -298,8 +340,8 @@ export function Discovery({
               <span className="soon-badge">Coming soon</span>
             </div>
             <p>
-              Explore by category as creator tools become available. For now,
-              every available channel is right here.
+              Categories are coming in a future update. For now, every available
+              channel is right here.
             </p>
           </div>
           <Link className="button secondary" to="/explore">
@@ -311,7 +353,7 @@ export function Discovery({
     </div>
   );
 }
-export function Explore() {
+function LegacyExplore() {
   return (
     <div className="explore-page">
       <div className="page-heading">
@@ -347,5 +389,20 @@ export function Explore() {
         </Link>
       </section>
     </div>
+  );
+}
+
+export function Discovery(props: { view?: "home" | "live" | "search" }) {
+  return config.VITE_DYNAMIC_MODE ? (
+    <DynamicDiscovery {...props} />
+  ) : (
+    <LegacyDiscovery {...props} />
+  );
+}
+export function Explore() {
+  return config.VITE_DYNAMIC_MODE ? (
+    <DynamicDiscovery view="explore" />
+  ) : (
+    <LegacyExplore />
   );
 }

@@ -7,7 +7,14 @@ export const healthSchema = z.object({
 export const systemInfoSchema = z.object({
   name: z.literal("StreamShield"),
   version: z.string(),
-  phase: z.literal(2),
+  phase: z.union([
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+    z.literal(6),
+    z.literal(7),
+  ]),
   capabilities: z.array(z.string()),
 });
 export type Health = z.infer<typeof healthSchema>;
@@ -32,9 +39,28 @@ export const streamSchema = z.object({
   ]),
   checkedAt: z.iso.datetime(),
   playbackUrl: z.string(),
+  playbackSources: z
+    .array(z.object({ id: z.enum(["primary", "standby"]), url: z.string() }))
+    .max(2)
+    .optional(),
   tracks: z.array(z.string()),
+  description: z.string().optional(),
+  channelId: z.string().optional(),
+  channelSlug: z.string().optional(),
+  channelName: z.string().optional(),
+  ownerUsername: z.string().optional(),
+  category: z.string().optional(),
+  broadcastState: z.string().optional(),
+  avatarColor: z.string().optional(),
+  viewers: z.number().nullable().optional(),
+  lifecycle: z.enum(["draft", "ready", "ended"]).optional(),
+  startedAt: z.string().nullable().optional(),
+  endedAt: z.string().nullable().optional(),
 });
-export const streamListSchema = z.object({ streams: z.array(streamSchema) });
+export const streamListSchema = z.object({
+  streams: z.array(streamSchema),
+  nextOffset: z.number().nullable().optional(),
+});
 export type Stream = z.infer<typeof streamSchema>;
 
 /** Browser observations, distinct from backend publisher/HLS availability. */
@@ -53,7 +79,12 @@ export type PlaybackEventKind =
   | "fatal_player_error"
   | "autoplay_blocked"
   | "retry_scheduled"
-  | "source_released";
+  | "source_released"
+  | "source_selected"
+  | "source_failure_detected"
+  | "alternate_source_selected"
+  | "playback_reinitialized"
+  | "recovery_failed";
 export interface PlaybackFailure {
   code: string;
   message: string;
@@ -65,6 +96,7 @@ export interface PlaybackEvent {
   at: string;
   elapsedMs: number;
   error?: PlaybackFailure;
+  deliverySource?: "primary" | "standby";
 }
 export interface PlaybackMetrics {
   sourceId: string;
@@ -80,3 +112,14 @@ export interface PlaybackObservation {
   event: PlaybackEvent;
   metrics: PlaybackMetrics;
 }
+
+export * from "./platform";
+
+export * from "./monitoring";
+export * from "./healing";
+export * from "./chaos";
+export * from "./demo.js";
+
+export * from "./dynamic.js";
+
+export * from "./operations";

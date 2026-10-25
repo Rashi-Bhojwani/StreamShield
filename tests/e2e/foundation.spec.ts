@@ -38,7 +38,9 @@ for (const width of [375, 768, 1280, 1440, 1680, 1920]) {
     await expect(
       page.getByRole("heading", { name: "A good place to tune in." }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: /Accounts/ })).toBeDisabled();
+    await expect(
+      page.getByRole("link", { name: "Sign in", exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Visit channel", exact: true }),
     ).toBeVisible();
@@ -101,7 +103,7 @@ for (const width of [375, 768, 1280, 1440, 1680, 1920]) {
   });
 }
 
-test("consumer search empty results and separate future Control product", async ({
+test("consumer search and separate authenticated Control boundary", async ({
   page,
 }) => {
   await page.goto("/search?q=channel-that-does-not-exist");
@@ -109,13 +111,14 @@ test("consumer search empty results and separate future Control product", async 
     page.getByRole("heading", { name: "No matching channels." }),
   ).toBeVisible();
   await page.goto("/control");
+  await expect(page).toHaveURL(/login\?next=/);
   await expect(
-    page.getByRole("heading", {
-      name: "A separate space for stream reliability.",
-    }),
+    page.getByRole("heading", { name: "Welcome back to Live." }),
   ).toBeVisible();
-  await expect(page.getByRole("searchbox")).toHaveCount(0);
-  await page.getByRole("link", { name: "Return to StreamShield Live" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Service health" }),
+  ).toHaveCount(0);
+  await page.goto("/");
   await expect(
     page.getByRole("heading", { name: "A good place to tune in." }),
   ).toBeVisible();

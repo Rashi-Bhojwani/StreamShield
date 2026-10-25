@@ -1,0 +1,887 @@
+{
+  "sourceCommit": "a451e4343f7fc26c766e43b4156c85af0543d7e9",
+  "sourceRunUrl": "https://github.com/Rashi-Bhojwani/StreamShield/actions/runs/39742661575",
+  "sourceRuntimeJobId": 119703692053,
+  "runtimeVerdict": "PASS using synthetic browser capture and real WebRTC/HLS transport",
+  "physicalWindowsVerdict": "UNVERIFIED",
+  "screenshots": [
+    {
+      "file": "screenshots/live-fix/exact-lakshita-live.png",
+      "sha256": "b10038dcfde3eee1b79def962b504c119efa2ae5ee0da2b1f13f2968f7ebf0bf",
+      "visuallyReviewed": true,
+      "modified": false
+    },
+    {
+      "file": "screenshots/live-fix/exact-lakshita-watch.png",
+      "sha256": "64cf0dbb116305b2dba792e55afb9e63514246c3db10780f3ea7ab95539b9dcb",
+      "visuallyReviewed": true,
+      "modified": false
+    },
+    {
+      "file": "screenshots/live-fix/studio-1440.png",
+      "sha256": "c66711b8bc0399808b3133d6f26929d42ec9b8b8d64ecf00eafef168a95eac38",
+      "visuallyReviewed": true,
+      "modified": false
+    },
+    {
+      "file": "screenshots/live-fix/studio-375.png",
+      "sha256": "f2a88b2a1791a22313ec58b790a5a248ab13563783ed67e0ccea506612297f1c",
+      "visuallyReviewed": true,
+      "modified": false
+    }
+  ],
+  "definitions": {
+    "decodedProgress": "Adjacent visible HTMLVideoElement samples require advancing currentTime and totalVideoFrames minus droppedVideoFrames. Encoder resolution can change between observations.",
+    "faultPlaybackSampler": "250ms samples compare advancing currentTime and totalVideoFrames across source/timeline resets. These sampled progress gaps are not end-to-end latency, a zero-buffering guarantee or a physical Windows measurement.",
+    "healing": "Control-plane browserPlaybackVerified stays false and playbackInterruptionMs stays null. Independent Playwright browser observations are stored separately; ordinary routing failover is distinct from Healer service restoration."
+  },
+  "measurements": {
+    "status": "PASS",
+    "measuredAt": "2026-10-22T07:50:39.187Z",
+    "checks": {
+      "falseLiveAndOwnership": true,
+      "automaticFeedWithoutReload": true,
+      "typedLiveDiscoveryEvents": true,
+      "obsoleteAttemptCannotStopReplacement": true,
+      "threeIndependentDecodedWidths": [640, 480, 320],
+      "categoryFilter": true,
+      "authenticatedChatHistoryIsolationModeration": true,
+      "independentFaultRecovery": true,
+      "independentSourceStop": true,
+      "exactCameraScenario": {
+        "network": [
+          {
+            "method": "POST",
+            "path": "/ingest/s-e3cd589f8e7a42dbb6c4e848a4d679d0/whip",
+            "status": 401
+          },
+          {
+            "method": "POST",
+            "path": "/ingest/s-e817efa3a0064eaab3118ca495066899/whip",
+            "status": 201
+          },
+          {
+            "method": "DELETE",
+            "path": "/ingest/s-e817efa3a0064eaab3118ca495066899/whip/feb2a601-1d5d-413a-8635-deee8ecd2f55",
+            "status": 404
+          },
+          {
+            "method": "POST",
+            "path": "/ingest/s-b56143d2310b432a9ddd9d83ba289ccf/whip",
+            "status": 201
+          },
+          {
+            "method": "DELETE",
+            "path": "/ingest/s-b56143d2310b432a9ddd9d83ba289ccf/whip/cd28373a-b8bc-433d-99a4-825e0e9b2661",
+            "status": 404
+          }
+        ],
+        "consoleErrors": 3,
+        "pageErrors": 0,
+        "status": "PASS",
+        "title": "learn c++ in 2 hour",
+        "separateAccounts": 3,
+        "automaticFeed": true,
+        "watchPopupPreservesPublishing": true,
+        "chatAcknowledgedAndReceivedOnce": true,
+        "isolatedOtherSource": true,
+        "iceStates": ["connecting", "connecting", "connected"]
+      },
+      "crossReplicaCameraChat": {
+        "sender": "api-2",
+        "receiver": "api-1",
+        "acknowledged": true,
+        "deliveries": 1
+      },
+      "mediaServerSnapshots": {
+        "relay": {
+          "status": 200,
+          "paths": [
+            {
+              "name": "s-b56143d2310b432a9ddd9d83ba289ccf",
+              "ready": true,
+              "source": "webRTCSession",
+              "tracks": ["Opus", "H264"],
+              "bytes": 357202
+            },
+            {
+              "name": "s-ea0cb4a06395420abf8ee73e7b1ffe2c",
+              "ready": true,
+              "source": "rtmpConn",
+              "tracks": ["H264", "MPEG-4 Audio"],
+              "bytes": 16869389
+            },
+            {
+              "name": "s-fa8cd1ed9fb44939aeebcef377cf19e3",
+              "ready": true,
+              "source": "rtmpConn",
+              "tracks": ["H264", "MPEG-4 Audio"],
+              "bytes": 47073099
+            }
+          ]
+        },
+        "primary": {
+          "status": 200,
+          "paths": [
+            {
+              "name": "s-8935f80e69f042acab981c94ba7d58df",
+              "ready": false,
+              "source": "rtspSource",
+              "tracks": [],
+              "bytes": 0
+            },
+            {
+              "name": "s-b56143d2310b432a9ddd9d83ba289ccf",
+              "ready": true,
+              "source": "rtspSource",
+              "tracks": ["Opus", "H264"],
+              "bytes": 330346
+            },
+            {
+              "name": "s-ea0cb4a06395420abf8ee73e7b1ffe2c",
+              "ready": true,
+              "source": "rtspSource",
+              "tracks": ["H264", "MPEG-4 Audio"],
+              "bytes": 8562615
+            },
+            {
+              "name": "s-fa8cd1ed9fb44939aeebcef377cf19e3",
+              "ready": true,
+              "source": "rtspSource",
+              "tracks": ["H264", "MPEG-4 Audio"],
+              "bytes": 23841586
+            }
+          ]
+        },
+        "standby": {
+          "status": 200,
+          "paths": [
+            {
+              "name": "s-8935f80e69f042acab981c94ba7d58df",
+              "ready": false,
+              "source": "rtspSource",
+              "tracks": [],
+              "bytes": 0
+            },
+            {
+              "name": "s-b56143d2310b432a9ddd9d83ba289ccf",
+              "ready": true,
+              "source": "rtspSource",
+              "tracks": ["Opus", "H264"],
+              "bytes": 332869
+            },
+            {
+              "name": "s-ea0cb4a06395420abf8ee73e7b1ffe2c",
+              "ready": true,
+              "source": "rtspSource",
+              "tracks": ["H264", "MPEG-4 Audio"],
+              "bytes": 16416068
+            },
+            {
+              "name": "s-fa8cd1ed9fb44939aeebcef377cf19e3",
+              "ready": true,
+              "source": "rtspSource",
+              "tracks": ["H264", "MPEG-4 Audio"],
+              "bytes": 45748397
+            }
+          ]
+        }
+      },
+      "browserWhip": {
+        "status": "PASS",
+        "remoteDecoded": {
+          "width": 480,
+          "height": 270,
+          "audioDecodedBytes": 6262
+        },
+        "decodedProgress": {
+          "before": {
+            "width": 320,
+            "time": 0.336686,
+            "frames": 14,
+            "playing": true
+          },
+          "after": {
+            "width": 320,
+            "time": 0.843603,
+            "frames": 24,
+            "playing": true
+          }
+        },
+        "tracks": ["Opus", "H264"],
+        "remoteAudioRms": 0.4512727598676597
+      },
+      "automaticCameraFeedRemoval": true,
+      "fourthAccountAndBrowserEnd": true,
+      "logout": true
+    },
+    "faults": [
+      {
+        "experiment": {
+          "id": "81cd16d3-7419-46fa-bbe8-c610d2a2b90e",
+          "actor": "93922fff-1475-4a7f-88da-74dd7e4fd61a",
+          "scenario": "crash-api",
+          "target": "api-1",
+          "state": "COMPLETED",
+          "createdAt": "2026-10-22T07:47:45.785Z",
+          "updatedAt": "2026-10-22T07:48:04.038Z",
+          "injectedAt": "2026-10-22T07:47:47.645Z",
+          "faultConfirmedAt": "2026-10-22T07:47:50.365Z",
+          "incidentDetectedAt": "2026-10-22T07:47:51.461Z",
+          "actionStartedAt": "2026-10-22T07:47:52.386Z",
+          "actionFinishedAt": "2026-10-22T07:47:52.545Z",
+          "verifiedAt": "2026-10-22T07:48:04.027Z",
+          "finishedAt": "2026-10-22T07:48:04.034Z",
+          "deadline": 1792655445785,
+          "faultExpiresAt": null,
+          "incidentId": "4bc119ec-d5c6-4a78-9e02-9a624e68cae5",
+          "recoveryIds": ["573f9554-f0cd-4dd7-975e-de4eea0f7b56"],
+          "priorRecoveryIds": [],
+          "reason": "Restoration independently verified",
+          "mechanism": "Independent Healer allowlisted service start; Phase 4 routing continuity is separate",
+          "cleanup": "NOT_REQUIRED",
+          "cancelRequestedBy": null,
+          "databasePersisted": true,
+          "evidence": {
+            "containerId": "e61faf867b776492185fc0c0555cd5bbd25b5d08c6fd7e4924f77b339f61c9bd",
+            "signal": "SIGKILL",
+            "killAccepted": true,
+            "stoppedObserved": true,
+            "recoveryAction": "start_stopped_service",
+            "recoveryPlaybook": "api-start",
+            "incidentPredatesFault": false,
+            "healerVerifiedAt": "2026-10-22T07:48:00.660Z",
+            "healerReceipt": "docker_start_accepted",
+            "independentBehaviorVerified": true,
+            "browserPlaybackVerified": false
+          },
+          "events": [
+            {
+              "kind": "CREATED",
+              "at": "2026-10-22T07:47:45.785Z",
+              "detail": "Administrator confirmed api-1"
+            },
+            {
+              "kind": "VALIDATING",
+              "detail": "Checking fresh health, independent Healer and deployment policy",
+              "at": "2026-10-22T07:47:46.619Z"
+            },
+            {
+              "kind": "INJECTING",
+              "detail": "Durable intent recorded before restricted fault injection",
+              "at": "2026-10-22T07:47:47.630Z"
+            },
+            {
+              "kind": "FAULT_CONFIRMED",
+              "detail": "Actual infrastructure fault confirmed by restricted adapter",
+              "at": "2026-10-22T07:47:50.367Z"
+            },
+            {
+              "kind": "AWAITING_DETECTION",
+              "detail": "Awaiting a confirmed Phase 5 incident",
+              "at": "2026-10-22T07:47:51.376Z"
+            },
+            {
+              "kind": "INCIDENT_CORRELATED",
+              "detail": "Independent recovery attempt 573f9554-f0cd-4dd7-975e-de4eea0f7b56",
+              "at": "2026-10-22T07:47:52.387Z"
+            },
+            {
+              "kind": "INCIDENT_DETECTED",
+              "detail": "Confirmed Phase 5 detection",
+              "at": "2026-10-22T07:47:51.461Z"
+            },
+            {
+              "kind": "HEALING_OBSERVED",
+              "detail": "Independent Healer action observed: start stopped service",
+              "at": "2026-10-22T07:47:53.399Z"
+            },
+            {
+              "kind": "VERIFYING",
+              "detail": "Independent Healer verification observed",
+              "at": "2026-10-22T07:47:53.400Z"
+            },
+            {
+              "kind": "SERVICE_VERIFIED",
+              "detail": "Experiment independently verified actual service behavior",
+              "at": "2026-10-22T07:48:04.027Z"
+            },
+            {
+              "kind": "COMPLETED",
+              "detail": "Restoration independently verified",
+              "at": "2026-10-22T07:48:04.034Z"
+            }
+          ],
+          "measurements": {
+            "detectionMs": 3816,
+            "healingStartMs": 4741,
+            "actionMs": 159,
+            "restorationMs": 16382,
+            "playbackInterruptionMs": null
+          }
+        },
+        "playback": [
+          {
+            "samples": 77,
+            "windowMs": 19305.900000000023,
+            "maxProgressGapMs": 500.20000000001164,
+            "thresholdMs": 2000
+          },
+          {
+            "samples": 79,
+            "windowMs": 19830.70000000001,
+            "maxProgressGapMs": 500.20000000001164,
+            "thresholdMs": 2000
+          },
+          {
+            "samples": 81,
+            "windowMs": 20343.5,
+            "maxProgressGapMs": 500.1000000000058,
+            "thresholdMs": 2000
+          }
+        ]
+      },
+      {
+        "experiment": {
+          "id": "0a211896-6a59-47a3-bdc7-9134dbf10a96",
+          "actor": "93922fff-1475-4a7f-88da-74dd7e4fd61a",
+          "scenario": "crash-edge",
+          "target": "edge-1",
+          "state": "COMPLETED",
+          "createdAt": "2026-10-22T07:48:06.637Z",
+          "updatedAt": "2026-10-22T07:48:24.621Z",
+          "injectedAt": "2026-10-22T07:48:10.182Z",
+          "faultConfirmedAt": "2026-10-22T07:48:10.372Z",
+          "incidentDetectedAt": "2026-10-22T07:48:14.339Z",
+          "actionStartedAt": "2026-10-22T07:48:14.781Z",
+          "actionFinishedAt": "2026-10-22T07:48:14.930Z",
+          "verifiedAt": "2026-10-22T07:48:24.610Z",
+          "finishedAt": "2026-10-22T07:48:24.614Z",
+          "deadline": 1792655466637,
+          "faultExpiresAt": null,
+          "incidentId": "3994f597-d787-4418-b55d-35aa8e241a0d",
+          "recoveryIds": ["d545ddda-4c5c-4c54-80d3-d99685d1c999"],
+          "priorRecoveryIds": ["573f9554-f0cd-4dd7-975e-de4eea0f7b56"],
+          "reason": "Restoration independently verified",
+          "mechanism": "Independent Healer allowlisted service start; Phase 4 routing continuity is separate",
+          "cleanup": "NOT_REQUIRED",
+          "cancelRequestedBy": null,
+          "databasePersisted": true,
+          "evidence": {
+            "containerId": "0f0a8b6175ddffbb087f33e002e0c2030494f65396d06f7e86ce5eaf84b93ba0",
+            "signal": "SIGKILL",
+            "killAccepted": true,
+            "stoppedObserved": true,
+            "recoveryAction": "start_stopped_service",
+            "recoveryPlaybook": "edge-start",
+            "incidentPredatesFault": false,
+            "healerVerifiedAt": "2026-10-22T07:48:21.256Z",
+            "healerReceipt": "docker_start_accepted",
+            "independentBehaviorVerified": true,
+            "browserPlaybackVerified": false
+          },
+          "events": [
+            {
+              "kind": "CREATED",
+              "at": "2026-10-22T07:48:06.637Z",
+              "detail": "Administrator confirmed edge-1"
+            },
+            {
+              "kind": "VALIDATING",
+              "detail": "Checking fresh health, independent Healer and deployment policy",
+              "at": "2026-10-22T07:48:07.062Z"
+            },
+            {
+              "kind": "STANDBY_VALIDATING",
+              "detail": "Waiting for independently observed standby segment progression; no fault injected",
+              "at": "2026-10-22T07:48:08.103Z"
+            },
+            {
+              "kind": "INJECTING",
+              "detail": "Durable intent recorded before restricted fault injection",
+              "at": "2026-10-22T07:48:10.177Z"
+            },
+            {
+              "kind": "FAULT_CONFIRMED",
+              "detail": "Actual infrastructure fault confirmed by restricted adapter",
+              "at": "2026-10-22T07:48:10.373Z"
+            },
+            {
+              "kind": "AWAITING_DETECTION",
+              "detail": "Awaiting a confirmed Phase 5 incident",
+              "at": "2026-10-22T07:48:11.381Z"
+            },
+            {
+              "kind": "INCIDENT_CORRELATED",
+              "detail": "Independent recovery attempt d545ddda-4c5c-4c54-80d3-d99685d1c999",
+              "at": "2026-10-22T07:48:15.412Z"
+            },
+            {
+              "kind": "INCIDENT_DETECTED",
+              "detail": "Confirmed Phase 5 detection",
+              "at": "2026-10-22T07:48:14.339Z"
+            },
+            {
+              "kind": "HEALING_OBSERVED",
+              "detail": "Independent Healer action observed: start stopped service",
+              "at": "2026-10-22T07:48:15.414Z"
+            },
+            {
+              "kind": "VERIFYING",
+              "detail": "Independent Healer verification observed",
+              "at": "2026-10-22T07:48:15.414Z"
+            },
+            {
+              "kind": "SERVICE_VERIFIED",
+              "detail": "Experiment independently verified actual service behavior",
+              "at": "2026-10-22T07:48:24.610Z"
+            },
+            {
+              "kind": "COMPLETED",
+              "detail": "Restoration independently verified",
+              "at": "2026-10-22T07:48:24.614Z"
+            }
+          ],
+          "measurements": {
+            "detectionMs": 4157,
+            "healingStartMs": 4599,
+            "actionMs": 149,
+            "restorationMs": 14428,
+            "playbackInterruptionMs": null
+          }
+        },
+        "playback": [
+          {
+            "samples": 72,
+            "windowMs": 18209.600000000006,
+            "maxProgressGapMs": 500.19999999998254,
+            "thresholdMs": 2000
+          },
+          {
+            "samples": 74,
+            "windowMs": 18723.899999999994,
+            "maxProgressGapMs": 500.19999999998254,
+            "thresholdMs": 2000
+          },
+          {
+            "samples": 76,
+            "windowMs": 19244.600000000006,
+            "maxProgressGapMs": 500.29999999998836,
+            "thresholdMs": 2000
+          }
+        ]
+      },
+      {
+        "experiment": {
+          "id": "6f70b579-37c1-490a-bfbc-57062191fdd9",
+          "actor": "93922fff-1475-4a7f-88da-74dd7e4fd61a",
+          "scenario": "crash-primary",
+          "target": "origin-primary",
+          "state": "COMPLETED",
+          "createdAt": "2026-10-22T07:48:26.405Z",
+          "updatedAt": "2026-10-22T07:48:54.219Z",
+          "injectedAt": "2026-10-22T07:48:27.672Z",
+          "faultConfirmedAt": "2026-10-22T07:48:27.858Z",
+          "incidentDetectedAt": "2026-10-22T07:48:30.976Z",
+          "actionStartedAt": "2026-10-22T07:48:32.412Z",
+          "actionFinishedAt": "2026-10-22T07:48:32.577Z",
+          "verifiedAt": "2026-10-22T07:48:54.215Z",
+          "finishedAt": "2026-10-22T07:48:54.218Z",
+          "deadline": 1792655486405,
+          "faultExpiresAt": null,
+          "incidentId": "f06da2de-19ae-420a-9be4-022130f3cf40",
+          "recoveryIds": ["c0e1b9c8-5c91-4fc7-9040-684f65eb1434"],
+          "priorRecoveryIds": [
+            "d545ddda-4c5c-4c54-80d3-d99685d1c999",
+            "573f9554-f0cd-4dd7-975e-de4eea0f7b56"
+          ],
+          "reason": "Restoration independently verified",
+          "mechanism": "Independent Healer allowlisted service start; Phase 4 routing continuity is separate",
+          "cleanup": "NOT_REQUIRED",
+          "cancelRequestedBy": null,
+          "databasePersisted": true,
+          "evidence": {
+            "containerId": "06bfea4780480918f278d5d538373226ed5969354a665928cb88b6ec09eba7ec",
+            "signal": "SIGKILL",
+            "killAccepted": true,
+            "stoppedObserved": true,
+            "recoveryAction": "start_stopped_service",
+            "recoveryPlaybook": "primary-start",
+            "incidentPredatesFault": false,
+            "healerVerifiedAt": "2026-10-22T07:48:49.130Z",
+            "healerReceipt": "docker_start_accepted",
+            "independentBehaviorVerified": true,
+            "browserPlaybackVerified": false
+          },
+          "events": [
+            {
+              "kind": "CREATED",
+              "at": "2026-10-22T07:48:26.405Z",
+              "detail": "Administrator confirmed origin-primary"
+            },
+            {
+              "kind": "VALIDATING",
+              "detail": "Checking fresh health, independent Healer and deployment policy",
+              "at": "2026-10-22T07:48:26.636Z"
+            },
+            {
+              "kind": "INJECTING",
+              "detail": "Durable intent recorded before restricted fault injection",
+              "at": "2026-10-22T07:48:27.668Z"
+            },
+            {
+              "kind": "FAULT_CONFIRMED",
+              "detail": "Actual infrastructure fault confirmed by restricted adapter",
+              "at": "2026-10-22T07:48:27.860Z"
+            },
+            {
+              "kind": "AWAITING_DETECTION",
+              "detail": "Awaiting a confirmed Phase 5 incident",
+              "at": "2026-10-22T07:48:28.867Z"
+            },
+            {
+              "kind": "INCIDENT_CORRELATED",
+              "detail": "Independent recovery attempt c0e1b9c8-5c91-4fc7-9040-684f65eb1434",
+              "at": "2026-10-22T07:48:31.886Z"
+            },
+            {
+              "kind": "INCIDENT_DETECTED",
+              "detail": "Confirmed Phase 5 detection",
+              "at": "2026-10-22T07:48:30.976Z"
+            },
+            {
+              "kind": "HEALING_OBSERVED",
+              "detail": "Independent Healer action observed: start stopped service",
+              "at": "2026-10-22T07:48:32.897Z"
+            },
+            {
+              "kind": "VERIFYING",
+              "detail": "Independent Healer verification observed",
+              "at": "2026-10-22T07:48:32.898Z"
+            },
+            {
+              "kind": "SERVICE_VERIFIED",
+              "detail": "Experiment independently verified actual service behavior",
+              "at": "2026-10-22T07:48:54.215Z"
+            },
+            {
+              "kind": "COMPLETED",
+              "detail": "Restoration independently verified",
+              "at": "2026-10-22T07:48:54.218Z"
+            }
+          ],
+          "measurements": {
+            "detectionMs": 3304,
+            "healingStartMs": 4740,
+            "actionMs": 165,
+            "restorationMs": 26543,
+            "playbackInterruptionMs": null
+          }
+        },
+        "playback": [
+          {
+            "samples": 113,
+            "windowMs": 28350.600000000006,
+            "maxProgressGapMs": 1499.7999999999884,
+            "thresholdMs": 2000
+          },
+          {
+            "samples": 115,
+            "windowMs": 28864.5,
+            "maxProgressGapMs": 1500.1000000000058,
+            "thresholdMs": 2000
+          },
+          {
+            "samples": 117,
+            "windowMs": 29376.899999999994,
+            "maxProgressGapMs": 1500,
+            "thresholdMs": 2000
+          }
+        ]
+      },
+      {
+        "scope": "exact-browser-camera",
+        "experiment": {
+          "id": "9b08a72f-1673-452f-9193-7c29f3ab78a2",
+          "actor": "93922fff-1475-4a7f-88da-74dd7e4fd61a",
+          "scenario": "crash-api",
+          "target": "api-1",
+          "state": "COMPLETED",
+          "createdAt": "2026-10-22T07:49:56.791Z",
+          "updatedAt": "2026-10-22T07:50:15.457Z",
+          "injectedAt": "2026-10-22T07:49:58.569Z",
+          "faultConfirmedAt": "2026-10-22T07:49:58.841Z",
+          "incidentDetectedAt": "2026-10-22T07:50:00.915Z",
+          "actionStartedAt": "2026-10-22T07:50:01.727Z",
+          "actionFinishedAt": "2026-10-22T07:50:01.936Z",
+          "verifiedAt": "2026-10-22T07:50:15.453Z",
+          "finishedAt": "2026-10-22T07:50:15.456Z",
+          "deadline": 1792655576791,
+          "faultExpiresAt": null,
+          "incidentId": "1d7d36f2-c0d2-4a44-b452-585285bb9448",
+          "recoveryIds": ["8171bb47-cd72-4690-a900-a5fc278a853d"],
+          "priorRecoveryIds": [
+            "c0e1b9c8-5c91-4fc7-9040-684f65eb1434",
+            "d545ddda-4c5c-4c54-80d3-d99685d1c999",
+            "573f9554-f0cd-4dd7-975e-de4eea0f7b56"
+          ],
+          "reason": "Restoration independently verified",
+          "mechanism": "Independent Healer allowlisted service start; Phase 4 routing continuity is separate",
+          "cleanup": "NOT_REQUIRED",
+          "cancelRequestedBy": null,
+          "databasePersisted": true,
+          "evidence": {
+            "containerId": "e61faf867b776492185fc0c0555cd5bbd25b5d08c6fd7e4924f77b339f61c9bd",
+            "signal": "SIGKILL",
+            "killAccepted": true,
+            "stoppedObserved": true,
+            "recoveryAction": "start_stopped_service",
+            "recoveryPlaybook": "api-start",
+            "incidentPredatesFault": false,
+            "healerVerifiedAt": "2026-10-22T07:50:12.482Z",
+            "healerReceipt": "docker_start_accepted",
+            "independentBehaviorVerified": true,
+            "browserPlaybackVerified": false
+          },
+          "events": [
+            {
+              "kind": "CREATED",
+              "at": "2026-10-22T07:49:56.791Z",
+              "detail": "Administrator confirmed api-1"
+            },
+            {
+              "kind": "VALIDATING",
+              "detail": "Checking fresh health, independent Healer and deployment policy",
+              "at": "2026-10-22T07:49:57.558Z"
+            },
+            {
+              "kind": "INJECTING",
+              "detail": "Durable intent recorded before restricted fault injection",
+              "at": "2026-10-22T07:49:58.565Z"
+            },
+            {
+              "kind": "FAULT_CONFIRMED",
+              "detail": "Actual infrastructure fault confirmed by restricted adapter",
+              "at": "2026-10-22T07:49:58.851Z"
+            },
+            {
+              "kind": "AWAITING_DETECTION",
+              "detail": "Awaiting a confirmed Phase 5 incident",
+              "at": "2026-10-22T07:49:59.861Z"
+            },
+            {
+              "kind": "INCIDENT_CORRELATED",
+              "detail": "Independent recovery attempt 8171bb47-cd72-4690-a900-a5fc278a853d",
+              "at": "2026-10-22T07:50:01.930Z"
+            },
+            {
+              "kind": "INCIDENT_DETECTED",
+              "detail": "Confirmed Phase 5 detection",
+              "at": "2026-10-22T07:50:00.915Z"
+            },
+            {
+              "kind": "HEALING_OBSERVED",
+              "detail": "Independent Healer action observed: start stopped service",
+              "at": "2026-10-22T07:50:01.934Z"
+            },
+            {
+              "kind": "VERIFYING",
+              "detail": "Independent Healer verification observed",
+              "at": "2026-10-22T07:50:02.948Z"
+            },
+            {
+              "kind": "SERVICE_VERIFIED",
+              "detail": "Experiment independently verified actual service behavior",
+              "at": "2026-10-22T07:50:15.453Z"
+            },
+            {
+              "kind": "COMPLETED",
+              "detail": "Restoration independently verified",
+              "at": "2026-10-22T07:50:15.456Z"
+            }
+          ],
+          "measurements": {
+            "detectionMs": 2346,
+            "healingStartMs": 3158,
+            "actionMs": 209,
+            "restorationMs": 16884,
+            "playbackInterruptionMs": null
+          }
+        },
+        "playback": {
+          "samples": 82,
+          "windowMs": 20620.600000000035,
+          "maxProgressGapMs": 503.6000000000349,
+          "thresholdMs": 2000
+        },
+        "chat": "acknowledged and received"
+      },
+      {
+        "scope": "exact-browser-camera",
+        "experiment": {
+          "id": "ba0f0aae-fbd9-4ac9-8dfc-2b1dc9d6cecc",
+          "actor": "93922fff-1475-4a7f-88da-74dd7e4fd61a",
+          "scenario": "crash-edge",
+          "target": "edge-1",
+          "state": "COMPLETED",
+          "createdAt": "2026-10-22T07:50:17.448Z",
+          "updatedAt": "2026-10-22T07:50:32.955Z",
+          "injectedAt": "2026-10-22T07:50:19.546Z",
+          "faultConfirmedAt": "2026-10-22T07:50:19.744Z",
+          "incidentDetectedAt": "2026-10-22T07:50:21.772Z",
+          "actionStartedAt": "2026-10-22T07:50:22.580Z",
+          "actionFinishedAt": "2026-10-22T07:50:22.731Z",
+          "verifiedAt": "2026-10-22T07:50:32.951Z",
+          "finishedAt": "2026-10-22T07:50:32.954Z",
+          "deadline": 1792655597448,
+          "faultExpiresAt": null,
+          "incidentId": "c1867f0e-89ad-4983-a4ca-c301e8dec620",
+          "recoveryIds": ["0c1a4ac2-14ad-4cfa-8c2e-66b98f13e8a6"],
+          "priorRecoveryIds": [
+            "8171bb47-cd72-4690-a900-a5fc278a853d",
+            "c0e1b9c8-5c91-4fc7-9040-684f65eb1434",
+            "d545ddda-4c5c-4c54-80d3-d99685d1c999",
+            "573f9554-f0cd-4dd7-975e-de4eea0f7b56"
+          ],
+          "reason": "Restoration independently verified",
+          "mechanism": "Independent Healer allowlisted service start; Phase 4 routing continuity is separate",
+          "cleanup": "NOT_REQUIRED",
+          "cancelRequestedBy": null,
+          "databasePersisted": true,
+          "evidence": {
+            "containerId": "0f0a8b6175ddffbb087f33e002e0c2030494f65396d06f7e86ce5eaf84b93ba0",
+            "signal": "SIGKILL",
+            "killAccepted": true,
+            "stoppedObserved": true,
+            "recoveryAction": "start_stopped_service",
+            "recoveryPlaybook": "edge-start",
+            "incidentPredatesFault": false,
+            "healerVerifiedAt": "2026-10-22T07:50:29.011Z",
+            "healerReceipt": "docker_start_accepted",
+            "independentBehaviorVerified": true,
+            "browserPlaybackVerified": false
+          },
+          "events": [
+            {
+              "kind": "CREATED",
+              "at": "2026-10-22T07:50:17.448Z",
+              "detail": "Administrator confirmed edge-1"
+            },
+            {
+              "kind": "VALIDATING",
+              "detail": "Checking fresh health, independent Healer and deployment policy",
+              "at": "2026-10-22T07:50:17.470Z"
+            },
+            {
+              "kind": "STANDBY_VALIDATING",
+              "detail": "Waiting for independently observed standby segment progression; no fault injected",
+              "at": "2026-10-22T07:50:18.508Z"
+            },
+            {
+              "kind": "INJECTING",
+              "detail": "Durable intent recorded before restricted fault injection",
+              "at": "2026-10-22T07:50:19.538Z"
+            },
+            {
+              "kind": "FAULT_CONFIRMED",
+              "detail": "Actual infrastructure fault confirmed by restricted adapter",
+              "at": "2026-10-22T07:50:19.746Z"
+            },
+            {
+              "kind": "AWAITING_DETECTION",
+              "detail": "Awaiting a confirmed Phase 5 incident",
+              "at": "2026-10-22T07:50:20.755Z"
+            },
+            {
+              "kind": "INCIDENT_CORRELATED",
+              "detail": "Independent recovery attempt 0c1a4ac2-14ad-4cfa-8c2e-66b98f13e8a6",
+              "at": "2026-10-22T07:50:22.770Z"
+            },
+            {
+              "kind": "INCIDENT_DETECTED",
+              "detail": "Confirmed Phase 5 detection",
+              "at": "2026-10-22T07:50:21.772Z"
+            },
+            {
+              "kind": "HEALING_OBSERVED",
+              "detail": "Independent Healer action observed: start stopped service",
+              "at": "2026-10-22T07:50:22.773Z"
+            },
+            {
+              "kind": "VERIFYING",
+              "detail": "Independent Healer verification observed",
+              "at": "2026-10-22T07:50:22.774Z"
+            },
+            {
+              "kind": "SERVICE_VERIFIED",
+              "detail": "Experiment independently verified actual service behavior",
+              "at": "2026-10-22T07:50:32.951Z"
+            },
+            {
+              "kind": "COMPLETED",
+              "detail": "Restoration independently verified",
+              "at": "2026-10-22T07:50:32.954Z"
+            }
+          ],
+          "measurements": {
+            "detectionMs": 2226,
+            "healingStartMs": 3034,
+            "actionMs": 151,
+            "restorationMs": 13405,
+            "playbackInterruptionMs": null
+          }
+        },
+        "playback": {
+          "samples": 69,
+          "windowMs": 17397.099999999977,
+          "maxProgressGapMs": 500.20000000001164,
+          "thresholdMs": 2000
+        },
+        "chat": "acknowledged and received"
+      }
+    ],
+    "streamIds": [
+      "0ee96908-a30b-412b-80bd-f4f6762c1569",
+      "51d0427e-39da-421c-9c25-2bb98bf43779",
+      "a435f687-3fd6-47ce-9abe-4db69c59aafb"
+    ],
+    "limitations": [
+      "Synthetic browser devices verify the real WHIP/media pipeline; no physical Windows camera, screen-share chooser or three LAN laptops were available.",
+      "50K capacity is a separate unverified milestone."
+    ]
+  },
+  "sourceCiJobs": [
+    {
+      "name": "resilience",
+      "conclusion": "success"
+    },
+    {
+      "name": "healing",
+      "conclusion": "success"
+    },
+    {
+      "name": "demo",
+      "conclusion": "success"
+    },
+    {
+      "name": "verify",
+      "conclusion": "success"
+    },
+    {
+      "name": "chaos",
+      "conclusion": "success"
+    },
+    {
+      "name": "capacity",
+      "conclusion": "success"
+    },
+    {
+      "name": "dynamic",
+      "conclusion": "success"
+    },
+    {
+      "name": "monitoring",
+      "conclusion": "success"
+    }
+  ]
+}

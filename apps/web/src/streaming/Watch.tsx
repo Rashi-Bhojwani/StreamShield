@@ -1,15 +1,21 @@
 import type { PlaybackObservation } from "@streamshield/shared";
-import { useState } from "react";
+import { Chat } from "../platform/Chat";
+import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchStream } from "../api";
 import { config } from "../config";
 import { LivePlayer } from "./LivePlayer";
+import {
+  readHealthPreference,
+  writeHealthPreference,
+} from "./health-preference";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConnectionStatus } from "../ui/ConnectionStatus";
 
 export default function Watch() {
+  const playerContainer = useRef<HTMLElement>(null);
   const { id = "" } = useParams();
   const [diagnostics, setDiagnostics] = useState(false);
   const [observation, setObservation] = useState<PlaybackObservation | null>(
@@ -23,6 +29,10 @@ export default function Watch() {
     retry: false,
   });
   const stream = query.data;
+  const [showHealth, setShowHealth] = useState(readHealthPreference);
+  const reconnectingSource = ["CONNECTION_LOST", "RECONNECTING"].includes(
+    stream?.broadcastState || "",
+  );
   return (
     <div className="watch-page">
       <div className="watch-breadcrumb">
@@ -33,13 +43,22 @@ export default function Watch() {
         <span>{stream?.title || "Channel"}</span>
       </div>
       <div className="watch-layout">
-        <section className="watch-main" aria-label="Video playback">
-          {stream?.status === "live" ? (
+        <section
+          ref={playerContainer}
+          className="watch-main"
+          aria-label="Video playback"
+        >
+          {stream?.status === "live" ||
+          (config.VITE_DYNAMIC_MODE &&
+            stream?.status === "unavailable" &&
+            observation?.metrics.sourceId === stream.id) ? (
             <LivePlayer
               key={stream.playbackUrl}
               source={stream.playbackUrl}
+              alternateSources={stream.playbackSources}
               sourceId={stream.id}
               onObservation={setObservation}
+              showHealth={showHealth && config.VITE_SHOW_SERVING_INSTANCE}
             />
           ) : (
             <div className="video-empty">
@@ -49,11 +68,13 @@ export default function Watch() {
                   ? "Checking source"
                   : query.isError
                     ? "Status unknown"
-                    : stream?.status === "offline"
-                      ? "Offline"
-                      : stream?.status === "starting"
-                        ? "Connecting"
-                        : "Origin unavailable"}
+                    : reconnectingSource
+                      ? "Reconnecting"
+                      : stream?.status === "offline"
+                        ? "Offline"
+                        : stream?.status === "starting"
+                          ? "Connecting"
+                          : "Origin unavailable"}
               </span>
               <div className="offline-player-art" aria-hidden="true">
                 <Icon
@@ -69,18 +90,24 @@ export default function Watch() {
                   ? "Finding your signal…"
                   : query.isError
                     ? "Unable to check this stream"
-                    : stream?.status === "offline"
-                      ? "Waiting for a broadcaster"
-                      : stream?.status === "starting"
-                        ? "Your stream is getting ready"
-                        : "The stream is unavailable"}
+                    : reconnectingSource
+                      ? "Broadcaster reconnecting…"
+                      : stream?.status === "unavailable"
+                        ? "Video service reconnecting…"
+                        : stream?.status === "offline"
+                          ? "Waiting for a broadcaster"
+                          : stream?.status === "starting"
+                            ? "Your stream is getting ready"
+                            : "The stream is unavailable"}
               </h2>
               <p>
-                {stream?.status === "offline"
-                  ? "This channel isn’t broadcasting right now. Keep this page open — the player will appear when the source returns."
-                  : query.isError
-                    ? "We couldn’t check the channel. Try again to see its current availability."
-                    : "We’re waiting for a verified video source. Please try again in a moment."}
+                {reconnectingSource
+                  ? "The broadcaster’s connection dropped. Keep this page open — playback returns by itself when their stream reconnects."
+                  : stream?.status === "offline"
+                    ? "This channel isn’t broadcasting right now. Keep this page open — the player will appear when the source returns."
+                    : query.isError
+                      ? "We couldn’t check the channel. Try again to see its current availability."
+                      : "We’re waiting for a verified video source. Please try again in a moment."}
               </p>
               <button
                 className="button secondary"
@@ -92,6 +119,18 @@ export default function Watch() {
               </button>
             </div>
           )}
+          {config.VITE_SHOW_SERVING_INSTANCE && (
+            <button
+              className="text-link stream-health-toggle"
+              aria-pressed={showHealth}
+              onClick={() => {
+                writeHealthPreference(!showHealth);
+                setShowHealth(!showHealth);
+              }}
+            >
+              Stream health overlay: {showHealth ? "on" : "off"}
+            </button>
+          )}
           <div className="watch-information">
             <div className="stream-identity">
               <span className="channel-symbol large">
@@ -99,7 +138,18 @@ export default function Watch() {
               </span>
               <div>
                 <h1>{stream?.title || "Live channel"}</h1>
-                <p>StreamShield Live channel</p>
+                <p>
+                  {stream?.channelSlug ? (
+                    <Link
+                      className="inline-link"
+                      to={"/channels/" + stream.channelSlug}
+                    >
+                      {stream.channelName} · @{stream.ownerUsername}
+                    </Link>
+                  ) : (
+                    "Development compatibility channel"
+                  )}
+                </p>
               </div>
             </div>
             <div className="watch-info-actions">
@@ -142,9 +192,10 @@ export default function Watch() {
           <div className="stream-about">
             <h2>About this stream</h2>
             <p>
-              {stream?.status === "live"
-                ? "A live broadcast on StreamShield. Use the player controls for sound, pause and fullscreen."
-                : "The next live moment starts when the broadcaster goes on air."}
+              {stream?.description ||
+                (stream?.status === "live"
+                  ? "A live broadcast on StreamShield. Use the player controls for sound, pause and fullscreen."
+                  : "The next live moment starts when the broadcaster goes on air.")}
             </p>
           </div>
           <details
@@ -247,29 +298,38 @@ export default function Watch() {
             )}
           </details>
         </section>
-        <aside className="chat-panel" aria-label="Live chat">
-          <div className="chat-heading">
-            <h2>
-              <Icon name="chat" />
-              Live chat
-            </h2>
-            <span className="soon-badge">Coming soon</span>
-          </div>
-          <div className="chat-empty">
-            <span className="chat-illustration">
-              <Icon name="chat" />
-            </span>
-            <h3>A place for the conversation.</h3>
-            <p>
-              Live chat isn’t available yet. For now, settle in and enjoy the
-              stream.
-            </p>
-          </div>
-          <div className="chat-unavailable">
-            <Icon name="lock" />
-            <span>Messaging is not available</span>
-          </div>
-        </aside>
+        {stream?.channelId ? (
+          <Chat
+            ownerUsername={stream?.ownerUsername}
+            key={stream.id}
+            streamId={stream.id}
+            playerContainer={playerContainer}
+          />
+        ) : (
+          <aside className="chat-panel" aria-label="Live chat">
+            <div className="chat-heading">
+              <h2>
+                <Icon name="chat" />
+                Live chat
+              </h2>
+              <span className="soon-badge">Coming soon</span>
+            </div>
+            <div className="chat-empty">
+              <span className="chat-illustration">
+                <Icon name="chat" />
+              </span>
+              <h3>A place for the conversation.</h3>
+              <p>
+                Live chat isn’t available yet. For now, settle in and enjoy the
+                stream.
+              </p>
+            </div>
+            <div className="chat-unavailable">
+              <Icon name="lock" />
+              <span>Messaging is not available</span>
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

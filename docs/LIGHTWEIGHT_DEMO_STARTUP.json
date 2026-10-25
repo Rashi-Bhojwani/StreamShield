@@ -1,0 +1,707 @@
+{
+  "id": "31dde83a",
+  "status": "DEMO_STOPPED",
+  "startedAt": "2026-10-24T20:51:42.243Z",
+  "scenarios": [],
+  "selectedScenarios": [
+    "crash-api",
+    "crash-video-gateway",
+    "crash-edge",
+    "network-timeout"
+  ],
+  "repetitions": 1,
+  "controlRoute": "/control/chaos",
+  "currentStage": "interactive-demo",
+  "artifacts": {
+    "directory": "test-results/light-demo/runs/31dde83a",
+    "serviceLogs": [
+      {
+        "service": "postgres",
+        "file": "services/postgres.log"
+      },
+      {
+        "service": "redis",
+        "file": "services/redis.log"
+      },
+      {
+        "service": "mediamtx",
+        "file": "services/mediamtx.log"
+      },
+      {
+        "service": "origin-primary",
+        "file": "services/origin-primary.log"
+      },
+      {
+        "service": "origin-standby",
+        "file": "services/origin-standby.log"
+      },
+      {
+        "service": "edge-1",
+        "file": "services/edge-1.log"
+      },
+      {
+        "service": "edge-2",
+        "file": "services/edge-2.log"
+      },
+      {
+        "service": "video-gateway",
+        "file": "services/video-gateway.log"
+      },
+      {
+        "service": "api",
+        "file": "services/api.log"
+      },
+      {
+        "service": "api-gateway",
+        "file": "services/api-gateway.log"
+      },
+      {
+        "service": "toxiproxy",
+        "file": "services/toxiproxy.log"
+      },
+      {
+        "service": "web",
+        "file": "services/web.log"
+      },
+      {
+        "service": "control-plane",
+        "file": "services/control-plane.log"
+      }
+    ],
+    "combinedLog": "fixture.log"
+  },
+  "hostPlatform": "linux",
+  "omittedOptionalTelemetry": ["prometheus", "grafana", "api-tier", "api-3"],
+  "sourceType": "generated FFmpeg test pattern (sample content)",
+  "limitations": [
+    "Isolated actual-service Docker fixture. Control-plane processes share one fixture container; targeted API/gateway containers remain separate. The host operating system and source type are recorded; no production-stream or browser-decoding claim is inferred."
+  ],
+  "resources": {
+    "storageDriver": "vfs",
+    "repositoryFreeBytes": 5131341824,
+    "minimumFreeBytes": 4294967296,
+    "runningFreeBytes": 1160462336
+  },
+  "preparation": {
+    "sourceFiles": 276,
+    "type": "dir",
+    "copiedDependencyFiles": 0,
+    "archiveUsed": false
+  },
+  "resourceChecks": [
+    {
+      "service": "postgres",
+      "freeBytes": 5131341824,
+      "estimatedNeededBytes": 1502676850.5
+    },
+    {
+      "service": "redis",
+      "freeBytes": 4556828672,
+      "estimatedNeededBytes": 1048425813
+    },
+    {
+      "service": "mediamtx",
+      "freeBytes": 4358533120,
+      "estimatedNeededBytes": 1301875125.5
+    },
+    {
+      "service": "origin-primary",
+      "freeBytes": 3956043776,
+      "estimatedNeededBytes": 1301875125.5
+    },
+    {
+      "service": "origin-standby",
+      "freeBytes": 3553554432,
+      "estimatedNeededBytes": 1301875125.5
+    },
+    {
+      "service": "edge-1",
+      "freeBytes": 3151069184,
+      "estimatedNeededBytes": 976246185.5
+    },
+    {
+      "service": "edge-2",
+      "freeBytes": 3018674176,
+      "estimatedNeededBytes": 976246185.5
+    },
+    {
+      "service": "video-gateway",
+      "freeBytes": 2886250496,
+      "estimatedNeededBytes": 976246185.5
+    },
+    {
+      "service": "api",
+      "freeBytes": 2753826816,
+      "estimatedNeededBytes": 1507781798
+    },
+    {
+      "service": "api-gateway",
+      "freeBytes": 2115047424,
+      "estimatedNeededBytes": 976246185.5
+    },
+    {
+      "service": "toxiproxy",
+      "freeBytes": 1982648320,
+      "estimatedNeededBytes": 863920928
+    },
+    {
+      "service": "web",
+      "freeBytes": 1935503360,
+      "estimatedNeededBytes": 980180780.5
+    },
+    {
+      "service": "control-plane",
+      "freeBytes": 1799462912,
+      "estimatedNeededBytes": 1507781798
+    }
+  ],
+  "waits": [
+    {
+      "stage": "postgres-readiness",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:51:56.198Z",
+      "timeoutMs": 30000,
+      "attempts": 1,
+      "elapsedMs": 131.8455300000005,
+      "finishedAt": "2026-10-24T20:51:56.330Z"
+    },
+    {
+      "stage": "api-authentication",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:52:20.356Z",
+      "timeoutMs": 90000,
+      "attempts": 8,
+      "lastError": {
+        "name": "Error",
+        "message": "HTTP_502_/auth/me_request_failed",
+        "httpStatus": "502"
+      },
+      "lastErrorAt": "2026-10-24T20:52:23.397Z",
+      "elapsedMs": 3550.6051860000007,
+      "finishedAt": "2026-10-24T20:52:23.907Z"
+    },
+    {
+      "stage": "scenario-baseline",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:52:30.007Z",
+      "timeoutMs": 120000,
+      "attempts": 28,
+      "lastObservation": {
+        "missing": [],
+        "denied": [
+          {
+            "id": "crash-video-gateway",
+            "reason": "Waiting for actual valid gateway segments to advance. Keep the live source running."
+          },
+          {
+            "id": "crash-api",
+            "reason": "Waiting for actual valid gateway segments to advance. Keep the live source running."
+          }
+        ],
+        "available": true,
+        "unavailableReason": null,
+        "activeId": null
+      },
+      "lastObservationAt": "2026-10-24T20:52:47.200Z",
+      "elapsedMs": 17829.003388999998,
+      "finishedAt": "2026-10-24T20:52:47.836Z"
+    },
+    {
+      "stage": "browser-video-element",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:52:51.508Z",
+      "timeoutMs": 30000,
+      "attempts": 1,
+      "elapsedMs": 296.4231230000005,
+      "finishedAt": "2026-10-24T20:52:51.805Z"
+    },
+    {
+      "stage": "browser-video-progress",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:52:51.860Z",
+      "timeoutMs": 30000,
+      "attempts": 2,
+      "lastObservation": {
+        "ready": false
+      },
+      "lastObservationAt": "2026-10-24T20:52:52.077Z",
+      "elapsedMs": 849.1114670000097,
+      "finishedAt": "2026-10-24T20:52:52.709Z"
+    }
+  ],
+  "lastAdmission": [],
+  "baseline": {
+    "observedAt": "2026-10-24T20:52:47.802Z",
+    "scenarioIds": [
+      "crash-api",
+      "crash-video-gateway",
+      "crash-edge",
+      "network-timeout"
+    ],
+    "noFaultInjected": true,
+    "noRecoveryBeforeClick": true,
+    "apiPeerDockerAccessDenied": true,
+    "functional": {
+      "observedAt": "2026-10-24T20:52:47.802Z",
+      "api": true,
+      "gateway": true,
+      "sourceCount": 1,
+      "progressingPaths": 1,
+      "reason": null
+    },
+    "components": [
+      {
+        "id": "web",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.219Z",
+        "latencyMs": 1
+      },
+      {
+        "id": "api-gateway",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.219Z",
+        "latencyMs": 2
+      },
+      {
+        "id": "api-1",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.222Z",
+        "latencyMs": 4
+      },
+      {
+        "id": "api-2",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.221Z",
+        "latencyMs": 3
+      },
+      {
+        "id": "postgres",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.222Z",
+        "latencyMs": 3
+      },
+      {
+        "id": "redis",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.221Z",
+        "latencyMs": 1
+      },
+      {
+        "id": "video-gateway",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.225Z",
+        "latencyMs": 4
+      },
+      {
+        "id": "edge-1",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.223Z",
+        "latencyMs": 2
+      },
+      {
+        "id": "edge-2",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.223Z",
+        "latencyMs": 2
+      },
+      {
+        "id": "origin-primary",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.224Z",
+        "latencyMs": 2
+      },
+      {
+        "id": "origin-standby",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.225Z",
+        "latencyMs": 3
+      },
+      {
+        "id": "relay",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.227Z",
+        "latencyMs": 3
+      },
+      {
+        "id": "demo-dependency",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:52:47.226Z",
+        "latencyMs": 2
+      }
+    ],
+    "containerStates": [
+      {
+        "service": "postgres",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "redis",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "mediamtx",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "origin-primary",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "origin-standby",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "edge-1",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "edge-2",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "video-gateway",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "api",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "api-gateway",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "toxiproxy",
+        "state": "running",
+        "health": null,
+        "restartCount": 0
+      },
+      {
+        "service": "web",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      }
+    ],
+    "browserPlayback": {
+      "observedAt": "2026-10-24T20:52:52.709Z",
+      "before": {
+        "currentTime": 4.081,
+        "width": 640,
+        "height": 360,
+        "frames": 0,
+        "paused": false
+      },
+      "after": {
+        "currentTime": 4.850583,
+        "width": 640,
+        "height": 360,
+        "frames": 24,
+        "paused": false
+      },
+      "newMediaResponses": 8
+    },
+    "homepageDiscoversOwnedLiveStream": true,
+    "refreshAndPollingNoFault": true
+  },
+  "urls": {
+    "control": "http://127.0.0.1:5174/control/chaos",
+    "watch": "http://127.0.0.1:5174/watch/efed8cac-ac3e-4471-99f4-2f2af31aa93e"
+  },
+  "interactiveSnapshot": {
+    "version": 1,
+    "available": true,
+    "enabled": true,
+    "databaseAvailable": true,
+    "observedAt": "2026-10-24T20:53:01.188Z",
+    "serverTime": "2026-10-24T20:53:01.350Z",
+    "staleAfterMs": 12000,
+    "unavailableReason": null,
+    "activeId": null,
+    "crashBaseline": {
+      "observedAt": "2026-10-24T20:53:00.184Z",
+      "api": true,
+      "gateway": true,
+      "sourceCount": 1,
+      "progressingPaths": 1,
+      "reason": null
+    },
+    "observationWindowMs": 15000,
+    "faultDurationMs": 8000,
+    "timeoutMs": 180000,
+    "scenarios": [
+      {
+        "id": "crash-redis",
+        "name": "Redis Service Failure (substitute)",
+        "target": "redis",
+        "targets": ["redis"],
+        "kind": "healer",
+        "order": 1,
+        "audienceSees": "Chat shows Reconnecting and messages stop crossing between windows; video keeps playing.",
+        "realWorldCause": "Memory exhaustion, host restart or a bad Redis upgrade.",
+        "expectedReceipt": "docker_start_accepted",
+        "risk": "high",
+        "failure": "SIGKILL Redis. Chat fan-out, presence and viewer counts lose their shared bus.",
+        "recovery": "The Healer starts Redis; both APIs reconnect. PostgreSQL chat history stays intact.",
+        "prerequisites": "Use an isolated demo with a healthy database and both APIs. Redis persistence is disabled: volatile keys and Pub/Sub deliveries can be lost; PostgreSQL history stays intact.",
+        "supported": true,
+        "available": false,
+        "reason": "Scenario disabled by deployment policy."
+      },
+      {
+        "id": "crash-video-gateway",
+        "name": "Video Gateway Crash",
+        "target": "video-gateway",
+        "targets": ["video-gateway"],
+        "kind": "healer",
+        "order": 2,
+        "audienceSees": "Every viewer's video freezes and the stall timer counts up, then resumes by itself.",
+        "realWorldCause": "Connection exhaustion or a bad configuration reload.",
+        "expectedReceipt": "docker_start_accepted",
+        "risk": "high",
+        "failure": "SIGKILL the single HLS entry point. Every viewer's playlist and segment requests fail.",
+        "recovery": "The Healer starts the gateway and verifies advancing segments fetched through it.",
+        "prerequisites": "Healthy edges and origins. A live stream makes the freeze visible.",
+        "supported": true,
+        "available": true,
+        "reason": null
+      },
+      {
+        "id": "crash-api-tier",
+        "name": "Crash the whole API tier (website down, video survives)",
+        "target": "api-tier",
+        "targets": ["api-1", "api-2"],
+        "kind": "healer",
+        "order": 3,
+        "audienceSees": "The site shows Can't reach the server, retrying; chat disconnects; live video keeps playing.",
+        "realWorldCause": "A bad deployment, a memory leak or an unhandled crash.",
+        "expectedReceipt": "docker_start_accepted",
+        "risk": "high",
+        "failure": "SIGKILL API-1 and API-2 in one experiment. No application server is left.",
+        "recovery": "The Healer starts API-1, then API-2 (one operation at a time); both are verified serving.",
+        "prerequisites": "Both APIs, PostgreSQL and Redis healthy; Healer budget available for both APIs.",
+        "supported": true,
+        "available": false,
+        "reason": "Scenario disabled by deployment policy."
+      },
+      {
+        "id": "crash-relay",
+        "name": "Crash ingest relay (broadcaster drops)",
+        "target": "relay",
+        "targets": ["relay"],
+        "kind": "healer",
+        "order": 4,
+        "audienceSees": "Studio shows Reconnecting, viewers see Broadcaster reconnecting, then the stream is LIVE again.",
+        "realWorldCause": "A malformed incoming stream or ingest overload.",
+        "expectedReceipt": "docker_start_accepted",
+        "risk": "high",
+        "failure": "SIGKILL the MediaMTX ingest relay. Browser WHIP and OBS RTMP publishers are disconnected.",
+        "recovery": "The Healer starts the relay. The broadcaster client reconnects itself; that is recorded separately.",
+        "prerequisites": "Healthy origins. A live broadcaster makes the drop and the return visible.",
+        "supported": true,
+        "available": false,
+        "reason": "Scenario disabled by deployment policy."
+      },
+      {
+        "id": "hang-api",
+        "name": "Freeze API-2 (hung, not crashed)",
+        "target": "api-2",
+        "targets": ["api-2"],
+        "kind": "healer",
+        "order": 5,
+        "audienceSees": "Pages and chat sends become slow (up to the 10 s gateway timeout), then return to normal.",
+        "realWorldCause": "A deadlock, an infinite loop or a stuck query.",
+        "expectedReceipt": "docker_restart_accepted",
+        "risk": "moderate",
+        "failure": "SIGTSTP the API-2 Node process: the container stays running but stops answering.",
+        "recovery": "The Observer sees timeouts, the Healer corroborates the hang and restarts API-2 (not start).",
+        "prerequisites": "API-1 must be healthy so restarting API-2 never removes the last serving instance.",
+        "supported": true,
+        "available": false,
+        "reason": "Scenario disabled by deployment policy."
+      },
+      {
+        "id": "traffic-surge",
+        "name": "Traffic Surge / Overload",
+        "target": "api-tier",
+        "targets": ["api-tier"],
+        "kind": "healer",
+        "order": 6,
+        "audienceSees": "Load meter and latency climb, pages slow down, then Served by API-3 appears and latency drops while load continues.",
+        "realWorldCause": "A flash crowd, bots or a retry storm.",
+        "expectedReceipt": "docker_start_accepted",
+        "risk": "moderate",
+        "failure": "A bounded load generator floods the API tier with simulated viewers for a bounded time.",
+        "recovery": "The Healer adds the pre-provisioned spare API-3 (scale-out) and removes it again after load stays normal.",
+        "prerequisites": "Healthy tier, the spare API-3 created but stopped, and Healer budget for API-3.",
+        "supported": true,
+        "available": false,
+        "reason": "Scenario disabled by deployment policy."
+      },
+      {
+        "id": "crash-api",
+        "name": "API Server Crash",
+        "target": "api-1",
+        "targets": ["api-1"],
+        "kind": "healer",
+        "order": 7,
+        "audienceSees": "Nothing breaks; the Served by badge shows API-2 only, then API-1 again.",
+        "realWorldCause": "An unhandled crash on one instance.",
+        "expectedReceipt": "docker_start_accepted",
+        "risk": "moderate",
+        "failure": "Terminate API-1 with SIGKILL. Its current requests may disconnect.",
+        "recovery": "API-2 serves surviving requests; the independent Healer starts and verifies API-1.",
+        "prerequisites": "Both APIs, PostgreSQL, Redis and fresh monitoring must be healthy.",
+        "supported": true,
+        "available": true,
+        "reason": null
+      },
+      {
+        "id": "crash-edge",
+        "name": "Edge Node Failure",
+        "target": "edge-1",
+        "targets": ["edge-1"],
+        "kind": "healer",
+        "order": 8,
+        "audienceSees": "Video keeps playing; the overlay flips Served by Edge-1 to Edge-2, later Edge-1 again.",
+        "realWorldCause": "Cache node crash or disk/memory pressure on one edge.",
+        "expectedReceipt": "docker_start_accepted",
+        "risk": "moderate",
+        "failure": "Terminate the selected HLS edge. Viewers may briefly buffer.",
+        "recovery": "Existing routing uses Edge-2; the Healer verifies restored HLS segments.",
+        "prerequisites": "A genuine live source, healthy peer/origins and progressing media.",
+        "supported": true,
+        "available": true,
+        "reason": null
+      },
+      {
+        "id": "crash-primary",
+        "name": "Kill primary origin",
+        "target": "origin-primary",
+        "targets": ["origin-primary"],
+        "kind": "healer",
+        "order": 9,
+        "audienceSees": "The overlay shows Source: Primary to Standby, possibly with a short reinit.",
+        "realWorldCause": "Origin process crash or a failed media host.",
+        "expectedReceipt": "docker_start_accepted",
+        "risk": "high",
+        "failure": "Terminate primary MediaMTX. The player may reinitialize on standby.",
+        "recovery": "Standby preserves the source; the Healer restores primary without forced failback.",
+        "prerequisites": "Live publishing and independently verified healthy standby media.",
+        "supported": true,
+        "available": false,
+        "reason": "Scenario disabled by deployment policy."
+      },
+      {
+        "id": "network-timeout",
+        "name": "Network Latency / Connection Disruption",
+        "target": "demo-dependency",
+        "targets": ["demo-dependency"],
+        "kind": "resilience",
+        "order": 20,
+        "audienceSees": "Recommendations slow down, then the circuit protects callers until latency ends.",
+        "realWorldCause": "A congested or degraded network path to a partner API.",
+        "expectedReceipt": null,
+        "risk": "moderate",
+        "failure": "Add real downstream latency to the private recommendation connection.",
+        "recovery": "The owned fault expires; bounded safe-read probes verify real reconnection.",
+        "prerequisites": "Healthy simulated dependency, closed circuit and functioning expiry adapter.",
+        "supported": true,
+        "available": true,
+        "reason": null
+      },
+      {
+        "id": "external-api",
+        "name": "Interrupt external API demo",
+        "target": "demo-dependency",
+        "targets": ["demo-dependency"],
+        "kind": "resilience",
+        "order": 21,
+        "audienceSees": "Recommendations show an explicit unavailable fallback instead of hanging.",
+        "realWorldCause": "A third-party outage.",
+        "expectedReceipt": null,
+        "risk": "moderate",
+        "failure": "Reset connections to the explicitly simulated read-only recommendation API.",
+        "recovery": "Real circuit opens and rejects calls, then probes after timed fault cleanup.",
+        "prerequisites": "Closed circuit and healthy simulated upstream. No payments or writes.",
+        "supported": true,
+        "available": false,
+        "reason": "Scenario disabled by deployment policy."
+      },
+      {
+        "id": "database-outage",
+        "name": "Database outage",
+        "target": "postgres",
+        "targets": ["postgres"],
+        "kind": "disabled",
+        "order": 30,
+        "audienceSees": "Sign-in and writes would fail until an operator acts.",
+        "realWorldCause": "Disk failure, corruption or a bad migration.",
+        "expectedReceipt": null,
+        "risk": "high",
+        "failure": "Would interrupt database-dependent authorization and writes.",
+        "recovery": "Current policy escalates storage faults for operator review.",
+        "prerequisites": "A separate disposable database fault/cleanup authority is required.",
+        "supported": false,
+        "available": false,
+        "reason": "Disabled: no database fault or automatic database restoration authority is granted."
+      },
+      {
+        "id": "broadcast-interruption",
+        "name": "Interrupt test broadcaster",
+        "target": "publisher-source",
+        "targets": ["publisher-source"],
+        "kind": "disabled",
+        "order": 31,
+        "audienceSees": "The stream would go offline until the broadcaster returns.",
+        "realWorldCause": "Camera unplugged, laptop asleep or home internet loss.",
+        "expectedReceipt": null,
+        "risk": "moderate",
+        "failure": "Would stop a publisher owned by the test environment.",
+        "recovery": "Only an authorized broadcaster can return the original source.",
+        "prerequisites": "A controller-owned disposable publisher lifecycle is required.",
+        "supported": false,
+        "available": false,
+        "reason": "Disabled: the controller does not own your OBS, camera or FFmpeg process."
+      }
+    ],
+    "experiments": []
+  },
+  "cleanedContainers": 13,
+  "verifiedScenarios": 0,
+  "userEnvUnchanged": true,
+  "finishedAt": "2026-10-24T20:53:20.734Z"
+}

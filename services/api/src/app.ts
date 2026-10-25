@@ -1,3 +1,5 @@
+import type { ApiMetrics } from "./monitoring/metrics.js";
+import type { Platform } from "./platform/routes.js";
 import { randomUUID } from "node:crypto";
 import express, { type ErrorRequestHandler } from "express";
 import helmet from "helmet";
@@ -15,14 +17,31 @@ export function createApp(
   lifecycle: Lifecycle,
   logger: Logger = pino({ level: config.LOG_LEVEL }),
   media: MediaService = createMediaService(config),
+  platform?: Platform,
+  metrics?: ApiMetrics,
 ) {
   const app = express();
   app.disable("x-powered-by");
+  const servedBy =
+    config.API_INSTANCE_ID &&
+    (config.EXPOSE_SERVING_INSTANCE ??
+      (config.NODE_ENV === "production" ? "false" : "true")) === "true"
+      ? config.API_INSTANCE_ID
+      : null;
+  if (metrics) app.use(metrics.middleware);
   app.use((req, res, next) => {
-    // Generate our own IDs; untrusted incoming IDs are never reflected or logged.
-    const requestId = randomUUID();
+    // Default to our own ID; opt-in local gateway mode accepts only its fixed hex format.
+    const incoming = req.headers["x-request-id"];
+    const requestId =
+      config.TRUST_GATEWAY_IDS === "true" &&
+      typeof incoming === "string" &&
+      /^[a-f0-9]{32}$/.test(incoming)
+        ? incoming
+        : randomUUID();
     res.locals.requestId = requestId;
     res.setHeader("X-Request-ID", requestId);
+    // Visible proof of which redundant instance answered (demo/development only).
+    if (servedBy) res.setHeader("X-Served-By", servedBy);
     const started = performance.now();
     res.on("finish", () =>
       logger.info(
@@ -40,17 +59,23 @@ export function createApp(
   });
   app.use(helmet());
   app.use(
-    cors({ origin: config.CORS_ORIGINS, methods: ["GET"], credentials: false }),
+    cors({
+      origin: config.CORS_ORIGINS,
+      methods: ["GET", "POST", "PATCH"],
+      credentials: true,
+      exposedHeaders: servedBy ? ["X-Served-By"] : [],
+    }),
   );
   app.use(express.json({ limit: "16kb" }));
   app.get("/api/v1/health/live", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.json({ status: "alive", service: "streamshield-api" } satisfies Health);
   });
-  app.get("/api/v1/health/ready", (_req, res) => {
+  app.get("/api/v1/health/ready", async (_req, res) => {
+    const ready = lifecycle.ready && (!platform || (await platform.ready()));
     res.setHeader("Cache-Control", "no-store");
-    res.status(lifecycle.ready ? 200 : 503).json({
-      status: lifecycle.ready ? "ready" : "not_ready",
+    res.status(ready ? 200 : 503).json({
+      status: ready ? "ready" : "not_ready",
       service: "streamshield-api",
     } satisfies Health);
   });
@@ -58,8 +83,28 @@ export function createApp(
     res.setHeader("Cache-Control", "no-store");
     res.json({
       name: "StreamShield",
-      version: "0.2.0",
-      phase: 2,
+      version: config.CHAOS_URL
+        ? "0.7.0"
+        : config.HEALER_URL
+          ? "0.6.0"
+          : config.OBS_URL
+            ? "0.5.0"
+            : config.MEDIA_STANDBY_API_BASE_URL
+              ? "0.4.0"
+              : platform
+                ? "0.3.0"
+                : "0.2.0",
+      phase: config.CHAOS_URL
+        ? 7
+        : config.HEALER_URL
+          ? 6
+          : config.OBS_URL
+            ? 5
+            : config.MEDIA_STANDBY_API_BASE_URL
+              ? 4
+              : platform
+                ? 3
+                : 2,
       capabilities: [
         "API health probes",
         "System metadata",
@@ -69,6 +114,10 @@ export function createApp(
       ],
     } satisfies SystemInfo);
   });
+  if (platform) {
+    app.use("/api/v1", platform.router);
+    app.use(platform.errors);
+  }
   app.get("/api/v1/streams", async (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.json({ streams: [await media.getStream()] });

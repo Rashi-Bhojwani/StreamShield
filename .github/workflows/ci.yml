@@ -1,5 +1,11 @@
 name: Foundation and streaming checks
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -12,14 +18,16 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run setup:media
+      - run: npm run setup:platform
       - run: npm run lint && npm run format:check && npm run typecheck && npm test && npm run build
       - run: docker compose config --quiet
       - run: docker compose up --build --wait
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps chromium
+      - run: npm run test:platform
       - run: npm run test:e2e
       - run: npm run test:media
+      - run: npm run test:media:platform
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -28,3 +36,223 @@ jobs:
           if-no-files-found: ignore
       - if: always()
         run: docker compose down
+
+  resilience:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:resilience
+      - run: node infrastructure/resilience/compose.mjs config --quiet
+      - run: npm run resilience:up
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      - run: npm run resilience:probe
+      - run: npm run test:e2e
+      - run: npm run test:resilience
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resilience-results
+          path: test-results/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/resilience/compose.yml ]; then npm run resilience:down; fi
+
+  monitoring:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:monitoring
+      - run: node infrastructure/monitoring/compose.mjs config --quiet
+      - run: npm run monitoring:up
+      - run: npm run monitoring:probe
+      - run: node infrastructure/monitoring/compose.mjs exec -T --user 1001:1001 observer node -e "JSON.parse(require('node:fs').readFileSync('/config/targets.json','utf8'))"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:monitoring
+      - run: npm run test:resilience:monitoring
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monitoring-results
+          path: test-results/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/monitoring/compose.yml ]; then npm run monitoring:down; fi
+
+  healing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:healing -- --enable-local-repairs
+      - run: node infrastructure/healing/compose.mjs config --quiet
+      - run: npm run healing:up
+      - run: npm run healing:probe
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:healing
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: healing-results
+          path: test-results/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/healing/compose.yml ]; then npm run healing:down; fi
+
+  chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:chaos -- --enable-local-chaos
+      - run: node infrastructure/chaos/compose.mjs config --quiet
+      - run: npm run chaos:up
+      - run: npm run chaos:probe
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:chaos
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chaos-results
+          path: test-results/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/chaos/compose.yml ]; then npm run chaos:down; fi
+
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:demo -- --enable-local-chaos
+      - run: node infrastructure/demo/compose.mjs config --quiet
+      - run: npm run demo:up
+      - run: npm run chaos:probe
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:demo
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: three-channel-demo-results
+          path: test-results/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/demo/compose.yml ]; then npm run demo:down; fi
+
+  capacity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:demo
+      - run: npm run demo:up
+      - run: npm run capacity:run -- --profile socket --clients 100 --duration 10 --ramp 5 --authorize-owned-target
+      - run: npm run capacity:run -- --profile socket --clients 1000 --duration 20 --ramp 20 --authorize-owned-target
+      - run: node scripts/capacity/collect-evidence.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bounded-capacity-results
+          path: test-results/capacity/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/demo/compose.yml ]; then npm run demo:down; fi
+
+  dynamic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:dynamic -- --enable-local-chaos
+      - run: node infrastructure/dynamic/compose.mjs config --quiet
+      - run: npm run dynamic:up
+      - run: npm run chaos:probe
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:dynamic
+      - if: always()
+        run: node scripts/dynamic-diagnostics.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dynamic-streaming-results
+          path: test-results/dynamic/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/dynamic/compose.yml ]; then npm run dynamic:down; fi
+
+  final:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:dynamic -- --enable-local-chaos
+      - run: node infrastructure/dynamic/compose.mjs config --quiet
+      - run: npm run dynamic:up
+      - run: node infrastructure/dynamic/compose.mjs --profile spare create api-3
+      - run: npm run chaos:probe
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps chromium
+      # Two full rounds; the suite waits for Healer budgets/cooldowns instead of raising them.
+      - run: npm run test:final
+        env:
+          FINAL_ROUNDS: "2"
+      - if: always()
+        run: node scripts/final-watch.mjs --once
+      - if: always()
+        run: node scripts/dynamic-diagnostics.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-self-healing-results
+          path: |
+            test-results/final/
+            test-results/final-artifacts/
+            docs/screenshots/final/
+          if-no-files-found: ignore
+      - if: always()
+        run: if [ -f .local/dynamic/compose.yml ]; then npm run dynamic:down; fi

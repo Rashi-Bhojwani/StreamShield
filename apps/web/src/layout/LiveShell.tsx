@@ -1,3 +1,6 @@
+import { config } from "../config";
+import { useAuth } from "../platform/auth-context";
+import { AccountMenu } from "../platform/Auth";
 import { useEffect, useRef, useState } from "react";
 import {
   Link,
@@ -9,6 +12,7 @@ import {
 import { Brand } from "../ui/Brand";
 import { Icon, type IconName } from "../ui/Icon";
 import { useStreams } from "../streaming/useStreams";
+import { OutageBanner, ServedByBadge } from "../proof/ProofLayer";
 
 const navigation: { to: string; label: string; icon: IconName }[] = [
   { to: "/", label: "Home", icon: "home" },
@@ -16,6 +20,7 @@ const navigation: { to: string; label: string; icon: IconName }[] = [
   { to: "/explore", label: "Explore Categories", icon: "grid" },
 ];
 export function LiveShell() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
@@ -55,7 +60,9 @@ export function LiveShell() {
     };
   }, [open]);
   return (
-    <div className="live-app">
+    <div
+      className={"live-app" + (config.VITE_DYNAMIC_MODE ? " dynamic-app" : "")}
+    >
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -77,6 +84,16 @@ export function LiveShell() {
           </NavLink>
           <NavLink to="/live">Live</NavLink>
           <NavLink to="/explore">Explore</NavLink>
+          {config.VITE_DYNAMIC_MODE && (
+            <NavLink className="mobile-go-live" to="/studio">
+              Go Live
+            </NavLink>
+          )}
+          {config.VITE_DYNAMIC_MODE && (
+            <NavLink className="my-channel-nav" to="/my-channel">
+              My Channel
+            </NavLink>
+          )}
         </nav>
         <form
           className="search-form"
@@ -106,17 +123,12 @@ export function LiveShell() {
             <Icon name="arrow" />
           </button>
         </form>
-        <button
-          className="account-button"
-          disabled
-          aria-label="Accounts — coming soon"
-          title="Accounts are coming soon"
-        >
-          <Icon name="user" />
-          <span>
-            Accounts <small>Coming soon</small>
-          </span>
-        </button>
+        {config.VITE_DYNAMIC_MODE && (
+          <Link className="button primary" to="/studio">
+            <Icon name="studio" /> Go Live
+          </Link>
+        )}
+        <AccountMenu />
       </header>
       {open && (
         <button
@@ -166,16 +178,43 @@ export function LiveShell() {
         <div className="sidebar-divider" />
         <div className="sidebar-group">
           <p className="sidebar-label">Your space</p>
-          <button className="sidebar-future" disabled>
-            <Icon name="heart" />
-            <span>Following</span>
-            <small>Soon</small>
-          </button>
-          <button className="sidebar-future" disabled>
+          {user?.role === "administrator" ? (
+            <Link
+              className="sidebar-future"
+              to="/control"
+              onClick={() => setOpen(false)}
+            >
+              <Icon name="shield" />
+              <span>Control Center</span>
+              <small>Admin</small>
+            </Link>
+          ) : (
+            <button
+              className="sidebar-future"
+              disabled
+              title="Administrator access required"
+            >
+              <Icon name="lock" />
+              <span>Control Center</span>
+              <small>Admin only</small>
+            </button>
+          )}
+          <Link
+            className="sidebar-future studio-link"
+            to="/studio"
+            onClick={() => setOpen(false)}
+          >
             <Icon name="studio" />
             <span>Broadcaster Studio</span>
-            <small>Soon</small>
-          </button>
+          </Link>
+          <Link
+            className="sidebar-future studio-link"
+            to="/channels"
+            onClick={() => setOpen(false)}
+          >
+            <Icon name="grid" />
+            <span>Browse channels</span>
+          </Link>
         </div>
         <div className="sidebar-divider" />
         <section className="sidebar-group channels">
@@ -222,14 +261,10 @@ export function LiveShell() {
             <Icon name="shield" />
             <div>
               <span>StreamShield Control</span>
-              <small>Operations, in a future update</small>
+              <small>Administrator operations</small>
             </div>
           </div>
-          <button className="sidebar-future" disabled>
-            <Icon name="lock" />
-            <span>Control Center</span>
-            <small>Soon</small>
-          </button>
+
           <Link
             className="connection-link"
             to="/diagnostics"
@@ -243,11 +278,13 @@ export function LiveShell() {
         </div>
       </aside>
       <div className="app-workspace">
+        <OutageBanner />
         <main id="main" tabIndex={-1}>
           <Outlet />
         </main>
         <footer className="app-footer">
           <span>StreamShield Live</span>
+          <ServedByBadge signedIn={!!user} />
           <Link className="text-link" to="/about">
             About this build
           </Link>

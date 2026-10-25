@@ -1,0 +1,24 @@
+# Read existing .env values; do not regenerate or overwrite credentials/configuration.
+x-observation: &observation
+  OBS_STALE_MS: ${OBS_STALE_MS:-12000}
+x-load: &load
+  <<: *observation
+  CHAOS_OBSERVATION_WINDOW_MS: ${CHAOS_OBSERVATION_WINDOW_MS:-15000}
+  CHAOS_NETWORK_TOLERANCE_MS: ${CHAOS_NETWORK_TOLERANCE_MS:-500}
+  CHAOS_SURGE_RPS: ${CHAOS_SURGE_RPS:-50}
+  CHAOS_SURGE_MAX_REQUESTS: ${CHAOS_SURGE_MAX_REQUESTS:-3000}
+services:
+  api:
+    environment:
+      READINESS_TIMEOUT_MS: ${READINESS_TIMEOUT_MS:-750}
+  api-2:
+    environment:
+      READINESS_TIMEOUT_MS: ${READINESS_TIMEOUT_MS:-750}
+  observer:
+    environment: *observation
+  healer:
+    environment: *observation
+  chaos-controller:
+    environment: *load
+  chaos-fault-adapter:
+    environment: *load

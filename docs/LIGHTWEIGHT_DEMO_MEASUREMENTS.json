@@ -1,0 +1,1796 @@
+{
+  "id": "a109af7b",
+  "status": "PASS",
+  "startedAt": "2026-10-24T20:53:39.542Z",
+  "scenarios": [
+    {
+      "scenario": "crash-api",
+      "status": "PASS",
+      "experiment": {
+        "id": "42975e03-8eef-42de-ac17-b362d470d149",
+        "actor": "f11fc83e-b500-40fa-9178-bf78cfffde3a",
+        "scenario": "crash-api",
+        "target": "api-1",
+        "state": "COMPLETED",
+        "createdAt": "2026-10-24T20:54:52.095Z",
+        "updatedAt": "2026-10-24T20:55:19.345Z",
+        "injectedAt": "2026-10-24T20:54:53.950Z",
+        "faultConfirmedAt": "2026-10-24T20:54:54.126Z",
+        "incidentDetectedAt": "2026-10-24T20:54:56.599Z",
+        "actionStartedAt": "2026-10-24T20:54:57.866Z",
+        "actionFinishedAt": "2026-10-24T20:54:58.526Z",
+        "verifiedAt": "2026-10-24T20:55:18.883Z",
+        "finishedAt": "2026-10-24T20:55:19.345Z",
+        "deadline": 1792875472095,
+        "faultExpiresAt": null,
+        "incidentId": "1b9bea8d-5732-4c77-b823-767ef6e6f659",
+        "recoveryIds": ["8e2f2d4d-e3d8-4136-8ac8-98d5b082dbbb"],
+        "priorRecoveryIds": [],
+        "reason": "Restoration independently verified and observation window completed",
+        "mechanism": "Independent Healer allowlisted service start",
+        "cleanup": "NOT_REQUIRED",
+        "cancelRequestedBy": null,
+        "databasePersisted": true,
+        "evidence": {
+          "observationWindowMs": 15000,
+          "baselineObservedAt": "2026-10-24T20:54:50.401Z",
+          "signal": "SIGKILL",
+          "api-1:stoppedObserved": true,
+          "api-1:exitCode": 137,
+          "killAccepted": true,
+          "stoppedObserved": true,
+          "adapterConfirmedAt": "2026-10-24T20:54:54.123Z",
+          "unavailableProbe": "probe_unreachable",
+          "unavailableProbeAt": "2026-10-24T20:54:54.126Z",
+          "livePathsAtInjection": 1,
+          "recoveryAction": "start_stopped_service",
+          "recoveryPlaybook": "api-start",
+          "diagnosis": "API process is gone (connection refused or name unresolvable): start the stopped container",
+          "failureCode": "probe_unreachable",
+          "incidentPredatesFault": false,
+          "healerVerifiedAt": "2026-10-24T20:55:15.776Z",
+          "healerReceipt": "docker_start_accepted",
+          "healerReceipts": 1,
+          "independentBehaviorVerified": true,
+          "browserPlaybackVerified": false,
+          "observationLastVerifiedAt": "2026-10-24T20:55:19.340Z",
+          "baselineRestoredAt": "2026-10-24T20:55:19.340Z"
+        },
+        "events": [
+          {
+            "kind": "CREATED",
+            "at": "2026-10-24T20:54:52.095Z",
+            "detail": "API CRASH REQUESTED"
+          },
+          {
+            "kind": "VALIDATING",
+            "at": "2026-10-24T20:54:52.922Z",
+            "detail": "Checking fresh health, independent Healer and deployment policy"
+          },
+          {
+            "kind": "INJECTING",
+            "at": "2026-10-24T20:54:53.929Z",
+            "detail": "Durable intent recorded before restricted fault injection"
+          },
+          {
+            "kind": "FAULT_CONFIRMED",
+            "at": "2026-10-24T20:54:54.144Z",
+            "detail": "Actual infrastructure fault confirmed by restricted adapter"
+          },
+          {
+            "kind": "AWAITING_DETECTION",
+            "at": "2026-10-24T20:54:55.155Z",
+            "detail": "Awaiting a confirmed Phase 5 incident"
+          },
+          {
+            "kind": "INCIDENT_CORRELATED",
+            "at": "2026-10-24T20:54:58.417Z",
+            "detail": "Independent recovery attempt 8e2f2d4d-e3d8-4136-8ac8-98d5b082dbbb for api-1 (api-start)"
+          },
+          {
+            "kind": "INCIDENT_DETECTED",
+            "at": "2026-10-24T20:54:56.599Z",
+            "detail": "Confirmed Phase 5 detection"
+          },
+          {
+            "kind": "HEALING_OBSERVED",
+            "at": "2026-10-24T20:54:58.420Z",
+            "detail": "Independent Healer action observed: start stopped service api-1"
+          },
+          {
+            "kind": "VERIFYING",
+            "at": "2026-10-24T20:54:59.436Z",
+            "detail": "Independent Healer verification observed"
+          },
+          {
+            "kind": "TARGET_VERIFIED",
+            "at": "2026-10-24T20:55:15.776Z",
+            "detail": "api-1 verified by the Healer (docker_start_accepted)"
+          },
+          {
+            "kind": "SERVICE_VERIFIED",
+            "at": "2026-10-24T20:55:18.883Z",
+            "detail": "Experiment independently verified actual service behavior"
+          },
+          {
+            "kind": "COMPLETED",
+            "at": "2026-10-24T20:55:19.345Z",
+            "detail": "Restoration independently verified and observation window completed"
+          }
+        ],
+        "measurements": {
+          "detectionMs": 2649,
+          "healingStartMs": 3916,
+          "actionMs": 660,
+          "restorationMs": 24933,
+          "playbackInterruptionMs": null,
+          "demonstrationMs": 25390
+        }
+      },
+      "attempts": [
+        {
+          "id": "8e2f2d4d-e3d8-4136-8ac8-98d5b082dbbb",
+          "incidentId": "1b9bea8d-5732-4c77-b823-767ef6e6f659",
+          "component": "api-1",
+          "episode": "api-1:2026-10-24T20:54:54.573Z",
+          "playbook": "api-start",
+          "version": 1,
+          "actor": "streamshield-healer",
+          "diagnosis": "API process is gone (connection refused or name unresolvable): start the stopped container",
+          "action": "start_stopped_service",
+          "state": "VERIFIED",
+          "number": 1,
+          "epoch": 1,
+          "createdAt": "2026-10-24T20:54:57.535Z",
+          "detectedAt": "2026-10-24T20:54:54.573Z",
+          "actionStartedAt": "2026-10-24T20:54:57.866Z",
+          "actionFinishedAt": "2026-10-24T20:54:58.526Z",
+          "verificationStartedAt": "2026-10-24T20:54:58.527Z",
+          "finishedAt": "2026-10-24T20:55:15.776Z",
+          "nextAt": 0,
+          "deadline": 1792875358527,
+          "reason": "independent_behavior_verified",
+          "evidence": {
+            "browserPlaybackVerified": false,
+            "failureCode": "probe_unreachable",
+            "consecutiveFailures": 2,
+            "observerConfirmedAt": "2026-10-24T20:54:56.599Z",
+            "containerState": "exited",
+            "containerExitCode": 137,
+            "containerStartedAtBefore": "2026-10-24T20:54:08.55159457Z",
+            "controlReceipt": "docker_start_accepted",
+            "actionOrigin": "healer_control_adapter",
+            "actionPerformed": true,
+            "stableSince": 1792875312332,
+            "readinessResponseMs": 2,
+            "gatewayServingAPIs": "api-1,api-2",
+            "gatewayBothAPIs": true,
+            "gatewayRepairedAPIServing": true,
+            "applicationReadVerified": true
+          },
+          "events": [
+            {
+              "state": "SCHEDULED",
+              "at": "2026-10-24T20:54:57.535Z",
+              "reason": "confirmed_independent_failure"
+            },
+            {
+              "state": "EXECUTING",
+              "reason": "allowlisted_playbook_selected",
+              "at": "2026-10-24T20:54:57.866Z"
+            },
+            {
+              "state": "VERIFYING",
+              "reason": "independent_verification_started",
+              "at": "2026-10-24T20:54:58.527Z"
+            },
+            {
+              "state": "VERIFIED",
+              "reason": "independent_behavior_verified",
+              "at": "2026-10-24T20:55:15.776Z"
+            }
+          ],
+          "databasePersisted": true
+        }
+      ],
+      "stoppedObserved": true,
+      "edgeFallbackObserved": null,
+      "peerUnchanged": null,
+      "controlPlaneUnchanged": true,
+      "actualRecoveryMs": 24933,
+      "demonstrationMs": 25390,
+      "browserPlayback": {
+        "observedAt": "2026-10-24T20:55:20.921Z",
+        "before": {
+          "currentTime": 38.530136,
+          "width": 640,
+          "height": 360,
+          "frames": 832,
+          "paused": false
+        },
+        "after": {
+          "currentTime": 39.348637,
+          "width": 640,
+          "height": 360,
+          "frames": 852,
+          "paused": false
+        },
+        "newMediaResponses": 2
+      },
+      "existingUiVerifiedResult": true
+    },
+    {
+      "scenario": "crash-video-gateway",
+      "status": "PASS",
+      "experiment": {
+        "id": "f73535c6-1b06-4989-b120-89d614f7b125",
+        "actor": "f11fc83e-b500-40fa-9178-bf78cfffde3a",
+        "scenario": "crash-video-gateway",
+        "target": "video-gateway",
+        "state": "COMPLETED",
+        "createdAt": "2026-10-24T20:55:23.503Z",
+        "updatedAt": "2026-10-24T20:55:42.339Z",
+        "injectedAt": "2026-10-24T20:55:26.633Z",
+        "faultConfirmedAt": "2026-10-24T20:55:26.866Z",
+        "incidentDetectedAt": "2026-10-24T20:55:30.470Z",
+        "actionStartedAt": "2026-10-24T20:55:30.944Z",
+        "actionFinishedAt": "2026-10-24T20:55:31.153Z",
+        "verifiedAt": "2026-10-24T20:55:39.174Z",
+        "finishedAt": "2026-10-24T20:55:42.338Z",
+        "deadline": 1792875503503,
+        "faultExpiresAt": null,
+        "incidentId": "789bc77b-9a1a-4a63-b447-19ad4b6da0d9",
+        "recoveryIds": ["d2042d35-a0ba-407a-a847-72bb304da6ca"],
+        "priorRecoveryIds": ["8e2f2d4d-e3d8-4136-8ac8-98d5b082dbbb"],
+        "reason": "Restoration independently verified and observation window completed",
+        "mechanism": "Independent Healer allowlisted service start",
+        "cleanup": "NOT_REQUIRED",
+        "cancelRequestedBy": null,
+        "databasePersisted": true,
+        "evidence": {
+          "observationWindowMs": 15000,
+          "baselineObservedAt": "2026-10-24T20:55:22.030Z",
+          "signal": "SIGKILL",
+          "video-gateway:stoppedObserved": true,
+          "video-gateway:exitCode": 137,
+          "killAccepted": true,
+          "stoppedObserved": true,
+          "adapterConfirmedAt": "2026-10-24T20:55:26.866Z",
+          "unavailableProbe": "probe_unreachable",
+          "unavailableProbeAt": "2026-10-24T20:55:26.866Z",
+          "livePathsAtInjection": 1,
+          "recoveryAction": "start_stopped_service",
+          "recoveryPlaybook": "gateway-start",
+          "diagnosis": "Video gateway process is gone (single HLS entry): start the stopped container",
+          "failureCode": "probe_unreachable",
+          "incidentPredatesFault": false,
+          "healerVerifiedAt": "2026-10-24T20:55:36.911Z",
+          "healerReceipt": "docker_start_accepted",
+          "healerReceipts": 1,
+          "independentBehaviorVerified": true,
+          "browserPlaybackVerified": false,
+          "observationLastVerifiedAt": "2026-10-24T20:55:42.336Z",
+          "baselineRestoredAt": "2026-10-24T20:55:42.336Z"
+        },
+        "events": [
+          {
+            "kind": "CREATED",
+            "at": "2026-10-24T20:55:23.503Z",
+            "detail": "VIDEO GATEWAY CRASH REQUESTED"
+          },
+          {
+            "kind": "VALIDATING",
+            "at": "2026-10-24T20:55:24.480Z",
+            "detail": "Checking fresh health, independent Healer and deployment policy"
+          },
+          {
+            "kind": "STANDBY_VALIDATING",
+            "at": "2026-10-24T20:55:25.576Z",
+            "detail": "Waiting for independently observed standby segment progression; no fault injected"
+          },
+          {
+            "kind": "INJECTING",
+            "at": "2026-10-24T20:55:26.626Z",
+            "detail": "Durable intent recorded before restricted fault injection"
+          },
+          {
+            "kind": "FAULT_CONFIRMED",
+            "at": "2026-10-24T20:55:26.892Z",
+            "detail": "Actual infrastructure fault confirmed by restricted adapter"
+          },
+          {
+            "kind": "AWAITING_DETECTION",
+            "at": "2026-10-24T20:55:27.903Z",
+            "detail": "Awaiting a confirmed Phase 5 incident"
+          },
+          {
+            "kind": "INCIDENT_CORRELATED",
+            "at": "2026-10-24T20:55:31.937Z",
+            "detail": "Independent recovery attempt d2042d35-a0ba-407a-a847-72bb304da6ca for video-gateway (gateway-start)"
+          },
+          {
+            "kind": "INCIDENT_DETECTED",
+            "at": "2026-10-24T20:55:30.470Z",
+            "detail": "Confirmed Phase 5 detection"
+          },
+          {
+            "kind": "HEALING_OBSERVED",
+            "at": "2026-10-24T20:55:31.938Z",
+            "detail": "Independent Healer action observed: start stopped service video-gateway"
+          },
+          {
+            "kind": "VERIFYING",
+            "at": "2026-10-24T20:55:31.939Z",
+            "detail": "Independent Healer verification observed"
+          },
+          {
+            "kind": "TARGET_VERIFIED",
+            "at": "2026-10-24T20:55:36.911Z",
+            "detail": "video-gateway verified by the Healer (docker_start_accepted)"
+          },
+          {
+            "kind": "SERVICE_VERIFIED",
+            "at": "2026-10-24T20:55:39.174Z",
+            "detail": "Experiment independently verified actual service behavior"
+          },
+          {
+            "kind": "COMPLETED",
+            "at": "2026-10-24T20:55:42.338Z",
+            "detail": "Restoration independently verified and observation window completed"
+          }
+        ],
+        "measurements": {
+          "detectionMs": 3837,
+          "healingStartMs": 4311,
+          "actionMs": 209,
+          "restorationMs": 12541,
+          "playbackInterruptionMs": null,
+          "demonstrationMs": 15703
+        }
+      },
+      "attempts": [
+        {
+          "id": "d2042d35-a0ba-407a-a847-72bb304da6ca",
+          "incidentId": "789bc77b-9a1a-4a63-b447-19ad4b6da0d9",
+          "component": "video-gateway",
+          "episode": "video-gateway:2026-10-24T20:55:28.209Z",
+          "playbook": "gateway-start",
+          "version": 1,
+          "actor": "streamshield-healer",
+          "diagnosis": "Video gateway process is gone (single HLS entry): start the stopped container",
+          "action": "start_stopped_service",
+          "state": "VERIFIED",
+          "number": 1,
+          "epoch": 1,
+          "createdAt": "2026-10-24T20:55:30.934Z",
+          "detectedAt": "2026-10-24T20:55:28.209Z",
+          "actionStartedAt": "2026-10-24T20:55:30.944Z",
+          "actionFinishedAt": "2026-10-24T20:55:31.153Z",
+          "verificationStartedAt": "2026-10-24T20:55:31.153Z",
+          "finishedAt": "2026-10-24T20:55:36.911Z",
+          "nextAt": 0,
+          "deadline": 1792875391153,
+          "reason": "independent_behavior_verified",
+          "evidence": {
+            "browserPlaybackVerified": false,
+            "failureCode": "probe_unreachable",
+            "consecutiveFailures": 2,
+            "observerConfirmedAt": "2026-10-24T20:55:30.470Z",
+            "containerState": "exited",
+            "containerExitCode": 137,
+            "containerStartedAtBefore": "2026-10-24T20:54:03.741345431Z",
+            "controlReceipt": "docker_start_accepted",
+            "actionOrigin": "healer_control_adapter",
+            "actionPerformed": true,
+            "stableSince": 1792875333854,
+            "gatewayHealth": true,
+            "livePaths": 1,
+            "progressingPaths": 1,
+            "mediaVerification": "authorized_segment_progression_through_gateway"
+          },
+          "events": [
+            {
+              "state": "SCHEDULED",
+              "at": "2026-10-24T20:55:30.934Z",
+              "reason": "confirmed_independent_failure"
+            },
+            {
+              "state": "EXECUTING",
+              "reason": "allowlisted_playbook_selected",
+              "at": "2026-10-24T20:55:30.944Z"
+            },
+            {
+              "state": "VERIFYING",
+              "reason": "independent_verification_started",
+              "at": "2026-10-24T20:55:31.153Z"
+            },
+            {
+              "state": "VERIFIED",
+              "reason": "independent_behavior_verified",
+              "at": "2026-10-24T20:55:36.911Z"
+            }
+          ],
+          "databasePersisted": true
+        }
+      ],
+      "stoppedObserved": true,
+      "edgeFallbackObserved": null,
+      "peerUnchanged": null,
+      "controlPlaneUnchanged": true,
+      "actualRecoveryMs": 12541,
+      "demonstrationMs": 15703,
+      "browserPlayback": {
+        "observedAt": "2026-10-24T20:55:45.021Z",
+        "before": {
+          "currentTime": 11.148883,
+          "width": 640,
+          "height": 360,
+          "frames": 176,
+          "paused": false
+        },
+        "after": {
+          "currentTime": 12.76754,
+          "width": 640,
+          "height": 360,
+          "frames": 215,
+          "paused": false
+        },
+        "newMediaResponses": 2
+      },
+      "existingUiVerifiedResult": true
+    },
+    {
+      "scenario": "crash-edge",
+      "status": "PASS",
+      "experiment": {
+        "id": "8cae4d68-2e5b-4dcd-bef4-4fae0b019aef",
+        "actor": "f11fc83e-b500-40fa-9178-bf78cfffde3a",
+        "scenario": "crash-edge",
+        "target": "edge-1",
+        "state": "COMPLETED",
+        "createdAt": "2026-10-24T20:55:47.061Z",
+        "updatedAt": "2026-10-24T20:56:04.567Z",
+        "injectedAt": "2026-10-24T20:55:48.728Z",
+        "faultConfirmedAt": "2026-10-24T20:55:48.888Z",
+        "incidentDetectedAt": "2026-10-24T20:55:51.350Z",
+        "actionStartedAt": "2026-10-24T20:55:52.067Z",
+        "actionFinishedAt": "2026-10-24T20:55:52.220Z",
+        "verifiedAt": "2026-10-24T20:56:01.419Z",
+        "finishedAt": "2026-10-24T20:56:04.567Z",
+        "deadline": 1792875527061,
+        "faultExpiresAt": null,
+        "incidentId": "397a51c8-615c-44d0-af4f-116acbf9aa76",
+        "recoveryIds": ["f06f9708-09bd-4f2a-9c3d-89aa193b8c02"],
+        "priorRecoveryIds": [
+          "d2042d35-a0ba-407a-a847-72bb304da6ca",
+          "8e2f2d4d-e3d8-4136-8ac8-98d5b082dbbb"
+        ],
+        "reason": "Restoration independently verified and observation window completed",
+        "mechanism": "Independent Healer allowlisted service start",
+        "cleanup": "NOT_REQUIRED",
+        "cancelRequestedBy": null,
+        "databasePersisted": true,
+        "evidence": {
+          "observationWindowMs": 15000,
+          "baselineObservedAt": "2026-10-24T20:55:46.063Z",
+          "edgeBefore": "edge-1",
+          "edgeBeforeAt": "2026-10-24T20:55:48.725Z",
+          "signal": "SIGKILL",
+          "edge-1:stoppedObserved": true,
+          "edge-1:exitCode": 137,
+          "killAccepted": true,
+          "stoppedObserved": true,
+          "livePathsAtInjection": 1,
+          "edgeAfter": "edge-2",
+          "edgeFailoverObservedAt": "2026-10-24T20:55:49.921Z",
+          "recoveryAction": "start_stopped_service",
+          "recoveryPlaybook": "edge-start",
+          "diagnosis": "HLS edge process is gone: start the stopped container",
+          "failureCode": "probe_unreachable",
+          "incidentPredatesFault": false,
+          "healerVerifiedAt": "2026-10-24T20:55:57.434Z",
+          "healerReceipt": "docker_start_accepted",
+          "healerReceipts": 1,
+          "independentBehaviorVerified": true,
+          "browserPlaybackVerified": false,
+          "observationLastVerifiedAt": "2026-10-24T20:56:04.565Z",
+          "baselineRestoredAt": "2026-10-24T20:56:04.565Z"
+        },
+        "events": [
+          {
+            "kind": "CREATED",
+            "at": "2026-10-24T20:55:47.061Z",
+            "detail": "Administrator confirmed edge-1"
+          },
+          {
+            "kind": "VALIDATING",
+            "at": "2026-10-24T20:55:47.705Z",
+            "detail": "Checking fresh health, independent Healer and deployment policy"
+          },
+          {
+            "kind": "INJECTING",
+            "at": "2026-10-24T20:55:48.725Z",
+            "detail": "Durable intent recorded before restricted fault injection"
+          },
+          {
+            "kind": "FAULT_CONFIRMED",
+            "at": "2026-10-24T20:55:48.889Z",
+            "detail": "Actual infrastructure fault confirmed by restricted adapter"
+          },
+          {
+            "kind": "EDGE_FAILOVER_VERIFIED",
+            "at": "2026-10-24T20:55:49.921Z",
+            "detail": "Live manifest served by edge-2 while edge-1 was unavailable"
+          },
+          {
+            "kind": "AWAITING_DETECTION",
+            "at": "2026-10-24T20:55:49.922Z",
+            "detail": "Awaiting a confirmed Phase 5 incident"
+          },
+          {
+            "kind": "INCIDENT_CORRELATED",
+            "at": "2026-10-24T20:55:52.944Z",
+            "detail": "Independent recovery attempt f06f9708-09bd-4f2a-9c3d-89aa193b8c02 for edge-1 (edge-start)"
+          },
+          {
+            "kind": "INCIDENT_DETECTED",
+            "at": "2026-10-24T20:55:51.350Z",
+            "detail": "Confirmed Phase 5 detection"
+          },
+          {
+            "kind": "HEALING_OBSERVED",
+            "at": "2026-10-24T20:55:52.945Z",
+            "detail": "Independent Healer action observed: start stopped service edge-1"
+          },
+          {
+            "kind": "VERIFYING",
+            "at": "2026-10-24T20:55:52.945Z",
+            "detail": "Independent Healer verification observed"
+          },
+          {
+            "kind": "TARGET_VERIFIED",
+            "at": "2026-10-24T20:55:57.434Z",
+            "detail": "edge-1 verified by the Healer (docker_start_accepted)"
+          },
+          {
+            "kind": "SERVICE_VERIFIED",
+            "at": "2026-10-24T20:56:01.419Z",
+            "detail": "Experiment independently verified actual service behavior"
+          },
+          {
+            "kind": "COMPLETED",
+            "at": "2026-10-24T20:56:04.567Z",
+            "detail": "Restoration independently verified and observation window completed"
+          }
+        ],
+        "measurements": {
+          "detectionMs": 2622,
+          "healingStartMs": 3339,
+          "actionMs": 153,
+          "restorationMs": 12691,
+          "playbackInterruptionMs": null,
+          "demonstrationMs": 15837
+        }
+      },
+      "attempts": [
+        {
+          "id": "f06f9708-09bd-4f2a-9c3d-89aa193b8c02",
+          "incidentId": "397a51c8-615c-44d0-af4f-116acbf9aa76",
+          "component": "edge-1",
+          "episode": "edge-1:2026-10-24T20:55:49.279Z",
+          "playbook": "edge-start",
+          "version": 1,
+          "actor": "streamshield-healer",
+          "diagnosis": "HLS edge process is gone: start the stopped container",
+          "action": "start_stopped_service",
+          "state": "VERIFIED",
+          "number": 1,
+          "epoch": 1,
+          "createdAt": "2026-10-24T20:55:52.058Z",
+          "detectedAt": "2026-10-24T20:55:49.279Z",
+          "actionStartedAt": "2026-10-24T20:55:52.067Z",
+          "actionFinishedAt": "2026-10-24T20:55:52.220Z",
+          "verificationStartedAt": "2026-10-24T20:55:52.221Z",
+          "finishedAt": "2026-10-24T20:55:57.434Z",
+          "nextAt": 0,
+          "deadline": 1792875412221,
+          "reason": "independent_behavior_verified",
+          "evidence": {
+            "browserPlaybackVerified": false,
+            "failureCode": "probe_unreachable",
+            "consecutiveFailures": 2,
+            "observerConfirmedAt": "2026-10-24T20:55:51.350Z",
+            "containerState": "exited",
+            "containerExitCode": 137,
+            "containerStartedAtBefore": "2026-10-24T20:54:02.511356295Z",
+            "controlReceipt": "docker_start_accepted",
+            "actionOrigin": "healer_control_adapter",
+            "actionPerformed": true,
+            "stableSince": 1792875354262,
+            "livePaths": 1,
+            "progressingPaths": 1,
+            "mediaVerification": "authorized_segment_progression"
+          },
+          "events": [
+            {
+              "state": "SCHEDULED",
+              "at": "2026-10-24T20:55:52.058Z",
+              "reason": "confirmed_independent_failure"
+            },
+            {
+              "state": "EXECUTING",
+              "reason": "allowlisted_playbook_selected",
+              "at": "2026-10-24T20:55:52.067Z"
+            },
+            {
+              "state": "VERIFYING",
+              "reason": "independent_verification_started",
+              "at": "2026-10-24T20:55:52.221Z"
+            },
+            {
+              "state": "VERIFIED",
+              "reason": "independent_behavior_verified",
+              "at": "2026-10-24T20:55:57.434Z"
+            }
+          ],
+          "databasePersisted": true
+        }
+      ],
+      "stoppedObserved": true,
+      "edgeFallbackObserved": true,
+      "peerUnchanged": true,
+      "controlPlaneUnchanged": true,
+      "actualRecoveryMs": 12691,
+      "demonstrationMs": 15837,
+      "browserPlayback": {
+        "observedAt": "2026-10-24T20:56:07.804Z",
+        "before": {
+          "currentTime": 18.103089,
+          "width": 640,
+          "height": 360,
+          "frames": 343,
+          "paused": false
+        },
+        "after": {
+          "currentTime": 19.526692,
+          "width": 640,
+          "height": 360,
+          "frames": 377,
+          "paused": false
+        },
+        "newMediaResponses": 2
+      },
+      "existingUiVerifiedResult": true
+    },
+    {
+      "scenario": "network-timeout",
+      "status": "PASS",
+      "experiment": {
+        "id": "f8c7cd6c-109e-4e42-b8db-48c40ba0639c",
+        "actor": "f11fc83e-b500-40fa-9178-bf78cfffde3a",
+        "scenario": "network-timeout",
+        "target": "demo-dependency",
+        "state": "COMPLETED",
+        "createdAt": "2026-10-24T20:56:10.018Z",
+        "updatedAt": "2026-10-24T20:56:30.347Z",
+        "injectedAt": "2026-10-24T20:56:11.040Z",
+        "faultConfirmedAt": "2026-10-24T20:56:11.066Z",
+        "incidentDetectedAt": "2026-10-24T20:56:15.028Z",
+        "actionStartedAt": "2026-10-24T20:56:17.622Z",
+        "actionFinishedAt": "2026-10-24T20:56:17.626Z",
+        "verifiedAt": "2026-10-24T20:56:30.339Z",
+        "finishedAt": "2026-10-24T20:56:30.346Z",
+        "deadline": 1792875550018,
+        "faultExpiresAt": 1792875379040,
+        "incidentId": "cfbbcf5c-e152-47b2-86f3-21866e0d4563",
+        "recoveryIds": ["2281428f-7942-4974-97ce-92f7377d1a19"],
+        "priorRecoveryIds": [
+          "f06f9708-09bd-4f2a-9c3d-89aa193b8c02",
+          "d2042d35-a0ba-407a-a847-72bb304da6ca",
+          "8e2f2d4d-e3d8-4136-8ac8-98d5b082dbbb"
+        ],
+        "reason": "Restoration independently verified and observation window completed",
+        "mechanism": "Timed fault cleanup + autonomous safe-read/circuit reconnection",
+        "cleanup": "COMPLETED",
+        "cancelRequestedBy": null,
+        "databasePersisted": true,
+        "evidence": {
+          "observationWindowMs": 15000,
+          "baselineObservedAt": "2026-10-24T20:56:07.758Z",
+          "networkBaselineMs": 6,
+          "networkBaselineSamples": 3,
+          "circuitRequestsBefore": 45,
+          "networkToleranceMs": 500,
+          "toxicCreated": true,
+          "simulatedDependency": true,
+          "faultDurationMs": 8000,
+          "livePathsAtInjection": 1,
+          "dependencyReadAttempts": 7,
+          "lastCircuitState": "CLOSED",
+          "recoveryAction": "safe_read_retry",
+          "recoveryPlaybook": "dependency-reconnect",
+          "diagnosis": "External read-only dependency failing: let the circuit probe and reconnect",
+          "failureCode": "probe_timeout",
+          "incidentPredatesFault": false,
+          "networkVerifiedMs": 5,
+          "networkWithinTolerance": true,
+          "healerVerifiedAt": "2026-10-24T20:56:27.753Z",
+          "healerReceipt": "safe_read",
+          "healerReceipts": 1,
+          "independentBehaviorVerified": true,
+          "browserPlaybackVerified": false,
+          "observationLastVerifiedAt": "2026-10-24T20:56:30.344Z",
+          "baselineRestoredAt": "2026-10-24T20:56:30.345Z"
+        },
+        "events": [
+          {
+            "kind": "CREATED",
+            "at": "2026-10-24T20:56:10.018Z",
+            "detail": "Administrator confirmed demo-dependency"
+          },
+          {
+            "kind": "VALIDATING",
+            "at": "2026-10-24T20:56:10.020Z",
+            "detail": "Checking fresh health, independent Healer and deployment policy"
+          },
+          {
+            "kind": "INJECTING",
+            "at": "2026-10-24T20:56:11.037Z",
+            "detail": "Durable intent recorded before restricted fault injection"
+          },
+          {
+            "kind": "FAULT_CONFIRMED",
+            "at": "2026-10-24T20:56:11.066Z",
+            "detail": "Actual infrastructure fault confirmed by restricted adapter"
+          },
+          {
+            "kind": "AWAITING_DETECTION",
+            "at": "2026-10-24T20:56:12.073Z",
+            "detail": "Awaiting a confirmed Phase 5 incident"
+          },
+          {
+            "kind": "CIRCUIT_CLOSED",
+            "at": "2026-10-24T20:56:13.081Z",
+            "detail": "Observed recommendation circuit CLOSED"
+          },
+          {
+            "kind": "CIRCUIT_OPEN",
+            "at": "2026-10-24T20:56:18.111Z",
+            "detail": "Observed recommendation circuit OPEN"
+          },
+          {
+            "kind": "INCIDENT_CORRELATED",
+            "at": "2026-10-24T20:56:18.111Z",
+            "detail": "Independent recovery attempt 2281428f-7942-4974-97ce-92f7377d1a19 for demo-dependency (dependency-reconnect)"
+          },
+          {
+            "kind": "INCIDENT_DETECTED",
+            "at": "2026-10-24T20:56:15.028Z",
+            "detail": "Confirmed Phase 5 detection"
+          },
+          {
+            "kind": "HEALING_OBSERVED",
+            "at": "2026-10-24T20:56:18.112Z",
+            "detail": "Independent Healer action observed: safe read retry demo-dependency"
+          },
+          {
+            "kind": "VERIFYING",
+            "at": "2026-10-24T20:56:18.112Z",
+            "detail": "Independent Healer verification observed"
+          },
+          {
+            "kind": "CLEANUP_COMPLETED",
+            "at": "2026-10-24T20:56:19.062Z",
+            "detail": "Timed toxic removal is fault cleanup, not Healer service repair"
+          },
+          {
+            "kind": "CIRCUIT_HALF_OPEN",
+            "at": "2026-10-24T20:56:23.210Z",
+            "detail": "Observed recommendation circuit HALF_OPEN"
+          },
+          {
+            "kind": "CIRCUIT_CLOSED",
+            "at": "2026-10-24T20:56:25.263Z",
+            "detail": "Observed recommendation circuit CLOSED"
+          },
+          {
+            "kind": "TARGET_VERIFIED",
+            "at": "2026-10-24T20:56:27.753Z",
+            "detail": "demo-dependency verified by the Healer (no receipt)"
+          },
+          {
+            "kind": "SERVICE_VERIFIED",
+            "at": "2026-10-24T20:56:30.339Z",
+            "detail": "Experiment independently verified actual service behavior"
+          },
+          {
+            "kind": "COMPLETED",
+            "at": "2026-10-24T20:56:30.346Z",
+            "detail": "Restoration independently verified and observation window completed"
+          }
+        ],
+        "measurements": {
+          "detectionMs": 3988,
+          "healingStartMs": 6582,
+          "actionMs": 4,
+          "restorationMs": 19299,
+          "playbackInterruptionMs": null,
+          "demonstrationMs": 19305
+        }
+      },
+      "attempts": [
+        {
+          "id": "2281428f-7942-4974-97ce-92f7377d1a19",
+          "incidentId": "cfbbcf5c-e152-47b2-86f3-21866e0d4563",
+          "component": "demo-dependency",
+          "episode": "demo-dependency:2026-10-24T20:56:12.861Z",
+          "playbook": "dependency-reconnect",
+          "version": 1,
+          "actor": "streamshield-healer",
+          "diagnosis": "External read-only dependency failing: let the circuit probe and reconnect",
+          "action": "safe_read_retry",
+          "state": "VERIFIED",
+          "number": 1,
+          "epoch": 1,
+          "createdAt": "2026-10-24T20:56:17.616Z",
+          "detectedAt": "2026-10-24T20:56:12.861Z",
+          "actionStartedAt": "2026-10-24T20:56:17.622Z",
+          "actionFinishedAt": "2026-10-24T20:56:17.626Z",
+          "verificationStartedAt": "2026-10-24T20:56:17.626Z",
+          "finishedAt": "2026-10-24T20:56:27.753Z",
+          "nextAt": 0,
+          "deadline": 1792875437626,
+          "reason": "independent_behavior_verified",
+          "evidence": {
+            "browserPlaybackVerified": false,
+            "failureCode": "probe_timeout",
+            "consecutiveFailures": 2,
+            "observerConfirmedAt": "2026-10-24T20:56:15.028Z",
+            "actionOrigin": "bounded_safe_get",
+            "stableSince": 1792875384722,
+            "circuit": "CLOSED",
+            "safeReadVerified": true
+          },
+          "events": [
+            {
+              "state": "SCHEDULED",
+              "at": "2026-10-24T20:56:17.616Z",
+              "reason": "confirmed_independent_failure"
+            },
+            {
+              "state": "EXECUTING",
+              "reason": "allowlisted_playbook_selected",
+              "at": "2026-10-24T20:56:17.622Z"
+            },
+            {
+              "state": "VERIFYING",
+              "reason": "independent_verification_started",
+              "at": "2026-10-24T20:56:17.626Z"
+            },
+            {
+              "state": "VERIFIED",
+              "reason": "independent_behavior_verified",
+              "at": "2026-10-24T20:56:27.753Z"
+            }
+          ],
+          "databasePersisted": true
+        }
+      ],
+      "stoppedObserved": false,
+      "edgeFallbackObserved": null,
+      "peerUnchanged": null,
+      "controlPlaneUnchanged": true,
+      "actualRecoveryMs": 19299,
+      "demonstrationMs": 19305,
+      "browserPlayback": {
+        "observedAt": "2026-10-24T20:56:32.263Z",
+        "before": {
+          "currentTime": 43.22367,
+          "width": 640,
+          "height": 360,
+          "frames": 945,
+          "paused": false
+        },
+        "after": {
+          "currentTime": 43.986721,
+          "width": 640,
+          "height": 360,
+          "frames": 963,
+          "paused": false
+        },
+        "newMediaResponses": 2
+      },
+      "existingUiVerifiedResult": true
+    }
+  ],
+  "selectedScenarios": [
+    "crash-api",
+    "crash-video-gateway",
+    "crash-edge",
+    "network-timeout"
+  ],
+  "repetitions": 1,
+  "controlRoute": "/control/chaos",
+  "currentStage": "api-ready-after-startup-probe",
+  "artifacts": {
+    "directory": "test-results/light-four/runs/a109af7b",
+    "serviceLogs": [
+      {
+        "service": "postgres",
+        "file": "services/postgres.log"
+      },
+      {
+        "service": "redis",
+        "file": "services/redis.log"
+      },
+      {
+        "service": "mediamtx",
+        "file": "services/mediamtx.log"
+      },
+      {
+        "service": "origin-primary",
+        "file": "services/origin-primary.log"
+      },
+      {
+        "service": "origin-standby",
+        "file": "services/origin-standby.log"
+      },
+      {
+        "service": "edge-1",
+        "file": "services/edge-1.log"
+      },
+      {
+        "service": "edge-2",
+        "file": "services/edge-2.log"
+      },
+      {
+        "service": "video-gateway",
+        "file": "services/video-gateway.log"
+      },
+      {
+        "service": "api",
+        "file": "services/api.log"
+      },
+      {
+        "service": "api-gateway",
+        "file": "services/api-gateway.log"
+      },
+      {
+        "service": "toxiproxy",
+        "file": "services/toxiproxy.log"
+      },
+      {
+        "service": "web",
+        "file": "services/web.log"
+      },
+      {
+        "service": "control-plane",
+        "file": "services/control-plane.log"
+      }
+    ],
+    "combinedLog": "fixture.log"
+  },
+  "hostPlatform": "linux",
+  "omittedOptionalTelemetry": ["prometheus", "grafana", "api-tier", "api-3"],
+  "sourceType": "generated FFmpeg test pattern (sample content)",
+  "limitations": [
+    "Isolated actual-service Docker fixture. Control-plane processes share one fixture container; targeted API/gateway containers remain separate. The host operating system and source type are recorded; no production-stream or browser-decoding claim is inferred."
+  ],
+  "resources": {
+    "storageDriver": "vfs",
+    "repositoryFreeBytes": 5130371072,
+    "minimumFreeBytes": 4294967296,
+    "runningFreeBytes": 1159491584
+  },
+  "preparation": {
+    "sourceFiles": 276,
+    "type": "dir",
+    "copiedDependencyFiles": 0,
+    "archiveUsed": false
+  },
+  "resourceChecks": [
+    {
+      "service": "postgres",
+      "freeBytes": 5130362880,
+      "estimatedNeededBytes": 1502676850.5
+    },
+    {
+      "service": "redis",
+      "freeBytes": 4555849728,
+      "estimatedNeededBytes": 1048425813
+    },
+    {
+      "service": "mediamtx",
+      "freeBytes": 4357554176,
+      "estimatedNeededBytes": 1301875125.5
+    },
+    {
+      "service": "origin-primary",
+      "freeBytes": 3955064832,
+      "estimatedNeededBytes": 1301875125.5
+    },
+    {
+      "service": "origin-standby",
+      "freeBytes": 3552575488,
+      "estimatedNeededBytes": 1301875125.5
+    },
+    {
+      "service": "edge-1",
+      "freeBytes": 3150090240,
+      "estimatedNeededBytes": 976246185.5
+    },
+    {
+      "service": "edge-2",
+      "freeBytes": 3017695232,
+      "estimatedNeededBytes": 976246185.5
+    },
+    {
+      "service": "video-gateway",
+      "freeBytes": 2885271552,
+      "estimatedNeededBytes": 976246185.5
+    },
+    {
+      "service": "api",
+      "freeBytes": 2752847872,
+      "estimatedNeededBytes": 1507781798
+    },
+    {
+      "service": "api-gateway",
+      "freeBytes": 2114068480,
+      "estimatedNeededBytes": 976246185.5
+    },
+    {
+      "service": "toxiproxy",
+      "freeBytes": 1981669376,
+      "estimatedNeededBytes": 863920928
+    },
+    {
+      "service": "web",
+      "freeBytes": 1934524416,
+      "estimatedNeededBytes": 980180780.5
+    },
+    {
+      "service": "control-plane",
+      "freeBytes": 1798479872,
+      "estimatedNeededBytes": 1507781798
+    }
+  ],
+  "waits": [
+    {
+      "stage": "postgres-readiness",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:53:52.279Z",
+      "timeoutMs": 30000,
+      "attempts": 1,
+      "elapsedMs": 132.21872299999995,
+      "finishedAt": "2026-10-24T20:53:52.411Z"
+    },
+    {
+      "stage": "api-authentication",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:54:11.934Z",
+      "timeoutMs": 90000,
+      "attempts": 10,
+      "lastError": {
+        "name": "Error",
+        "message": "HTTP_502_/auth/me_request_failed",
+        "httpStatus": "502"
+      },
+      "lastErrorAt": "2026-10-24T20:54:16.013Z",
+      "elapsedMs": 4591.600684999998,
+      "finishedAt": "2026-10-24T20:54:16.525Z"
+    },
+    {
+      "stage": "scenario-baseline",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:54:22.714Z",
+      "timeoutMs": 120000,
+      "attempts": 26,
+      "lastObservation": {
+        "missing": [],
+        "denied": [
+          {
+            "id": "crash-video-gateway",
+            "reason": "Waiting for actual valid gateway segments to advance. Keep the live source running."
+          },
+          {
+            "id": "crash-api",
+            "reason": "Waiting for actual valid gateway segments to advance. Keep the live source running."
+          }
+        ],
+        "available": true,
+        "unavailableReason": null,
+        "activeId": null
+      },
+      "lastObservationAt": "2026-10-24T20:54:40.074Z",
+      "elapsedMs": 17991.829663000004,
+      "finishedAt": "2026-10-24T20:54:40.706Z"
+    },
+    {
+      "stage": "browser-video-element",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:54:43.879Z",
+      "timeoutMs": 30000,
+      "attempts": 1,
+      "elapsedMs": 286.31112700000085,
+      "finishedAt": "2026-10-24T20:54:44.165Z"
+    },
+    {
+      "stage": "browser-video-progress",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:54:44.201Z",
+      "timeoutMs": 30000,
+      "attempts": 1,
+      "elapsedMs": 252.75704399999813,
+      "finishedAt": "2026-10-24T20:54:44.454Z"
+    },
+    {
+      "stage": "scenario-availability:crash-api",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:54:51.474Z",
+      "timeoutMs": 120000,
+      "attempts": 1,
+      "elapsedMs": 136.78876799999853,
+      "finishedAt": "2026-10-24T20:54:51.610Z"
+    },
+    {
+      "stage": "browser-video-element",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:55:19.973Z",
+      "timeoutMs": 30000,
+      "attempts": 1,
+      "elapsedMs": 119.26164300000528,
+      "finishedAt": "2026-10-24T20:55:20.092Z"
+    },
+    {
+      "stage": "browser-video-progress",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:55:20.100Z",
+      "timeoutMs": 30000,
+      "attempts": 2,
+      "lastObservation": {
+        "ready": false
+      },
+      "lastObservationAt": "2026-10-24T20:55:20.225Z",
+      "elapsedMs": 820.3641090000019,
+      "finishedAt": "2026-10-24T20:55:20.921Z"
+    },
+    {
+      "stage": "scenario-availability:crash-video-gateway",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:55:21.716Z",
+      "timeoutMs": 120000,
+      "attempts": 1,
+      "elapsedMs": 384.40990800000145,
+      "finishedAt": "2026-10-24T20:55:22.101Z"
+    },
+    {
+      "stage": "browser-video-element",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:55:43.260Z",
+      "timeoutMs": 30000,
+      "attempts": 1,
+      "elapsedMs": 136.30007900000783,
+      "finishedAt": "2026-10-24T20:55:43.397Z"
+    },
+    {
+      "stage": "browser-video-progress",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:55:43.402Z",
+      "timeoutMs": 30000,
+      "attempts": 3,
+      "lastObservation": {
+        "ready": false
+      },
+      "lastObservationAt": "2026-10-24T20:55:44.156Z",
+      "elapsedMs": 1618.9624479999911,
+      "finishedAt": "2026-10-24T20:55:45.021Z"
+    },
+    {
+      "stage": "scenario-availability:crash-edge",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:55:45.832Z",
+      "timeoutMs": 120000,
+      "attempts": 1,
+      "elapsedMs": 699.1504470000073,
+      "finishedAt": "2026-10-24T20:55:46.531Z"
+    },
+    {
+      "stage": "browser-video-element",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:56:06.219Z",
+      "timeoutMs": 30000,
+      "attempts": 1,
+      "elapsedMs": 152.11373099999037,
+      "finishedAt": "2026-10-24T20:56:06.371Z"
+    },
+    {
+      "stage": "browser-video-progress",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:56:06.380Z",
+      "timeoutMs": 30000,
+      "attempts": 3,
+      "lastObservation": {
+        "ready": false
+      },
+      "lastObservationAt": "2026-10-24T20:56:07.154Z",
+      "elapsedMs": 1423.5583399999887,
+      "finishedAt": "2026-10-24T20:56:07.804Z"
+    },
+    {
+      "stage": "scenario-availability:network-timeout",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:56:08.306Z",
+      "timeoutMs": 120000,
+      "attempts": 1,
+      "elapsedMs": 253.53187400000752,
+      "finishedAt": "2026-10-24T20:56:08.560Z"
+    },
+    {
+      "stage": "browser-video-element",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:56:31.353Z",
+      "timeoutMs": 30000,
+      "attempts": 1,
+      "elapsedMs": 140.19478200000594,
+      "finishedAt": "2026-10-24T20:56:31.493Z"
+    },
+    {
+      "stage": "browser-video-progress",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:56:31.501Z",
+      "timeoutMs": 30000,
+      "attempts": 2,
+      "lastObservation": {
+        "ready": false
+      },
+      "lastObservationAt": "2026-10-24T20:56:31.631Z",
+      "elapsedMs": 761.6512010000006,
+      "finishedAt": "2026-10-24T20:56:32.263Z"
+    },
+    {
+      "stage": "api-ready-after-startup-probe",
+      "status": "PASS",
+      "startedAt": "2026-10-24T20:56:42.075Z",
+      "timeoutMs": 90000,
+      "attempts": 1,
+      "elapsedMs": 164.4595520000148,
+      "finishedAt": "2026-10-24T20:56:42.239Z"
+    }
+  ],
+  "lastAdmission": [],
+  "baseline": {
+    "observedAt": "2026-10-24T20:54:40.487Z",
+    "scenarioIds": [
+      "crash-api",
+      "crash-video-gateway",
+      "crash-edge",
+      "network-timeout"
+    ],
+    "noFaultInjected": true,
+    "noRecoveryBeforeClick": true,
+    "apiPeerDockerAccessDenied": true,
+    "functional": {
+      "observedAt": "2026-10-24T20:54:40.487Z",
+      "api": true,
+      "gateway": true,
+      "sourceCount": 1,
+      "progressingPaths": 1,
+      "reason": null
+    },
+    "components": [
+      {
+        "id": "web",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.856Z",
+        "latencyMs": 1
+      },
+      {
+        "id": "api-gateway",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.856Z",
+        "latencyMs": 2
+      },
+      {
+        "id": "api-1",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.862Z",
+        "latencyMs": 7
+      },
+      {
+        "id": "api-2",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.858Z",
+        "latencyMs": 3
+      },
+      {
+        "id": "postgres",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.857Z",
+        "latencyMs": 1
+      },
+      {
+        "id": "redis",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.858Z",
+        "latencyMs": 1
+      },
+      {
+        "id": "video-gateway",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.861Z",
+        "latencyMs": 5
+      },
+      {
+        "id": "edge-1",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.861Z",
+        "latencyMs": 3
+      },
+      {
+        "id": "edge-2",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.863Z",
+        "latencyMs": 4
+      },
+      {
+        "id": "origin-primary",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.863Z",
+        "latencyMs": 2
+      },
+      {
+        "id": "origin-standby",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.863Z",
+        "latencyMs": 2
+      },
+      {
+        "id": "relay",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.865Z",
+        "latencyMs": 4
+      },
+      {
+        "id": "demo-dependency",
+        "state": "HEALTHY",
+        "code": "probe_ok",
+        "observedAt": "2026-10-24T20:54:39.865Z",
+        "latencyMs": 2
+      }
+    ],
+    "containerStates": [
+      {
+        "service": "postgres",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "redis",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "mediamtx",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "origin-primary",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "origin-standby",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "edge-1",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "edge-2",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "video-gateway",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "api",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "api-gateway",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      },
+      {
+        "service": "toxiproxy",
+        "state": "running",
+        "health": null,
+        "restartCount": 0
+      },
+      {
+        "service": "web",
+        "state": "running",
+        "health": "healthy",
+        "restartCount": 0
+      }
+    ],
+    "browserPlayback": {
+      "observedAt": "2026-10-24T20:54:44.454Z",
+      "before": {
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "paused": false
+      },
+      "after": {
+        "currentTime": 4.158178,
+        "width": 640,
+        "height": 360,
+        "frames": 7,
+        "paused": false
+      },
+      "newMediaResponses": 8
+    },
+    "homepageDiscoversOwnedLiveStream": true,
+    "refreshAndPollingNoFault": true
+  },
+  "urls": {
+    "control": "http://127.0.0.1:40649/control/chaos",
+    "watch": "http://127.0.0.1:40649/watch/df4e67ea-7233-42cb-b188-24efcd6e4993"
+  },
+  "finalObservations": {
+    "components": [
+      {
+        "id": "web",
+        "name": "Live frontend",
+        "group": "Application",
+        "role": "Viewer and broadcaster experience",
+        "dependencies": ["api-gateway", "video-gateway"],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.138Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.138Z",
+        "code": "probe_ok",
+        "latencyMs": 11,
+        "failures": 0,
+        "successes": 62,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:54:25.422Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "api-gateway",
+        "name": "API gateway",
+        "group": "Application",
+        "role": "REST and WebSocket routing",
+        "dependencies": ["api-1", "api-2"],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.131Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.131Z",
+        "code": "probe_ok",
+        "latencyMs": 3,
+        "failures": 0,
+        "successes": 62,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:54:25.422Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "api-1",
+        "name": "API-1",
+        "group": "Application",
+        "role": "Accounts, control and chat",
+        "dependencies": ["postgres", "redis"],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.139Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.139Z",
+        "code": "probe_ok",
+        "latencyMs": 11,
+        "failures": 0,
+        "successes": 42,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:55:06.916Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "api-2",
+        "name": "API-2",
+        "group": "Application",
+        "role": "Accounts, control and chat",
+        "dependencies": ["postgres", "redis"],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.139Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.139Z",
+        "code": "probe_ok",
+        "latencyMs": 11,
+        "failures": 0,
+        "successes": 62,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:54:25.430Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "postgres",
+        "name": "PostgreSQL",
+        "group": "Data",
+        "role": "Durable platform and incident store",
+        "dependencies": [],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.139Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.139Z",
+        "code": "probe_ok",
+        "latencyMs": 8,
+        "failures": 0,
+        "successes": 62,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:54:25.423Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "redis",
+        "name": "Redis",
+        "group": "Data",
+        "role": "Realtime distribution and expiring leases",
+        "dependencies": [],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.141Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.141Z",
+        "code": "probe_ok",
+        "latencyMs": 3,
+        "failures": 0,
+        "successes": 62,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:54:25.424Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "video-gateway",
+        "name": "Video gateway",
+        "group": "Delivery",
+        "role": "HLS edge routing",
+        "dependencies": ["edge-1", "edge-2"],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.143Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.143Z",
+        "code": "probe_ok",
+        "latencyMs": 5,
+        "failures": 0,
+        "successes": 30,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:55:32.568Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "edge-1",
+        "name": "Video edge 01",
+        "group": "Delivery",
+        "role": "Origin-aware HLS cache",
+        "dependencies": ["origin-primary", "origin-standby"],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.145Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.145Z",
+        "code": "probe_ok",
+        "latencyMs": 6,
+        "failures": 0,
+        "successes": 20,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:55:53.426Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "edge-2",
+        "name": "Video edge 02",
+        "group": "Delivery",
+        "role": "Origin-aware HLS cache",
+        "dependencies": ["origin-primary", "origin-standby"],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.144Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.144Z",
+        "code": "probe_ok",
+        "latencyMs": 5,
+        "failures": 0,
+        "successes": 62,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:54:25.432Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "origin-primary",
+        "name": "Primary origin",
+        "group": "Media",
+        "role": "Independent HLS packaging",
+        "dependencies": ["relay"],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.145Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.145Z",
+        "code": "probe_ok",
+        "latencyMs": 3,
+        "failures": 0,
+        "successes": 62,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:54:25.435Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "origin-standby",
+        "name": "Standby origin",
+        "group": "Media",
+        "role": "Independent HLS packaging",
+        "dependencies": ["relay"],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.145Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.145Z",
+        "code": "probe_ok",
+        "latencyMs": 2,
+        "failures": 0,
+        "successes": 62,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:54:25.434Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "relay",
+        "name": "Ingest relay",
+        "group": "Media",
+        "role": "Authenticated RTMP ingestion",
+        "dependencies": [],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.149Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.149Z",
+        "code": "probe_ok",
+        "latencyMs": 5,
+        "failures": 0,
+        "successes": 47,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:54:56.579Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      },
+      {
+        "id": "demo-dependency",
+        "name": "Simulated recommendations",
+        "group": "Application",
+        "role": "Read-only external dependency demo through Toxiproxy",
+        "dependencies": [],
+        "state": "HEALTHY",
+        "observedAt": "2026-10-24T20:56:33.148Z",
+        "lastSuccessAt": "2026-10-24T20:56:33.148Z",
+        "code": "probe_ok",
+        "latencyMs": 4,
+        "failures": 0,
+        "successes": 8,
+        "firstFailureAt": null,
+        "detectionMs": null,
+        "firstSuccessAt": "2026-10-24T20:56:19.058Z",
+        "confirmedAt": null,
+        "failureCode": null,
+        "failureState": null
+      }
+    ],
+    "persistence": true,
+    "lastCompleted": 1792875393149,
+    "mediaAvailable": true,
+    "media": [
+      {
+        "path": "s-92359599ae4e4794960ebb8602f3b620",
+        "publisher": true,
+        "checkedAt": "2026-10-24T20:56:26.161Z",
+        "sources": [
+          {
+            "id": "primary",
+            "manifest": true,
+            "segment": true,
+            "fresh": true,
+            "code": "media_bytes_observed"
+          },
+          {
+            "id": "standby",
+            "manifest": true,
+            "segment": true,
+            "fresh": true,
+            "code": "media_bytes_observed"
+          }
+        ]
+      }
+    ]
+  },
+  "occupiedPortStartupProbe": {
+    "exitCode": 1,
+    "timedOut": false,
+    "diagnostic": {
+      "level": 60,
+      "time": 1792875401733,
+      "pid": 148,
+      "hostname": "32de6d3b028a",
+      "event": "api_startup_failed",
+      "stage": "public_listener",
+      "instanceId": "api-1",
+      "failures": [
+        {
+          "type": "StartupFailure",
+          "message": "API startup failed at public_listener",
+          "stack": "StartupFailure: API startup failed at public_listener\n    at startupStep (/app/services/api/src/startup.ts:29:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async main (/app/services/api/src/fixture-startup-probe.ts:80:5)"
+        },
+        {
+          "type": "Error",
+          "message": "listen EADDRINUSE: address already in use 0.0.0.0:4000",
+          "code": "EADDRINUSE",
+          "stack": "Error: listen EADDRINUSE: address already in use 0.0.0.0:4000\n    at Server.setupListenHandle [as _listen2] (node:net:2390:16)\n    at listenInCluster (node:net:2499:12)\n    at node:net:2728:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)"
+        }
+      ],
+      "msg": "Platform startup failed"
+    },
+    "trace": "probe:resources:start\nprobe:resources:ready\n{\"event\":\"api_startup_failed\",\"stage\":\"public_listener\",\"instanceId\":\"api-1\",\"failures\":[{\"type\":\"StartupFailure\",\"message\":\"API startup failed at public_listener\",\"stack\":\"StartupFailure: API startup failed at public_listener\\n    at startupStep (/app/services/api/src/startup.ts:29:11)\\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\\n    at async main (/app/services/api/src/fixture-startup-probe.ts:80:5)\"},{\"type\":\"Error\",\"message\":\"listen EADDRINUSE: address already in use 0.0.0.0:4000\",\"code\":\"EADDRINUSE\",\"stack\":\"Error: listen EADDRINUSE: address already in use 0.0.0.0:4000\\n    at Server.setupListenHandle [as _listen2] (node:net:2390:16)\\n    at listenInCluster (node:net:2499:12)\\n    at node:net:2728:7\\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\"}]}\nprobe:cleanup:0:start\nprobe:cleanup:0:done\nprobe:cleanup:1:start\nprobe:cleanup:1:done\nprobe:cleanup:2:start\nprobe:cleanup:2:done\nprobe:cleanup:3:start\nprobe:cleanup:3:done\nprobe:cleanup:4:start\nprobe:cleanup:4:done\n"
+  },
+  "pageErrors": [],
+  "cleanedContainers": 13,
+  "verifiedScenarios": 4,
+  "userEnvUnchanged": true,
+  "finishedAt": "2026-10-24T20:56:48.003Z"
+}

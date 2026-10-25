@@ -1,0 +1,62 @@
+{
+  "outcome": "PASS",
+  "measuredAt": "2026-10-19T21:16:20.302Z",
+  "clock": "Harness monotonic durations; separate UTC injection and observer timestamps. Probe resolution ~2s.",
+  "experiments": [
+    {
+      "service": "api",
+      "component": "api-1",
+      "incidentId": "7e1883e1-55b5-444d-88d2-729a7018bdcc",
+      "injectedAt": "2026-10-19T21:15:03.521Z",
+      "injectionToSnapshotObservationMs": 2564.9253000000026,
+      "injectionToObserverConfirmationWallMs": 2397,
+      "browserDecodedProgressVerified": true,
+      "browserPlaybackRecoveryTimingMs": null,
+      "firstObservedAt": "2026-10-19T21:15:03.865Z",
+      "confirmedAt": "2026-10-19T21:15:05.918Z",
+      "confirmationDelayMs": 2052.2339030000003,
+      "firstSuccessAt": "2026-10-19T21:15:18.218Z",
+      "verifiedAt": "2026-10-19T21:15:20.385Z",
+      "observedUnavailableMs": 14353,
+      "experimentElapsedMs": 17420.579552000003,
+      "verification": "component probes; media playback measured by retained resilience suite"
+    },
+    {
+      "service": "edge-1",
+      "component": "edge-1",
+      "incidentId": "c6e053d5-fbd8-497e-979c-35ccf7a03b82",
+      "injectedAt": "2026-10-19T21:15:20.963Z",
+      "injectionToSnapshotObservationMs": 3836.220266000004,
+      "injectionToObserverConfirmationWallMs": 3475,
+      "browserDecodedProgressVerified": true,
+      "browserPlaybackRecoveryTimingMs": null,
+      "firstObservedAt": "2026-10-19T21:15:22.456Z",
+      "confirmedAt": "2026-10-19T21:15:24.438Z",
+      "confirmationDelayMs": 1982.1852199999994,
+      "firstSuccessAt": "2026-10-19T21:15:26.441Z",
+      "verifiedAt": "2026-10-19T21:15:28.473Z",
+      "observedUnavailableMs": 3985,
+      "experimentElapsedMs": 7608.635801000004,
+      "verification": "component probes; media playback measured by retained resilience suite"
+    },
+    {
+      "service": "origin-primary",
+      "component": "origin-primary",
+      "incidentId": "7440d316-1e61-4a65-b5d0-37e153b4fa18",
+      "injectedAt": "2026-10-19T21:15:28.582Z",
+      "injectionToSnapshotObservationMs": 4368.173719999999,
+      "injectionToObserverConfirmationWallMs": 4107,
+      "browserDecodedProgressVerified": true,
+      "browserPlaybackRecoveryTimingMs": null,
+      "firstObservedAt": "2026-10-19T21:15:30.668Z",
+      "confirmedAt": "2026-10-19T21:15:32.689Z",
+      "confirmationDelayMs": 2020.717918000002,
+      "firstSuccessAt": "2026-10-19T21:15:34.786Z",
+      "verifiedAt": "2026-10-19T21:15:36.750Z",
+      "observedUnavailableMs": 4118,
+      "experimentElapsedMs": 8620.854454999993,
+      "verification": "component probes; media playback measured by retained resilience suite"
+    }
+  ],
+  "snapshotReadErrors": 11
+}

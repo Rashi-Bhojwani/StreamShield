@@ -39,6 +39,16 @@ export default defineConfig(({ mode }) => {
       changeOrigin: true,
       rewrite: (path) => path.slice(media.MEDIA_PUBLIC_HLS_BASE_URL.length),
       configure: (proxy) => {
+        proxy.on("proxyReq", (request) => {
+          const cookie = String(request.getHeader("cookie") || "")
+            .split(";")
+            .filter((part) => !/^ss_(session|csrf)=/.test(part.trim()))
+            .filter(Boolean)
+            .join(";");
+          if (cookie) request.setHeader("cookie", cookie);
+          else request.removeHeader("cookie");
+          request.removeHeader("authorization");
+        });
         proxy.on("proxyRes", (response) => {
           const location = response.headers.location;
           if (location?.startsWith("/") && !location.startsWith("//"))
@@ -55,7 +65,14 @@ export default defineConfig(({ mode }) => {
       host: config.WEB_HOST,
       port: config.WEB_PORT,
       strictPort: true,
+      // Canonical private Compose frontend name, used by the independent observer.
+      allowedHosts: ["web"],
       proxy: {
+        "/socket.io": {
+          target: config.API_PROXY_TARGET,
+          ws: true,
+          changeOrigin: false,
+        },
         "/api": { target: config.API_PROXY_TARGET, changeOrigin: true },
         ...mediaProxy,
       },
