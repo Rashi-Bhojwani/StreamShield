@@ -1,0 +1,131 @@
+{
+  "change": "API-first disposable startup, direct listener readiness, safe compiled-import/startup tracing, automatic terminal failure evidence and removal of the omitted spare API from compact gateway routing.",
+  "reportedSymptom": "Windows report: database/cache healthy, API running but unhealthy, no API log output, gateway connections refused on API ports 4000 and 4001.",
+  "scope": "Isolated lightweight demo; persistent deployment and health criteria unchanged.",
+  "checks": {
+    "unitTestsPassed": 503,
+    "testFilesPassed": 43,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "build": "PASS"
+  },
+  "cleanStartup": {
+    "runId": "cbe197bb",
+    "status": "PASS",
+    "startedAt": "2026-10-26T22:18:04.884Z",
+    "finishedAt": "2026-10-26T22:19:48.415Z",
+    "fixtureStatus": "DEMO_STOPPED",
+    "waits": [
+      {
+        "stage": "api-listener-readiness",
+        "status": "PASS",
+        "elapsedMs": 3407.9271089999984
+      },
+      {
+        "stage": "api-authentication",
+        "status": "PASS",
+        "elapsedMs": 15.016922000002523
+      },
+      {
+        "stage": "idle-baseline-stable",
+        "status": "PASS",
+        "elapsedMs": 30687.841221000002
+      }
+    ],
+    "browserPlayback": {
+      "observedAt": "2026-10-26T22:19:32.680Z",
+      "before": {
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "paused": false
+      },
+      "after": {
+        "currentTime": 4.075912,
+        "width": 640,
+        "height": 360,
+        "frames": 5,
+        "paused": false
+      },
+      "newMediaResponses": 8
+    },
+    "cleanedContainers": 13,
+    "userEnvUnchanged": true
+  },
+  "realApiRecovery": {
+    "status": "PASS",
+    "runId": "5fa1ac23",
+    "fault": {
+      "component": "api-1",
+      "mechanism": "External acceptance check sends SIGKILL only to its newly created fixture API container",
+      "injectedAt": "2026-10-26T22:22:31.271Z",
+      "previousStartedAt": "2026-10-26T22:21:49.252797382Z"
+    },
+    "startupHistory": {
+      "recoveryAttempts": [
+        {
+          "id": "ece028d9-d812-4680-b0cb-8af083e88694",
+          "component": "api-1",
+          "state": "VERIFIED",
+          "reason": "independent_behavior_verified",
+          "finishedAt": "2026-10-26T22:22:48.585Z",
+          "databasePersisted": true
+        }
+      ],
+      "incidents": [
+        {
+          "id": "b0033093-f2b8-447b-96e7-3c4e01d78f35",
+          "component": "api-1",
+          "state": "RESOLVED",
+          "verified_at": "2026-10-26T22:22:53.122Z",
+          "resolved_at": "2026-10-26T22:22:53.122Z"
+        }
+      ]
+    },
+    "startupRestarts": [
+      {
+        "service": "api",
+        "previous": "2026-10-26T22:21:49.252797382Z",
+        "startedAt": "2026-10-26T22:22:37.273408679Z"
+      }
+    ],
+    "stableIdleMs": 30000,
+    "noRecoveryBeforeClick": false,
+    "noRecoveryDuringStableWindow": true,
+    "browserPlayback": {
+      "observedAt": "2026-10-26T22:23:41.500Z",
+      "before": {
+        "currentTime": 0,
+        "width": 0,
+        "height": 0,
+        "frames": 0,
+        "paused": false
+      },
+      "after": {
+        "currentTime": 4.087699,
+        "width": 640,
+        "height": 360,
+        "frames": 4,
+        "paused": false
+      },
+      "newMediaResponses": 8
+    },
+    "cleanedContainers": 13,
+    "userEnvUnchanged": true
+  },
+  "observedStartupTraceStages": [
+    "platform_configuration",
+    "resources",
+    "postgres",
+    "redis",
+    "platform_routes",
+    "realtime",
+    "public_listener",
+    "media_auth_listener"
+  ],
+  "limitations": [
+    "Real Linux Docker/Chromium acceptance with a generated media source; physical Windows Docker Desktop and devices were not tested.",
+    "The original empty Windows API log does not establish the exact internal bootstrap stall; API-first ordering reduces competing startup work and new markers make subsequent stalls diagnosable."
+  ]
+}

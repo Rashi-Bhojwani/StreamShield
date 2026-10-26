@@ -85,6 +85,20 @@ Wait for **READY**, then use the automatically opened, signed-in Chromium window
 Open http://127.0.0.1:5174/control/chaos in that window. Other browser profiles do
 not inherit its administrator session. Keep the terminal and browser open.
 
+The lightweight runner starts API-1 immediately after database/cache setup and
+migrations. It waits at `api-listener-readiness` for a real readiness response
+directly inside that container before starting the media/gateway/web stack.
+Later `api-authentication` still checks the full web-to-API route and CSRF response.
+This reduces competing startup work and distinguishes API boot from proxy errors.
+The omitted API-3 spare is removed from this compact gateway configuration.
+
+If either API stage fails, the terminal prints `api-startup-evidence` with safe
+runtime import/stage markers and error codes. The report saves the same evidence;
+full redacted API logs remain under `services/api.log` in that run's artifacts.
+Markers distinguish import loading, PostgreSQL/Redis initialization, application
+routes and listener binding. They contain no environment values or credentials.
+The runtime still requires actual readiness; no failed probe is forced to pass.
+
 Before requesting the sample stream's publishing key, startup checks the authenticated
 RTMP and browser-publisher control inventories and requires three seconds of successful
 checks. `media-control-readiness` is a normal waiting stage. Control operations have a
@@ -241,6 +255,7 @@ and [system logs](screenshots/reliable-studio/system-logs.png).
 - [Media control startup validation](MEDIA_CONTROL_READINESS_VALIDATION.json)
 - [Consistent health and recovery validation](RECOVERY_HEALTH_VALIDATION.json)
 - [Readiness after verified startup recovery](STARTUP_BASELINE_VALIDATION.json)
+- [API-first startup, safe boot diagnostics and real API recovery](API_STARTUP_VALIDATION.json)
 - [Recovered dashboard with retained recovery timestamps](screenshots/reliable-studio/recovered-dashboard.png)
 
 The screenshots use a generated camera test pattern and disposable test accounts.

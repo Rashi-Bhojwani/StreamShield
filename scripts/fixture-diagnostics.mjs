@@ -160,3 +160,65 @@ export function fixtureServiceState(service, container, redact = String) {
       })) || [],
   };
 }
+
+/** Safe startup markers only: no arbitrary log message, command or environment. */
+export function fixtureStartupEvents(logs, redact = String) {
+  const stages = new Set([
+    "api_configuration",
+    "platform_configuration",
+    "resources",
+    "postgres",
+    "redis",
+    "platform_routes",
+    "realtime",
+    "public_listener",
+    "media_auth_listener",
+  ]);
+  return redact(String(logs))
+    .split("\n")
+    .flatMap((line) => {
+      let row;
+      try {
+        row = JSON.parse(line);
+      } catch {
+        return [];
+      }
+      if (!row || typeof row !== "object" || Array.isArray(row)) return [];
+      if (
+        row.event === "fixture_runtime_import" &&
+        ["STARTING", "IMPORTED", "FAILED"].includes(row.state)
+      )
+        return [
+          {
+            event: row.event,
+            state: row.state,
+            ...(row.state === "FAILED" &&
+            typeof row.code === "string" &&
+            /^[A-Z0-9_]{2,60}$/.test(row.code || "")
+              ? { code: row.code }
+              : {}),
+          },
+        ];
+      if (
+        row.event === "fixture_startup_step" &&
+        stages.has(row.stage) &&
+        ["STARTING", "COMPLETE", "FAILED"].includes(row.state)
+      )
+        return [{ event: row.event, stage: row.stage, state: row.state }];
+      if (row.event === "api_startup_failed" && stages.has(row.stage))
+        return [
+          {
+            event: row.event,
+            stage: row.stage,
+            codes: (Array.isArray(row.failures) ? row.failures : [])
+              .map((f) => f?.code)
+              .filter(
+                (code) =>
+                  typeof code === "string" && /^[A-Z0-9_]{2,60}$/.test(code),
+              ),
+          },
+        ];
+      return [];
+    })
+    .slice(-16);
+}

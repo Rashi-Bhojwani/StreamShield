@@ -6,7 +6,49 @@ import {
   fixtureDataTmpfs,
   fixtureServiceState,
   redactFixtureText,
+  fixtureStartupEvents,
 } from "./fixture-diagnostics.mjs";
+
+it("extracts bounded startup evidence without echoing arbitrary messages or secrets", () => {
+  const rows = [
+    {
+      event: "fixture_runtime_import",
+      state: "STARTING",
+      environment: "private-secret",
+    },
+    {
+      event: "fixture_startup_step",
+      stage: "postgres",
+      state: "STARTING",
+      message: "private-secret",
+    },
+    {
+      event: "api_startup_failed",
+      stage: "postgres",
+      failures: [{ code: "ECONNREFUSED", message: "private-secret" }],
+    },
+    { event: "request", message: "private-secret" },
+  ];
+  const result = fixtureStartupEvents(
+    rows.map((r) => JSON.stringify(r)).join("\n"),
+  );
+  expect(result).toEqual([
+    { event: "fixture_runtime_import", state: "STARTING" },
+    { event: "fixture_startup_step", stage: "postgres", state: "STARTING" },
+    { event: "api_startup_failed", stage: "postgres", codes: ["ECONNREFUSED"] },
+  ]);
+  expect(JSON.stringify(result)).not.toContain("private-secret");
+  expect(
+    fixtureStartupEvents(
+      'not JSON\nnull\n42\n"plain text"\n' +
+        JSON.stringify({
+          event: "fixture_startup_step",
+          stage: "unknown",
+          state: "STARTING",
+        }),
+    ),
+  ).toEqual([]);
+});
 
 function clock() {
   let time = 0;

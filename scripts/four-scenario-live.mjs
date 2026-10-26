@@ -6,11 +6,13 @@ import {
   fixtureDataTmpfs,
   fixtureServiceState,
   redactFixtureText,
+  fixtureStartupEvents,
 } from "./fixture-diagnostics.mjs";
 import {
   fixtureProfile,
   demoBackupEdge,
   demoMediaAuthority,
+  demoWithoutSpareApi,
 } from "./fixture-profile.mjs";
 import { fixtureSupervisor } from "./fixture-supervisor.mjs";
 import {
@@ -18,6 +20,7 @@ import {
   compiledFixtureService,
   idleBaselineGate,
   idleBaselineAssessment,
+  apiListenerProbeCode,
 } from "./fixture-runtime.mjs";
 import {
   prepareFixtureWorkspace,
@@ -281,6 +284,15 @@ try {
           service,
           compiledDirectory,
         );
+    }
+    if (compact) {
+      const gatewayConfig = source.services["api-gateway"].volumes.find(
+        (v) => v.target === "/etc/nginx/nginx.conf",
+      ).source;
+      writeFileSync(
+        gatewayConfig,
+        demoWithoutSpareApi(readFileSync(gatewayConfig, "utf8"), env.API_PORT),
+      );
     }
     if (profile.lightweight) {
       const gatewayConfig = source.services["video-gateway"].volumes.find(
@@ -547,7 +559,31 @@ try {
       "init",
     );
     result.currentStage = "application-startup";
-    startOwned(keep.filter((k) => !["postgres", "redis"].includes(k)));
+    if (profile.lightweight) {
+      startOwned(["api"]);
+      await until("api-listener-readiness", async () => {
+        const state = inspect("api").State;
+        if (state.Status !== "running" || state.OOMKilled)
+          return pendingFixture({
+            processState: state.Status,
+            oom: state.OOMKilled,
+          });
+        const probe = JSON.parse(
+          compose("exec", "-T", "api", "node", "-e", apiListenerProbeCode),
+        );
+        return probe.ready === true ? true : pendingFixture(probe);
+      });
+    }
+    startOwned(
+      keep.filter(
+        (k) =>
+          ![
+            "postgres",
+            "redis",
+            ...(profile.lightweight ? ["api"] : []),
+          ].includes(k),
+      ),
+    );
     const baselineStartup = Object.fromEntries(
       (compact
         ? ["api", "video-gateway"]
@@ -1532,6 +1568,41 @@ try {
           status: "not-inspectable",
           error: fixtureError(error, redact),
         });
+      }
+    }
+    if (
+      ["api-listener-readiness", "api-authentication"].includes(
+        result.failure.stage,
+      )
+    ) {
+      try {
+        const cid = compose("ps", "-aq", "api").trim();
+        const logs = spawnSync("docker", ["logs", "--tail", "100", cid], {
+          encoding: "utf8",
+          timeout: 10000,
+          maxBuffer: 256 * 1024,
+        });
+        const state = result.startupDiagnostics.find(
+          (s) => s.service === "api",
+        );
+        result.apiStartupEvidence = {
+          service: "api",
+          status: state?.status,
+          health: state?.health,
+          oom: state?.oom,
+          steps: fixtureStartupEvents(
+            String(logs.stdout || "") + "\n" + String(logs.stderr || ""),
+            redact,
+          ),
+        };
+        console.log(
+          JSON.stringify({
+            stage: "api-startup-evidence",
+            ...result.apiStartupEvidence,
+          }),
+        );
+      } catch (error) {
+        result.apiStartupEvidence = { error: fixtureError(error, redact) };
       }
     }
   }

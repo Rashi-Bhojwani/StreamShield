@@ -1113,8 +1113,14 @@ compiles the demo's backend once; generates private run-specific configuration;
 and builds/mounts its static web assets. Linux container native dependencies stay
 inside the runtime image instead of being copied from Windows `node_modules`.
 
-Startup brings up database/cache/media/API/web prerequisites, runs ordered
-migrations and waits for API/authenticated-control readiness before preparing the
+Startup brings up database/cache prerequisites and runs ordered migrations.
+The lightweight profile then starts API-1 first and checks its readiness directly
+inside its container before starting media, gateways and web. The full web/API
+authentication check follows. API-only bootstrap tracing records safe import,
+dependency, route and listener stages; failure reports surface these automatically
+without exposing arbitrary log messages or environment values. The compact API
+gateway also omits the unprovisioned API-3 spare.
+Startup waits for API/authenticated-control readiness before preparing the
 sample source. Publisher control inventory must remain successful for three
 seconds before the publishing preparation request. Registration/publishing
 writes are not repeatedly retried as if they were harmless reads.
@@ -1249,6 +1255,7 @@ Additional current evidence:
 - [Logs and manual authorization failure](SYSTEM_LOGS_VALIDATION.json)
 - [Authenticated media-control startup](MEDIA_CONTROL_READINESS_VALIDATION.json)
 - [Healthy readiness after actual startup API recovery](STARTUP_BASELINE_VALIDATION.json)
+- [API-first startup and safe diagnostic verification](API_STARTUP_VALIDATION.json)
 - [Recovered dashboard screenshot](screenshots/reliable-studio/recovered-dashboard.png)
 
 The startup-readiness regression check deliberately killed only API-1 in its own

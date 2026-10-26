@@ -1,5 +1,7 @@
 import { it, expect } from "vitest";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +10,7 @@ import {
   compiledFixtureService,
   idleBaselineAssessment,
   idleBaselineGate,
+  apiListenerProbeCode,
 } from "./fixture-runtime.mjs";
 
 const snapshot = () => ({
@@ -30,6 +33,64 @@ const snapshot = () => ({
     components: [{ id: "api-1", state: "HEALTHY", code: "probe_ok" }],
     incidents: [],
   },
+});
+
+it("uses a safe import marker and stage tracing only for compiled API processes", () => {
+  const original = {
+    command: ["node", "--import", "tsx", "services/api/src/server.ts"],
+    environment: { API_PORT: "4000" },
+  };
+  const mapped = compiledFixtureService(original, "/fixture/.compiled");
+  expect(mapped.environment).toEqual({
+    API_PORT: "4000",
+    FIXTURE_STARTUP_TRACE: "true",
+  });
+  expect(mapped.command.slice(0, 3)).toEqual([
+    "node",
+    "--input-type=module",
+    "--eval",
+  ]);
+  expect(mapped.command[3]).toContain("fixture_runtime_import");
+  expect(mapped.command[3]).toContain(
+    'import("file:///app/.fixture-runtime/server.js")',
+  );
+  expect(original.environment.FIXTURE_STARTUP_TRACE).toBeUndefined();
+});
+
+it("probes actual direct API readiness and never echoes an arbitrary response body", async () => {
+  let ready = false;
+  const server = createServer((_req, res) => {
+    res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        status: ready ? "ready" : "starting",
+        privateValue: "not-for-probe-output",
+      }),
+    );
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const probe = () =>
+    new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, ["-e", apiListenerProbeCode], {
+        env: { ...process.env, API_PORT: String(server.address().port) },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let output = "";
+      child.stdout.on("data", (chunk) => (output += chunk));
+      child.on("error", reject);
+      child.on("close", (code) =>
+        code === 0
+          ? resolve(JSON.parse(output))
+          : reject(Error("probe failed")),
+      );
+    });
+  try {
+    expect(await probe()).toEqual({ ready: false, httpStatus: 503 });
+    ready = true;
+    expect(await probe()).toEqual({ ready: true, httpStatus: 200 });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 const recoveredSnapshot = () => {

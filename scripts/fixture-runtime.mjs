@@ -68,7 +68,32 @@ export function compiledFixtureService(service, directory) {
   if (!entry) return service;
   return {
     ...service,
-    command: ["node", "/app/.fixture-runtime/" + entry + ".js"],
+    ...(entry === "server"
+      ? {
+          environment: {
+            ...service.environment,
+            FIXTURE_STARTUP_TRACE: "true",
+          },
+        }
+      : {}),
+    command:
+      entry === "server"
+        ? [
+            "node",
+            "--input-type=module",
+            "--eval",
+            `
+console.log(JSON.stringify({event:"fixture_runtime_import",state:"STARTING",entry:"server"}));
+try {
+  await import("file:///app/.fixture-runtime/server.js");
+  console.log(JSON.stringify({event:"fixture_runtime_import",state:"IMPORTED",entry:"server"}));
+} catch (error) {
+  console.error(JSON.stringify({event:"fixture_runtime_import",state:"FAILED",entry:"server",code:/^[A-Z0-9_]{2,60}$/.test(error?.code || "") ? error.code : "IMPORT_FAILED"}));
+  process.exitCode = 1;
+}
+`,
+          ]
+        : ["node", "/app/.fixture-runtime/" + entry + ".js"],
     volumes: [
       ...(service.volumes || []),
       {
@@ -80,6 +105,39 @@ export function compiledFixtureService(service, directory) {
     ],
   };
 }
+
+/** Run inside the owned API container, bypassing Nginx and unpublished host ports.
+ * Emit only readiness fields and reviewed error codes, never response bodies. */
+async function apiListenerProbe() {
+  try {
+    const response = await fetch(
+      "http://127.0.0.1:" +
+        Number(process.env.API_PORT) +
+        "/api/v1/health/ready",
+      {
+        signal: AbortSignal.timeout(2000),
+        redirect: "error",
+      },
+    );
+    const body = await response.json();
+    console.log(
+      JSON.stringify({
+        ready: response.ok && body.status === "ready",
+        httpStatus: response.status,
+      }),
+    );
+  } catch (error) {
+    const code = error?.cause?.code || error?.code || "REQUEST_FAILED";
+    console.log(
+      JSON.stringify({
+        ready: false,
+        code: /^[A-Z0-9_]{2,60}$/.test(String(code)) ? code : "REQUEST_FAILED",
+      }),
+    );
+  }
+}
+export const apiListenerProbeCode =
+  "void (" + apiListenerProbe.toString() + ")();";
 
 /** Completed startup history is retained evidence, not an active outage. Missing
  * verification, open incidents and unavailable history must still block entry. */

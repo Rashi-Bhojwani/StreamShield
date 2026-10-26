@@ -47,6 +47,15 @@ export function demoBackupEdge(config, host, port) {
   return config.replace(declaration, declaration + "backup ");
 }
 
+/** Compact fixtures do not create API-3. Keep the real two API peers and auth
+ * routing intact rather than asking Docker DNS for an omitted spare. */
+export function demoWithoutSpareApi(config, port) {
+  const declaration = `server api-3:${Number(port)} resolve max_fails=1 fail_timeout=5s;`;
+  if (!Number.isInteger(Number(port)) || config.split(declaration).length !== 2)
+    throw Error("demo_spare_api_declaration_missing_or_ambiguous");
+  return config.replace(declaration, "");
+}
+
 /** Protect both real HLS routes, including new segment requests. Health remains
  * a process probe; an unavailable signing authority is a separate prerequisite. */
 export function demoMediaAuthority(config, port) {
