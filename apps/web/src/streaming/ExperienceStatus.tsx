@@ -56,13 +56,15 @@ export function ExperienceStatus() {
           <strong>
             {recovering
               ? "Recovery in progress"
-              : status === "recovered"
-                ? "Back in rhythm"
-                : status === "healthy"
-                  ? "Live service updates"
-                  : status === "failed"
-                    ? "Recovery needs attention"
-                    : "Connection status unavailable"}
+              : status === "human_required"
+                ? "Human action required"
+                : status === "recovered"
+                  ? "Back in rhythm"
+                  : status === "healthy"
+                    ? "Live service updates"
+                    : status === "failed"
+                      ? "Recovery needs attention"
+                      : "Connection status unavailable"}
           </strong>
           <p>
             {q.isError

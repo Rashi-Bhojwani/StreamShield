@@ -20,6 +20,8 @@ const impactCopy = {
     "A delivery edge is recovering. The backup edge can keep your stream playing.",
   "network-timeout":
     "Recommendations are reconnecting after a network delay. Live video uses a separate connection.",
+  "media-authority-loss":
+    "Video delivery is blocked because media authorization is unavailable. An authorized operator must restore the simulated external signing authority; automatic recovery cannot recreate a missing private key or permission.",
 } as const;
 
 const dependencySchema = z.object({
@@ -53,13 +55,15 @@ export function experienceSummary(
     experiment?.finishedAt && now - Date.parse(experiment.finishedAt) < 30000;
   const state = !fresh
     ? "unavailable"
-    : experiment && !terminal
-      ? "recovering"
-      : experiment && terminal && !restored
-        ? "failed"
-        : restored && recent
-          ? "recovered"
-          : "healthy";
+    : experiment?.state === "AWAITING_OPERATOR"
+      ? "human_required"
+      : experiment && !terminal
+        ? "recovering"
+        : experiment && terminal && !restored
+          ? "failed"
+          : restored && recent
+            ? "recovered"
+            : "healthy";
   return experienceSchema.parse({
     enabled: true,
     available: fresh,
@@ -69,13 +73,17 @@ export function experienceSummary(
     message:
       state === "unavailable"
         ? "Live recovery status is unavailable. Your video connection is checked separately."
-        : state === "failed"
-          ? "Recovery has not been verified. Keep the stream open while the operator investigates."
-          : state === "recovered"
-            ? "Service recovery verified. Your live session can continue."
-            : scenario && state === "recovering"
-              ? impactCopy[scenario]
-              : "No failure experiment is active. Keep this tab open for live recovery updates.",
+        : state === "human_required"
+          ? impactCopy["media-authority-loss"]
+          : state === "failed"
+            ? "Recovery has not been verified. Keep the stream open while the operator investigates."
+            : state === "recovered"
+              ? scenario === "media-authority-loss"
+                ? "An operator restored media authorization and video recovery was independently verified. This was human intervention, not automatic healing."
+                : "Service recovery verified. Your live session can continue."
+              : scenario && state === "recovering"
+                ? impactCopy[scenario]
+                : "No failure experiment is active. Keep this tab open for live recovery updates.",
     recommendations: {
       available: dependency ? dependency.status === "available" : null,
       items:

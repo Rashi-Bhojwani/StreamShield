@@ -1,5 +1,9 @@
 import { expect, it } from "vitest";
-import { fixtureProfile, demoBackupEdge } from "./fixture-profile.mjs";
+import {
+  fixtureProfile,
+  demoBackupEdge,
+  demoMediaAuthority,
+} from "./fixture-profile.mjs";
 
 it("preserves the optional full VFS guard and separate evidence namespace", () => {
   const full = fixtureProfile([]),
@@ -29,4 +33,15 @@ it("cannot silently apply compact infrastructure to the full runner or interacti
     "invalid_demo_profile",
   );
   expect(() => fixtureProfile(["--smoke"])).toThrow("invalid_demo_profile");
+});
+it("gates both real video routes without caching authorization, and fails on generated config drift", () => {
+  const config =
+    "location = /health { return 200; } location ~ ^/(primary|standby)/ { proxy_pass http://edges; }";
+  const gate = demoMediaAuthority(config, 4030);
+  expect(gate).toContain("auth_request /_demo_media_authority");
+  expect(gate).toContain("set $demo_authority http://chaos-controller:4030");
+  expect(gate).toContain("X-Media-Authority unavailable always");
+  expect(gate).toContain("location = /health { return 200; }");
+  expect(() => demoMediaAuthority("wrong", 4030)).toThrow();
+  expect(() => demoMediaAuthority(config + config, 4030)).toThrow();
 });

@@ -204,7 +204,7 @@ function Scorecard({
             <tr>
               <th>Scenario</th>
               <th>Runs</th>
-              <th>Verified repairs</th>
+              <th>Verified restorations</th>
               <th>Escalated / failed</th>
               <th>Detect median (min–max)</th>
               <th>Restore median (min–max)</th>
@@ -217,7 +217,10 @@ function Scorecard({
               <tr key={r.s.id} data-scenario={r.s.id}>
                 <td>{r.s.name}</td>
                 <td>{r.runs.length}</td>
-                <td>{r.ok.length}</td>
+                <td>
+                  {r.ok.length}
+                  {r.s.kind === "manual" && " · human intervention"}
+                </td>
                 <td>{r.runs.length - r.ok.length}</td>
                 <td>{r.stat(r.detect)}</td>
                 <td>{r.stat(r.restore)}</td>
@@ -476,11 +479,17 @@ export function ExperimentSummary({
           tone={
             e.state === "COMPLETED"
               ? "recovered"
-              : terminalExperiment(e.state)
-                ? "failed"
-                : "healing"
+              : e.state === "AWAITING_OPERATOR"
+                ? "escalated"
+                : terminalExperiment(e.state)
+                  ? "failed"
+                  : "healing"
           }
-          label={e.state.replaceAll("_", " ")}
+          label={
+            e.scenario === "media-authority-loss" && e.state === "COMPLETED"
+              ? "RESTORED BY OPERATOR"
+              : e.state.replaceAll("_", " ")
+          }
         />
       </div>
       <div className="phase-bar" aria-label="Phase durations">
@@ -498,9 +507,26 @@ export function ExperimentSummary({
         ))}
       </div>
       <p className="cc-note">
-        Healthy → ϟ fault injected {clock(e.injectedAt)} → detected{" "}
-        {clock(e.incidentDetectedAt)} → Healer acted {clock(e.actionStartedAt)}{" "}
-        → verified {clock(e.verifiedAt)} → healthy.
+        {e.scenario === "media-authority-loss" ? (
+          <>
+            Video authorization denied {clock(e.faultConfirmedAt)} → human
+            action required → operator restored access{" "}
+            {clock(
+              typeof e.evidence.operatorRestoredAt === "string"
+                ? e.evidence.operatorRestoredAt
+                : null,
+            )}{" "}
+            → video restoration verified {clock(e.verifiedAt)}. No automatic
+            repair is claimed.
+          </>
+        ) : (
+          <>
+            Healthy → ϟ fault injected {clock(e.injectedAt)} → detected{" "}
+            {clock(e.incidentDetectedAt)} → Healer acted{" "}
+            {clock(e.actionStartedAt)} → verified {clock(e.verifiedAt)} →
+            healthy.
+          </>
+        )}
       </p>
       <p>
         <strong>Diagnosis:</strong>{" "}

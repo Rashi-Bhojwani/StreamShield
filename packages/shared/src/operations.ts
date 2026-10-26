@@ -27,8 +27,12 @@ export const primaryDemoIds = [
   "crash-edge",
   "network-timeout",
 ] as const satisfies readonly ChaosScenarioId[];
+export const liveDemoIds = [
+  ...primaryDemoIds,
+  "media-authority-loss",
+] as const satisfies readonly ChaosScenarioId[];
 export const primaryDemoScenarios = (rows: readonly ChaosScenario[]) =>
-  primaryDemoIds.flatMap((id) => rows.filter((s) => s.id === id));
+  liveDemoIds.flatMap((id) => rows.filter((s) => s.id === id));
 const stamp = z.iso.datetime(),
   nullableStamp = stamp.nullable();
 const scenarioSchema = z.object({
@@ -46,11 +50,12 @@ const scenarioSchema = z.object({
     "external-api",
     "database-outage",
     "broadcast-interruption",
+    "media-authority-loss",
   ]),
   name: z.string(),
   target: z.string(),
   targets: z.array(z.string()).max(3),
-  kind: z.enum(["healer", "resilience", "disabled"]),
+  kind: z.enum(["healer", "resilience", "manual", "disabled"]),
   order: z.number().int(),
   audienceSees: z.string(),
   realWorldCause: z.string(),
@@ -78,6 +83,7 @@ const experimentSchema = z.object({
     "AWAITING_DETECTION",
     "HEALING_OBSERVED",
     "VERIFYING",
+    "AWAITING_OPERATOR",
     "COMPLETED",
     "FAILED",
     "TIMED_OUT",

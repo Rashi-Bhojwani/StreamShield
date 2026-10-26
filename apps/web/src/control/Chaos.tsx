@@ -130,7 +130,7 @@ function Experiment({
             {e.injectedAt ? "pending" : "not yet applicable"}
           </span>
         )}
-        {!done(e.state) && (
+        {!done(e.state) && e.scenario !== "media-authority-loss" && (
           <button
             disabled={cancelling || !!e.cancelRequestedBy}
             onClick={() => void cancel()}

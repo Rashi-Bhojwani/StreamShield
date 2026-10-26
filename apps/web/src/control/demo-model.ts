@@ -16,6 +16,10 @@ export const demoNames = {
     "Network Disruption",
     "A temporary delay causes real timeouts; safe probes verify reconnection.",
   ],
+  "media-authority-loss": [
+    "Media Authorization Loss",
+    "Both video routes are blocked. Missing external signing authority requires human intervention.",
+  ],
 } as const;
 const completed = (e: ChaosExperiment) =>
   ["COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state);
@@ -26,6 +30,11 @@ export function scenarioPresentationState(
   fresh: boolean,
 ) {
   if (!fresh) return "DEGRADED";
+  if (e?.state === "AWAITING_OPERATOR") return "HUMAN ACTION REQUIRED";
+  if (e?.scenario === "media-authority-loss" && e.state === "COMPLETED")
+    return e.verifiedAt && e.evidence.independentBehaviorVerified === true
+      ? "RESTORED BY OPERATOR"
+      : "DEGRADED";
   if (e && !completed(e))
     return e.actionStartedAt || e.state === "VERIFYING" || !e.faultConfirmedAt
       ? "RECOVERING"
@@ -53,6 +62,7 @@ export function demoProgress(
   const event = (kind: string) =>
     e?.events.find((x) => x.kind === kind)?.at ?? null;
   const network = e?.scenario === "network-timeout";
+  const manual = e?.scenario === "media-authority-loss";
   const valid = (at: string | null | undefined) =>
     at && Number.isFinite(Date.parse(at)) && Date.parse(at) <= now ? at : null;
   const verified = valid(e?.verifiedAt);
@@ -72,18 +82,29 @@ export function demoProgress(
     { label: "Failure injected", at: valid(e?.faultConfirmedAt) },
     { label: "Failure detected", at: valid(e?.incidentDetectedAt) },
     {
-      label: "Recovery started",
+      label: manual ? "Human action required" : "Recovery started",
       at: valid(
-        network
-          ? event("CIRCUIT_OPEN") || e?.actionStartedAt
-          : e?.actionStartedAt,
+        manual
+          ? event("HUMAN_ACTION_REQUIRED")
+          : network
+            ? event("CIRCUIT_OPEN") || e?.actionStartedAt
+            : e?.actionStartedAt,
       ),
     },
     {
-      label: "Recovery in progress",
-      at: valid(network ? event("CLEANUP_COMPLETED") : event("VERIFYING")),
+      label: manual ? "Operator restored access" : "Recovery in progress",
+      at: valid(
+        manual
+          ? event("OPERATOR_ACCESS_RESTORED")
+          : network
+            ? event("CLEANUP_COMPLETED")
+            : event("VERIFYING"),
+      ),
     },
-    { label: "Recovery verified", at: verified },
+    {
+      label: manual ? "Human restoration verified" : "Recovery verified",
+      at: verified,
+    },
     {
       label: "Demo complete",
       at: e?.state === "COMPLETED" && verified ? valid(e.finishedAt) : null,
@@ -99,6 +120,8 @@ export function demoProgress(
   };
 }
 export function blockedNextStep(reason: string) {
+  if (/human action|external media authorization/i.test(reason))
+    return "Use Restore demo media authorization below, or stop this disposable demo. Automatic recovery cannot supply the missing external authority.";
   if (/auth|sign in/i.test(reason))
     return "Sign in again with an administrator account.";
   if (/live|media|standby|source/i.test(reason))

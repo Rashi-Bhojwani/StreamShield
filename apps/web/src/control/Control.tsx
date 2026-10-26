@@ -1,4 +1,5 @@
 import { CrashDemonstration } from "./Demonstration";
+import { SystemLogs } from "./Logs";
 import {
   observationFreshness,
   idleLoadObservation,
@@ -852,6 +853,9 @@ function Console() {
           <NavLink to="/control/metrics">
             <span>⌁</span>Metrics
           </NavLink>
+          <NavLink to="/control/logs">
+            <span>≡</span>System logs
+          </NavLink>
           <NavLink to="/control/recoveries">
             <span>⟳</span>Recoveries
           </NavLink>
@@ -911,6 +915,7 @@ function Console() {
               "/control/demo",
               "/control/capacity",
               "/control/three-stream-demo",
+              "/control/logs",
             ].includes(location.pathname) ||
             /^\/control\/(presentation|analysis)/.test(location.pathname)
               ? " chaos-focused"
@@ -1070,6 +1075,7 @@ function Console() {
               <Route path="analysis" element={<Analysis />} />
               <Route path="analysis/:id" element={<ExperimentAnalysis />} />
               <Route path="metrics" element={<MetricsPage />} />
+              <Route path="logs" element={<SystemLogs />} />
               <Route path="recoveries" element={<Recoveries />} />
               <Route path="incidents" element={<History />} />
               <Route path="incidents/:id" element={<IncidentDetail />} />

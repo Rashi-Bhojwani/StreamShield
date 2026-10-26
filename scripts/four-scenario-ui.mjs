@@ -274,8 +274,8 @@ try {
       .waitFor();
     await page.locator(".demo-choice").last().waitFor();
     check(
-      (await page.locator(".demo-choice").count()) === 4,
-      path + "_four_cards",
+      (await page.locator(".demo-choice").count()) === 5,
+      path + "_five_cards",
     );
     check(
       (await page
@@ -405,8 +405,8 @@ try {
     .first()
     .waitFor();
   check(
-    (await page.locator(".demo-choice").count()) === 4,
-    "auth_error_preserves_four_blocked_cards",
+    (await page.locator(".demo-choice").count()) === 5,
+    "auth_error_preserves_five_blocked_cards",
   );
   check(
     await page

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   observationFreshness,
   parseChaosSnapshot,
-  primaryDemoIds,
+  liveDemoIds,
   primaryDemoScenarios,
   type ChaosSnapshot,
 } from "@streamshield/shared";
@@ -63,7 +63,7 @@ describe("authoritative freshness", () => {
 describe("primary demo and admission", () => {
   it("selects exactly the five existing IDs without deleting the backend catalog", () => {
     expect(primaryDemoScenarios(scenarios).map((s) => s.id)).toEqual(
-      primaryDemoIds,
+      liveDemoIds,
     );
     expect(scenarios.length).toBeGreaterThan(5);
   });

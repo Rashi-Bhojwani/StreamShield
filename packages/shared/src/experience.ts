@@ -10,9 +10,16 @@ export const experienceSchema = z.object({
     "recovered",
     "failed",
     "unavailable",
+    "human_required",
   ]),
   scenario: z
-    .enum(["crash-api", "crash-video-gateway", "crash-edge", "network-timeout"])
+    .enum([
+      "crash-api",
+      "crash-video-gateway",
+      "crash-edge",
+      "network-timeout",
+      "media-authority-loss",
+    ])
     .nullable(),
   message: z.string().max(400),
   recommendations: z.object({

@@ -14,7 +14,7 @@ import type {
   ChaosExperiment,
   ComponentObservation,
 } from "@streamshield/shared";
-import { primaryDemoIds } from "@streamshield/shared";
+import { liveDemoIds } from "@streamshield/shared";
 import { AuthContext, type Auth } from "../platform/auth-context";
 import { RequestError } from "../platform/request";
 import { scenarios } from "../../../../services/api/src/chaos/config";
@@ -142,7 +142,7 @@ function fixture() {
     },
   };
 }
-it("renders exactly the same four primary scenarios on Chaos, Demo and Presentation", async () => {
+it("renders the same five scenarios on Chaos, Demo and Presentation", async () => {
   for (const page of [
     <ChaosLab />,
     <ChaosDemo components={[]} stale={false} topology={null} />,
@@ -156,7 +156,7 @@ it("renders exactly the same four primary scenarios on Chaos, Demo and Presentat
         [...container.querySelectorAll("[data-scenario]")].map((n) =>
           n.getAttribute("data-scenario"),
         ),
-      ).toEqual(primaryDemoIds),
+      ).toEqual(liveDemoIds),
     );
     expect(
       screen.getAllByRole("button", { name: "Run failure demonstration" }),
@@ -182,7 +182,7 @@ it("disables all Presentation buttons on stale data even when old scenario avail
   };
   const { container } = f.mount(<Presentation components={[]} stale={false} />);
   await waitFor(() =>
-    expect(container.querySelectorAll("button[data-scenario]")).toHaveLength(4),
+    expect(container.querySelectorAll("button[data-scenario]")).toHaveLength(5),
   );
   expect(
     screen.getByRole("button", { name: "Run failure demonstration" }),

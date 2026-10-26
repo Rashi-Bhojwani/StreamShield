@@ -1,0 +1,79 @@
+{
+  "platform": "Linux cloud with actual Docker faults and decoded synthetic video; physical Windows hardware is not tested here",
+  "baseBranch": "feature/reliable-live-studio",
+  "checks": {
+    "unitTests": 458,
+    "unitFiles": 42,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "format": "PASS",
+    "build": "PASS",
+    "studioCameraAndChat": "PASS",
+    "systemLogsAndManualFailure": "PASS"
+  },
+  "automaticFailures": {
+    "run": "97c8ed84",
+    "status": "PASS",
+    "verifiedScenarios": 4,
+    "cleanedContainers": 13,
+    "userEnvUnchanged": true,
+    "scenarios": [
+      {
+        "scenario": "crash-api",
+        "status": "PASS",
+        "recoveryMs": 15564,
+        "viewerImpactObserved": true,
+        "dependencyLoadingObserved": false,
+        "edgeFallbackObserved": null
+      },
+      {
+        "scenario": "crash-video-gateway",
+        "status": "PASS",
+        "recoveryMs": 11312,
+        "viewerImpactObserved": true,
+        "dependencyLoadingObserved": false,
+        "edgeFallbackObserved": null
+      },
+      {
+        "scenario": "crash-edge",
+        "status": "PASS",
+        "recoveryMs": 12293,
+        "viewerImpactObserved": true,
+        "dependencyLoadingObserved": false,
+        "edgeFallbackObserved": true
+      },
+      {
+        "scenario": "network-timeout",
+        "status": "PASS",
+        "recoveryMs": 30298,
+        "viewerImpactObserved": true,
+        "dependencyLoadingObserved": true,
+        "edgeFallbackObserved": null
+      }
+    ]
+  },
+  "manualFailure": {
+    "project": "ss-light-93367217",
+    "simulatedExternalAuthority": true,
+    "bothVideoRoutesDenied": true,
+    "decodedPlaybackActuallyStopped": true,
+    "operatorRestoration": {
+      "state": "COMPLETED",
+      "automaticallyHealed": false,
+      "advancingVideoVerified": true
+    },
+    "decodedPlaybackResumed": true,
+    "logsReadableAndFilterable": true,
+    "viewerCannotReadLogsOrRestore": true,
+    "status": "PASS",
+    "logsDownload": "PASS: exported JSON contained filtered experiment events and no test account password",
+    "mobileLayout": "PASS: no horizontal overflow, logs heading in viewport"
+  },
+  "mainApplication": {
+    "retainedDuringTests": true,
+    "readiness": {
+      "status": "ready",
+      "service": "streamshield-api"
+    }
+  }
+}

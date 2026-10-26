@@ -205,6 +205,31 @@ export function buildTimeline(input: {
         });
       }
     }
+    for (const e of input.experiments.filter(
+      (e) =>
+        e.scenario === "media-authority-loss" &&
+        e.target === "media-authority" &&
+        id === "video-gateway" &&
+        e.faultConfirmedAt,
+    )) {
+      // A healthy Nginx process cannot deliver video without authorization.
+      // Paint only the interval established by real denied requests and an
+      // explicit operator restoration, never a fabricated container outage.
+      const restored =
+        typeof e.evidence.operatorRestoredAt === "string"
+          ? t(e.evidence.operatorRestoredAt)
+          : to;
+      const start = Math.max(from, t(e.faultConfirmedAt!));
+      const end = Math.min(to, restored);
+      if (end > start)
+        spans = paint(spans, {
+          tone: "failed",
+          from: start,
+          to: end,
+          code: "media_authorization_unavailable",
+          experimentId: e.id,
+        });
+    }
     return { id, spans: merge(spans.filter((s) => s.to > s.from)) };
   });
   // Overall band: evaluate every interval between all component boundaries.
@@ -235,6 +260,29 @@ export function buildTimeline(input: {
     !!at && t(at) >= from && t(at) <= to;
   for (const e of input.experiments) {
     const label = e.scenario;
+    if (e.scenario === "media-authority-loss") {
+      const needed = e.events.find((x) => x.kind === "HUMAN_ACTION_REQUIRED");
+      if (needed && within(needed.at))
+        events.push({
+          kind: "escalated",
+          at: needed.at,
+          component: "video-gateway",
+          label: "Human action required: media signing authority unavailable",
+          experimentId: e.id,
+        });
+      const restored = e.events.find(
+        (x) => x.kind === "OPERATOR_ACCESS_RESTORED",
+      );
+      if (restored && within(restored.at))
+        events.push({
+          kind: "action",
+          at: restored.at,
+          component: "video-gateway",
+          label:
+            "Operator restored simulated media authority; not automatic healing",
+          experimentId: e.id,
+        });
+    }
     if (within(e.injectedAt))
       events.push({
         kind: "injected",

@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   primaryDemoScenarios,
-  primaryDemoIds,
+  liveDemoIds,
   idleLoadObservation,
   observationFreshness,
   type ChaosScenario,
@@ -33,6 +33,8 @@ const viewerImpact: Record<string, string> = {
     "Watch delivery switch to the backup edge. Continuous playback is successful failover, not a failed experiment.",
   "network-timeout":
     "Watch Discover next in Studio or the watch page: recommendations reconnect while live video stays independent.",
+  "media-authority-loss":
+    "New video requests on both routes fail with HTTP 503. Buffered video eventually stops. The player cannot recover until an operator restores the simulated external authorization.",
 };
 export function Demonstration({
   components = [],
@@ -52,7 +54,9 @@ export function Demonstration({
     [confirmation, setConfirmation] = useState<ChaosScenario | null>(null),
     [expanded, setExpanded] = useState(false),
     [error, setError] = useState(""),
-    [cancelling, setCancelling] = useState(false);
+    [cancelling, setCancelling] = useState(false),
+    [restoreConfirmation, setRestoreConfirmation] = useState(""),
+    [restoring, setRestoring] = useState(false);
   const scenarios = primaryDemoScenarios(q.data?.scenarios || []);
   const policy = scenarios.find((s) => s.id === selected);
   const experiment =
@@ -62,6 +66,14 @@ export function Demonstration({
         !crashOnly || ["crash-api", "crash-video-gateway"].includes(e.scenario),
     );
   const functional = q.data?.crashBaseline;
+  const observationFresh =
+    !!q.data?.available &&
+    !q.isError &&
+    observationFreshness(
+      q.data.observedAt,
+      q.serverNow,
+      q.data.staleAfterMs,
+    ) === "fresh";
   const functionalDenial =
     crashOnly &&
     (!functional ||
@@ -76,7 +88,9 @@ export function Demonstration({
         "BLOCKED: independent API and gateway streaming baseline is not verified. Keep a live source running and wait for fresh functional checks."
       : null;
   const denial =
-    scenarioDenial(policy, q.reason) ||
+    (experiment?.state === "AWAITING_OPERATOR"
+      ? "Human action required. Restore the simulated external media authorization below before running another failure."
+      : scenarioDenial(policy, q.reason)) ||
     functionalDenial ||
     (stale
       ? "Monitoring data is stale; wait for current health probes."
@@ -94,22 +108,51 @@ export function Demonstration({
     experiment?.events.some((event) => event.kind === "BASELINE_REVERIFIED") &&
     !!experiment.evidence.terminalBaselineReverifiedAt;
   const status =
-    failed && !safelyRestored
-      ? "Recovery Failed"
-      : progress.active
-        ? "Recovering"
-        : q.reason ||
-            functionalDenial ||
-            (functional && (!functional.api || !functional.gateway)) ||
-            stale ||
-            components.some(
-              (c) =>
-                c.state !== "HEALTHY" &&
-                c.code !== "spare_standby" &&
-                !idleLoadObservation(c),
-            )
-          ? "Degraded"
-          : "Healthy";
+    experiment?.state === "AWAITING_OPERATOR"
+      ? "Human action required"
+      : failed && !safelyRestored
+        ? "Recovery Failed"
+        : progress.active
+          ? "Recovering"
+          : q.reason ||
+              functionalDenial ||
+              (functional && (!functional.api || !functional.gateway)) ||
+              stale ||
+              components.some(
+                (c) =>
+                  c.state !== "HEALTHY" &&
+                  c.code !== "spare_standby" &&
+                  !idleLoadObservation(c),
+              )
+            ? "Degraded"
+            : "Healthy";
+  async function restoreMedia() {
+    if (!experiment || restoring || restoreConfirmation !== "media-authority")
+      return;
+    setRestoring(true);
+    setError("");
+    try {
+      await call(
+        "/monitoring/chaos/experiments/" +
+          experiment.id +
+          "/restore-media-authority",
+        {
+          method: "POST",
+          body: JSON.stringify({ confirmation: restoreConfirmation }),
+        },
+      );
+      setRestoreConfirmation("");
+      await cache.invalidateQueries({ queryKey: ["monitoring", "chaos"] });
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Operator restoration request failed. Check the logs before retrying.",
+      );
+    } finally {
+      setRestoring(false);
+    }
+  }
   async function cancel() {
     if (!experiment || cancelling) return;
     setCancelling(true);
@@ -163,12 +206,12 @@ export function Demonstration({
       <div
         className={"demo-scenario-grid" + (crashOnly ? " crash-only" : "")}
         aria-label={
-          crashOnly ? "Two crash scenarios" : "Four failure scenarios"
+          crashOnly ? "Two crash scenarios" : "Five failure scenarios"
         }
       >
         {(crashOnly
           ? (["crash-api", "crash-video-gateway"] as const)
-          : primaryDemoIds
+          : liveDemoIds
         ).map((id, index) => {
           const s = scenarios.find((s) => s.id === id);
           const reason =
@@ -193,7 +236,7 @@ export function Demonstration({
                   (c) => c.id === target && c.state === "HEALTHY",
                 ),
               ),
-            q.live && !stale,
+            observationFresh && !stale,
           );
           if (crashOnly)
             return (
@@ -242,7 +285,9 @@ export function Demonstration({
               <span>{copy[1]}</span>
               <span
                 className={
-                  ["HEALTHY", "HEALED"].includes(scenarioStatus)
+                  ["HEALTHY", "HEALED", "RESTORED BY OPERATOR"].includes(
+                    scenarioStatus,
+                  )
                     ? "demo-ready"
                     : "demo-unavailable"
                 }
@@ -288,6 +333,70 @@ export function Demonstration({
         </div>
       )}
       <section className="demo-live" aria-label="Live recovery timeline">
+        {experiment?.scenario === "media-authority-loss" &&
+          experiment.injectedAt &&
+          !demoTerminal(experiment) && (
+            <section
+              className="demo-operator"
+              aria-label="Manual recovery requirement"
+              data-testid="manual-recovery"
+            >
+              <p className="cc-kicker">AUTOMATIC RECOVERY NOT POSSIBLE</p>
+              <h2>
+                {experiment.evidence.operatorRestoredAt
+                  ? "Human restoration is being verified"
+                  : "Human action required"}
+              </h2>
+              <p>
+                A restart cannot recreate a lost private signing key or grant
+                privileged access to an external key vault. Real recovery needs
+                the original backup or an authorized signing-service
+                administrator.
+              </p>
+              <p>
+                This disposable demo simulates that missing authority by
+                blocking actual video requests. It does not destroy a real key.
+                The explicit reset below represents the operator restoring that
+                external prerequisite.
+              </p>
+              {!experiment.evidence.operatorResetRequestedAt ? (
+                <>
+                  <label>
+                    Type media-authority to authorize the demo reset
+                    <input
+                      aria-label="Confirm manual media restoration"
+                      value={restoreConfirmation}
+                      onChange={(e) => setRestoreConfirmation(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </label>
+                  <button
+                    className="chaos-inject"
+                    disabled={
+                      restoreConfirmation !== "media-authority" ||
+                      restoring ||
+                      !observationFresh
+                    }
+                    onClick={() => void restoreMedia()}
+                  >
+                    {restoring
+                      ? "Recording human intervention…"
+                      : "Restore demo media authorization"}
+                  </button>
+                </>
+              ) : (
+                <p role="status">
+                  Operator reset requested. Waiting for actual advancing video
+                  verification; automatic healing is not being claimed.
+                </p>
+              )}
+              <p>
+                <Link to="/control/logs">
+                  Follow the explanation in System logs →
+                </Link>
+              </p>
+            </section>
+          )}
         <div className="demo-section-head">
           <h2>Live recovery timeline</h2>
           <span>
@@ -297,9 +406,15 @@ export function Demonstration({
           </span>
         </div>
         <p>
-          Observation target: {Math.round(progress.windowMs / 1000)} seconds.
-          Recovery is measured separately; slower recovery continues until
-          verified or timed out.
+          {experiment?.scenario === "media-authority-loss" ? (
+            "This scenario stays blocked until an operator restores the simulated prerequisite or stops the disposable demo. A timer never claims successful healing."
+          ) : (
+            <>
+              Observation target: {Math.round(progress.windowMs / 1000)}{" "}
+              seconds. Recovery is measured separately; slower recovery
+              continues until verified or timed out.
+            </>
+          )}
         </p>
         <ol className="demo-steps">
           {progress.stages.map((step, i) => (
@@ -325,17 +440,18 @@ export function Demonstration({
                 : experiment.reason}
             </p>
             <p className="demo-id">Experiment {experiment.id}</p>
-            {progress.active && (
-              <button disabled={cancelling} onClick={() => void cancel()}>
-                {cancelling
-                  ? "Requesting cancellation…"
-                  : "Cancel observation / clean temporary fault"}
-              </button>
-            )}
+            {progress.active &&
+              experiment.scenario !== "media-authority-loss" && (
+                <button disabled={cancelling} onClick={() => void cancel()}>
+                  {cancelling
+                    ? "Requesting cancellation…"
+                    : "Cancel observation / clean temporary fault"}
+                </button>
+              )}
             <small>
-              Cancellation removes owned temporary network faults. A crashed
-              service still requires the independent Healer or operator
-              restoration.
+              {experiment.scenario === "media-authority-loss"
+                ? "Use the explicit operator reset above. Restarting a service does not restore external authority."
+                : "Cancellation removes owned temporary network faults. A crashed service still requires the independent Healer or operator restoration."}
             </small>
           </>
         )}
@@ -359,13 +475,16 @@ export function Demonstration({
             </p>
           )}
         <h2>
-          {failed
-            ? safelyRestored
-              ? "Previous demo failed; safe baseline reverified"
-              : "Recovery failed — inspect the evidence"
-            : progress.stages[6]?.at
-              ? "Verified demonstration result"
-              : "Recovery result"}
+          {experiment?.scenario === "media-authority-loss" &&
+          experiment.state === "COMPLETED"
+            ? "Human restoration verified · not automatically healed"
+            : failed
+              ? safelyRestored
+                ? "Previous demo failed; safe baseline reverified"
+                : "Recovery failed — inspect the evidence"
+              : progress.stages[6]?.at
+                ? "Verified demonstration result"
+                : "Recovery result"}
         </h2>
         {safelyRestored && (
           <p>
@@ -383,16 +502,20 @@ export function Demonstration({
           <div>
             <dt>Recovery performed</dt>
             <dd>
-              {experiment?.scenario === "network-timeout"
-                ? experiment.cleanup === "COMPLETED"
-                  ? "Owned network fault removed; safe reconnection probes"
-                  : "Not verified"
-                : experiment?.actionStartedAt
-                  ? String(
-                      experiment.evidence.recoveryAction ||
-                        "Independent Healer action started",
-                    )
-                  : "Not verified"}
+              {experiment?.scenario === "media-authority-loss"
+                ? experiment.evidence.operatorRestoredAt
+                  ? "Administrator restored the simulated prerequisite; no automatic repair performed"
+                  : "Cannot repair automatically: external signing authority is unavailable"
+                : experiment?.scenario === "network-timeout"
+                  ? experiment.cleanup === "COMPLETED"
+                    ? "Owned network fault removed; safe reconnection probes"
+                    : "Not verified"
+                  : experiment?.actionStartedAt
+                    ? String(
+                        experiment.evidence.recoveryAction ||
+                          "Independent Healer action started",
+                      )
+                    : "Not verified"}
             </dd>
           </div>
           <div>

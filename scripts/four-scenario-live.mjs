@@ -7,7 +7,11 @@ import {
   fixtureServiceState,
   redactFixtureText,
 } from "./fixture-diagnostics.mjs";
-import { fixtureProfile, demoBackupEdge } from "./fixture-profile.mjs";
+import {
+  fixtureProfile,
+  demoBackupEdge,
+  demoMediaAuthority,
+} from "./fixture-profile.mjs";
 import { fixtureSupervisor } from "./fixture-supervisor.mjs";
 import {
   buildFixtureRuntime,
@@ -219,7 +223,11 @@ try {
       HEALER_ENABLED: "true",
       CHAOS_ENABLED: "true",
       CHAOS_ENVIRONMENT: "local-development",
-      CHAOS_ALLOWED_SCENARIOS: selectedScenarios.join(","),
+      CHAOS_ALLOWED_SCENARIOS: [
+        ...selectedScenarios,
+        ...(profile.lightweight ? ["media-authority-loss"] : []),
+      ].join(","),
+      CHAOS_MEDIA_GATE_ENABLED: profile.lightweight ? "true" : "false",
       CHAOS_OBSERVATION_WINDOW_MS: "15000",
       CHAOS_FAULT_DURATION_MS: profile.lightweight ? "20000" : "8000",
       POSTGRES_DB: "fixture_" + id,
@@ -279,10 +287,13 @@ try {
       ).source;
       writeFileSync(
         gatewayConfig,
-        demoBackupEdge(
-          readFileSync(gatewayConfig, "utf8"),
-          env.RESILIENCE_EDGE2_HOST,
-          env.RESILIENCE_HTTP_PORT,
+        demoMediaAuthority(
+          demoBackupEdge(
+            readFileSync(gatewayConfig, "utf8"),
+            env.RESILIENCE_EDGE2_HOST,
+            env.RESILIENCE_HTTP_PORT,
+          ),
+          env.CHAOS_PORT,
         ),
       );
     }
@@ -856,7 +867,7 @@ try {
       .waitFor();
     check(
       (await page.locator(".demo-choice").count()) ===
-        (crashOnly && !existingUi ? 2 : 4),
+        (crashOnly && !existingUi ? 2 : 5),
       "primary_card_count",
     );
     if (crashOnly && !existingUi)

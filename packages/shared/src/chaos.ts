@@ -12,7 +12,8 @@ export type ChaosScenarioId =
   | "network-timeout"
   | "external-api"
   | "database-outage"
-  | "broadcast-interruption";
+  | "broadcast-interruption"
+  | "media-authority-loss";
 export type ExperimentState =
   | "CREATED"
   | "VALIDATING"
@@ -21,12 +22,14 @@ export type ExperimentState =
   | "AWAITING_DETECTION"
   | "HEALING_OBSERVED"
   | "VERIFYING"
+  | "AWAITING_OPERATOR"
   | "COMPLETED"
   | "FAILED"
   | "TIMED_OUT"
   | "CANCELLED";
-/** healer: ends only in a genuine Healer action; resilience: timed fault cleanup. */
-export type ChaosScenarioKind = "healer" | "resilience" | "disabled";
+/** healer: genuine Healer action; resilience: timed fault cleanup;
+ * manual: missing external authority, requiring explicit human intervention. */
+export type ChaosScenarioKind = "healer" | "resilience" | "manual" | "disabled";
 export interface ChaosScenario {
   id: ChaosScenarioId;
   name: string;
@@ -74,6 +77,9 @@ export type ExperimentEventKind =
   | "LOAD_ENDED"
   | "SCALED_IN"
   | "SCALE_IN_NOT_OBSERVED"
+  | "HUMAN_ACTION_REQUIRED"
+  | "OPERATOR_RESET_REQUESTED"
+  | "OPERATOR_ACCESS_RESTORED"
   | `CIRCUIT_${"CLOSED" | "OPEN" | "HALF_OPEN"}`;
 export interface ExperimentEvent {
   kind: ExperimentEventKind;

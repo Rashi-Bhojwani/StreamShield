@@ -115,6 +115,7 @@ it.each([
   "crash-video-gateway",
   "crash-edge",
   "network-timeout",
+  "media-authority-loss",
 ] as const)(
   "projects actual %s impact without exposing controls or credentials",
   (id) => {
@@ -140,6 +141,23 @@ it("does not advertise stale history as active live recovery", () => {
     observedAt: null,
     scenario: null,
   });
+});
+it("clearly distinguishes an unmet human prerequisite from automatic recovery and human restoration", () => {
+  const s = snapshot(),
+    e = experiment("media-authority-loss");
+  e.state = "AWAITING_OPERATOR";
+  s.experiments = [e];
+  expect(experienceSummary(s, dependency)).toMatchObject({
+    state: "human_required",
+    scenario: "media-authority-loss",
+  });
+  expect(experienceSummary(s, dependency).message).toContain("cannot recreate");
+  e.state = "COMPLETED";
+  e.verifiedAt = new Date().toISOString();
+  e.finishedAt = e.verifiedAt;
+  expect(experienceSummary(s, dependency).message).toContain(
+    "human intervention, not automatic healing",
+  );
 });
 it("requires verified restoration and lets a recovery notice expire", () => {
   const s = snapshot(),

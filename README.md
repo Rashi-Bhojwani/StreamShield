@@ -3,13 +3,14 @@
 **Current Windows setup:** [Run the persistent app and failure dashboard together](docs/WINDOWS_LOCAL_STUDIO.md).
 This branch includes the compiled demo runtime, stable idle baseline, browser media
 port isolation, broadcaster chat beside the live preview, visible service impact,
-and a charcoal/red Studio design. Use the repository version rather than the old
+understandable system logs at `/control/logs`, an operator-only media authorization
+failure, and a charcoal/red Studio design. Use the repository version rather than the old
 downloadable patches. Historical feature-branch checkout instructions below are
 preserved as phase documentation.
 
-**Lightweight four-scenario self-healing demo:** `npm.cmd run demo:light` starts the existing site with real API/gateway recovery, separate active/backup edges and scoped network timeouts, without Grafana or Prometheus. `npm.cmd run test:light-four` verifies the four scenarios sequentially. [Windows setup and safe GitHub checkout](docs/LIGHTWEIGHT_DEMO.md) · [Verified Linux results and screenshots](docs/LIGHTWEIGHT_DEMO_RESULTS.md). The full telemetry test remains optional with its original disk guard.
+**Lightweight failure demo:** `npm.cmd run demo:light` offers four automatic recovery scenarios plus a fifth failure that blocks real video delivery until an operator restores its simulated external signing authority. It requires no Grafana or Prometheus. `npm.cmd run test:light-four` verifies the four automatic scenarios sequentially; `npm.cmd run test:system` checks the operator-only failure and logs against a running disposable demo. [Current Windows setup](docs/WINDOWS_LOCAL_STUDIO.md).
 
-**Current four-scenario repair:** [UI, safe stale-recovery reconciliation, actual checks, Windows diagnosis/run instructions and remaining blockers](docs/FOUR_SCENARIO_REPAIR_RESULTS.md). Full live acceptance is PARTIAL; mocked UI screenshots and historical final-demo measurements are separate evidence.
+**Historical four-scenario repair report:** [Earlier diagnosis and remaining blockers at that time](docs/FOUR_SCENARIO_REPAIR_RESULTS.md). For this branch's current verification, use the Windows guide and [current validation evidence](docs/SYSTEM_LOGS_VALIDATION.json).
 
 ## Final presentation build
 

@@ -14,6 +14,7 @@ export const supported = [
   "crash-primary",
   "network-timeout",
   "external-api",
+  "media-authority-loss",
 ] as const;
 type Draft = Omit<ChaosScenario, "available" | "reason"> & {
   reason?: string | null;
@@ -24,6 +25,27 @@ const healer = (s: Omit<Draft, "kind" | "supported">): Draft => ({
   supported: true,
 });
 const drafts: Draft[] = [
+  {
+    id: "media-authority-loss",
+    order: 22,
+    kind: "manual",
+    name: "Media authorization unavailable · human action required",
+    target: "media-authority",
+    targets: ["video-gateway"],
+    expectedReceipt: null,
+    risk: "high",
+    supported: true,
+    failure:
+      "Deny actual HLS playlist and segment requests on both video routes. This safely simulates loss of an external media signing authority; no real keys are destroyed.",
+    recovery:
+      "Automatic recovery cannot recreate a missing private signing key or grant access to an external key vault. An authorized operator must restore access, then advancing video must be independently verified.",
+    prerequisites:
+      "Disposable demo media gate enabled, healthy live source, and an administrator available to reset the simulated external authority. In a real outage, recovery requires the original private-key backup or privileged access to the external signing service.",
+    audienceSees:
+      "Both delivery paths reject new video requests. Buffered video eventually stops; Human action required stays visible until an operator restores access.",
+    realWorldCause:
+      "Lost signing-key backup or revoked access to an external key-management service. Restarting containers cannot recreate that authority.",
+  },
   healer({
     id: "crash-redis",
     order: 1,
@@ -271,6 +293,7 @@ export function chaosConfig(env: Record<string, string | undefined>) {
   const c = z
     .object({
       CHAOS_ENABLED: z.enum(["true", "false"]).default("false"),
+      CHAOS_MEDIA_GATE_ENABLED: z.enum(["true", "false"]).default("false"),
       CHAOS_ENVIRONMENT: z
         .enum(["disabled", "local-development"])
         .default("disabled"),
@@ -326,6 +349,7 @@ export const temporary = (id: ChaosScenarioId) =>
   id === "network-timeout" || id === "external-api";
 /** Faults the controller generates itself (no Docker or Toxiproxy authority). */
 export const generated = (id: ChaosScenarioId) => id === "traffic-surge";
+export const manual = (id: ChaosScenarioId) => id === "media-authority-loss";
 /** The Healer budget/allowlist identity behind a scenario target. */
 export const authorityFor = (target: string) =>
   target === "api-tier" ? "api-3" : target;

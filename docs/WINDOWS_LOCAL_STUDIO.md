@@ -4,10 +4,10 @@ Use Node.js 24.x, npm 11+, Git, Docker Desktop with Linux containers/WSL 2,
 and current Chrome. Keep Docker's engine running. The two deployments have
 separate databases, credentials and Docker project names.
 
-| Deployment             | Website               | Purpose                                                    |
-| ---------------------- | --------------------- | ---------------------------------------------------------- |
-| `streamshield-main`    | http://127.0.0.1:5173 | Persistent accounts, channels and streams                  |
-| `ss-light-<random ID>` | http://127.0.0.1:5174 | Temporary live streaming and four real failure experiments |
+| Deployment             | Website               | Purpose                                                                                     |
+| ---------------------- | --------------------- | ------------------------------------------------------------------------------------------- |
+| `streamshield-main`    | http://127.0.0.1:5173 | Persistent accounts, channels and streams                                                   |
+| `ss-light-<random ID>` | http://127.0.0.1:5174 | Temporary live streaming, four automatic recovery experiments and one operator-only failure |
 
 Failure buttons affect the deployment on **5174**. They do not stop containers
 belonging to `streamshield-main` on 5173. The demonstration is disposable and
@@ -93,6 +93,41 @@ The demo publishes browser ICE on loopback **TCP and UDP 18189**, separate from
 the main app. A camera preview alone does not establish successful broadcasting.
 A failed publishing attempt is cleaned up and ended; create a new broadcast to retry.
 
+## Update an existing checkout from this branch
+
+Stop the old temporary demo with **Ctrl+C** and wait for its cleanup. Keep the
+persistent application running. In your new checkout (adjust the folder if needed):
+
+```powershell
+cd E:\final-streamshield\StreamShield-updated
+git pull --ff-only origin feature/reliable-live-studio
+npm.cmd run build
+npm.cmd run demo:light
+```
+
+The current update adds no dependencies or database migrations. The demo compiles
+the updated API and controller and builds its own isolated web assets automatically.
+Its existing runtime and Nginx images can be reused. Do not apply old patches.
+If Git reports local tracked changes, preserve them before updating; do not reset
+or delete your work. Accounts and streams in the temporary demo are recreated.
+
+## Read understandable system logs
+
+In the signed-in administrator browser, choose **System logs** in the Control
+sidebar, or open http://127.0.0.1:5174/control/logs.
+
+The page explains recorded service-health changes, broadcast lifecycle events,
+failure experiments, recovery decisions and human escalations in plain language.
+Search by component or explanation, filter by severity/source, choose the last
+1, 6 or 24 hours, pause updates, or download the filtered JSON. It refreshes every
+five seconds and shows the newest 500 recorded events. Missing sources and
+truncated history are explicitly labelled; missing evidence never means healthy.
+
+These are operational events, not all raw Docker stdout or every HTTP request.
+Stream keys, credentials, chat messages and arbitrary raw process details are not
+included. Administrator access is required. Logs belong to their deployment:
+5174 shows the disposable demo; 5173 shows the persistent application's events.
+
 For OBS, create a publishing key in Studio and copy the full key privately. The
 demo uses a dynamic RTMP host port: do not use main-app port 1935 by mistake.
 Find the demo mapping in another PowerShell window:
@@ -105,17 +140,18 @@ docker ps -q --filter "label=streamshield.light-run" --filter "label=com.docker.
 Use `rtmp://127.0.0.1:<printed-port>` in OBS with H.264 video, AAC audio and a
 two-second keyframe interval. OBS is separate from the browser's Start Live button.
 
-## What the four failures actually affect
+## What the five failures actually affect
 
 Run one scenario at a time. Acknowledge impact and confirm the exact target.
 Wait for verified recovery and healthy readiness/cooldown before the next one.
 
-| Failure             | Confirm           | Actual audience impact                                                                                                                                  |
-| ------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| API crash           | `api-1`           | Requests can fail over to API-2; chat/account requests may reconnect. Independent video can continue.                                                   |
-| Video gateway crash | `video-gateway`   | Video can stall or buffer until the gateway and advancing segments are restored.                                                                        |
-| Edge failure        | `edge-1`          | The backup edge serves video. Uninterrupted playback is successful redundancy.                                                                          |
-| Network disruption  | `demo-dependency` | The real read-only recommendations demo times out and reconnects through its circuit breaker. The network delay lasts 20 seconds; video is independent. |
+| Failure                  | Confirm           | Actual audience impact                                                                                                                                                                                             |
+| ------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| API crash                | `api-1`           | Requests can fail over to API-2; chat/account requests may reconnect. Independent video can continue.                                                                                                              |
+| Video gateway crash      | `video-gateway`   | Video can stall or buffer until the gateway and advancing segments are restored.                                                                                                                                   |
+| Edge failure             | `edge-1`          | The backup edge serves video. Uninterrupted playback is successful redundancy.                                                                                                                                     |
+| Network disruption       | `demo-dependency` | The real read-only recommendations demo times out and reconnects through its circuit breaker. The network delay lasts 20 seconds; video is independent.                                                            |
+| Media authorization loss | `media-authority` | Both real HLS routes reject new playlists and segments with HTTP 503. Buffered video drains and stops. The system reports **Human action required**; automatic recovery cannot recreate missing signing authority. |
 
 Studio and Watch show **Live service impact** during an actual experiment.
 **Discover next** shows its genuine dependency loading/reconnect state. These
@@ -126,12 +162,40 @@ The player is not artificially paused to make a successful failover look broken.
 Its loading state follows actual delivery. Recovery notices describe what is
 being repaired and whether video can continue through a backup.
 
+### The failure automatic healing cannot fix
+
+Select **Media Authorization Loss** and confirm `media-authority`. This disposable
+simulation represents a missing private-key backup or revoked privileged access
+to an external signing/key-management service. In a real incident, only the
+original key backup or an authorized external administrator could supply that
+prerequisite; restarting a container cannot invent it. The demo blocks actual
+video delivery but does not destroy a real key or contact a real external vault.
+
+Both delivery paths are denied. The camera can continue sending and chat can
+continue working, while viewers lose delivery after buffered media runs out.
+Other failure buttons stay blocked. No timer or background restart removes this
+gate. **Human action required** persists until explicit operator restoration or
+until this disposable demo is stopped.
+
+To continue your demonstration, type `media-authority` in **Confirm manual media
+restoration**, then select **Restore demo media authorization**. This explicit
+reset represents the authorized operator supplying the external prerequisite.
+The controller records human intervention, opens the simulated gate, and checks
+actual progressing video before allowing another experiment. The result says
+**Human restoration verified · not automatically healed**. Logs and analysis keep
+that distinction. If a player exhausted its retry budget during a long outage,
+use its **Retry playback** button after restoration. Do not delete any volumes.
+
+Screenshots: [manual recovery requirement](screenshots/reliable-studio/manual-recovery.png)
+and [system logs](screenshots/reliable-studio/system-logs.png).
+
 ## Preview and verification evidence
 
 - [Studio with a synthetic camera and real audience comments](screenshots/reliable-studio/studio-desktop.png)
 - [Mobile Studio](screenshots/reliable-studio/studio-mobile.png)
 - [Healthy failure dashboard](screenshots/reliable-studio/control-healthy.png)
 - [Validation results](RELIABLE_STUDIO_VALIDATION.json)
+- [Logs and operator-only failure validation](SYSTEM_LOGS_VALIDATION.json)
 
 The screenshots use a generated camera test pattern and disposable test accounts.
 The chat messages traveled between separate authenticated browser contexts while
@@ -194,6 +258,19 @@ device and firewall behavior still require a local test.
 the four faults and verifies receipts, independent behavior, progressing media,
 and visible live impact/recommendation reconnect states. Do not run multiple
 resource-heavy demo instances just to collect results.
+
+With exactly one disposable demo running, `test:system` verifies the fifth failure
+and logs with an actual decoded video player. It creates only temporary `e2e_`
+accounts, grants its test account administrator access in that demo, checks that
+ordinary viewers cannot read logs or restore access, confirms actual denial on
+both routes and stopped playback, uses the operator reset, and verifies decoded
+video resumes. It requires local Docker test authority and rejects main projects.
+
+```powershell
+$env:SYSTEM_E2E_PROJECT = (docker ps --filter "label=streamshield.light-run" --filter "label=com.docker.compose.service=control-plane" --format '{{.Names}}') -replace '-control-plane-1$', ''
+npm.cmd run test:system
+Remove-Item Env:SYSTEM_E2E_PROJECT
+```
 
 If startup fails, the terminal's final JSON gives an artifact directory under
 `test-results/light-demo/runs/<id>`. Its measurements and redacted service logs

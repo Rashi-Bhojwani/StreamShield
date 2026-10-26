@@ -817,7 +817,7 @@ test("authenticated real Chaos Lab experiments, durable evidence, live media and
       ).toBeVisible();
       await expect(
         control.locator(".demo-advanced [data-scenario]"),
-      ).toHaveCount(4);
+      ).toHaveCount(5);
       await expect(
         control.locator('[data-experiment="' + last.id + '"]'),
       ).toBeVisible();
