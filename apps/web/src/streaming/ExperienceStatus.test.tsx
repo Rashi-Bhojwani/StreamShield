@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ExperienceStatus } from "./ExperienceStatus";
 import { platformRequest, RequestError } from "../platform/request";
@@ -30,6 +30,7 @@ function mount() {
       <ExperienceStatus />
     </QueryClientProvider>,
   );
+  return client;
 }
 afterEach(() => vi.clearAllMocks());
 it("shows the affected dependency loading while explaining independent video delivery", async () => {
@@ -73,6 +74,35 @@ it("does not show stale success when status requests fail", async () => {
     "data-state",
     "unavailable",
   );
+});
+it("clears a previously healthy recommendation result after a failed refresh", async () => {
+  vi.mocked(platformRequest).mockResolvedValue({
+    ...value(),
+    state: "healthy",
+    recommendations: {
+      available: true,
+      items: ["Discover a live channel"],
+      simulated: true,
+    },
+  });
+  const client = mount();
+  await waitFor(() =>
+    expect(screen.getByTestId("recommendation-status")).toHaveAttribute(
+      "data-state",
+      "available",
+    ),
+  );
+  vi.mocked(platformRequest).mockRejectedValue(Error("Connection lost"));
+  await act(async () => {
+    await client.invalidateQueries();
+  });
+  await waitFor(() =>
+    expect(screen.getByTestId("recommendation-status")).toHaveAttribute(
+      "data-state",
+      "unavailable",
+    ),
+  );
+  expect(screen.getByText("Connection status unavailable")).toBeVisible();
 });
 it("hides the optional local feature when the production endpoint is absent", async () => {
   vi.mocked(platformRequest).mockRejectedValue(

@@ -75,7 +75,7 @@ export function experienceSummary(
             ? "Service recovery verified. Your live session can continue."
             : scenario && state === "recovering"
               ? impactCopy[scenario]
-              : "Your stream is ready. Service status updates appear here during a recovery.",
+              : "No failure experiment is active. Keep this tab open for live recovery updates.",
     recommendations: {
       available: dependency ? dependency.status === "available" : null,
       items:

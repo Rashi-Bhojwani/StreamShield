@@ -4,25 +4,27 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/e2e",
   outputDir:
-    process.env.FINAL_E2E === "1"
-      ? "test-results/final-artifacts"
-      : process.env.DYNAMIC_E2E === "1"
-        ? "test-results/dynamic-artifacts"
-        : process.env.DEMO_E2E === "1"
-          ? "test-results/demo-artifacts"
-          : process.env.CHAOS_E2E === "1"
-            ? "test-results/chaos-artifacts"
-            : process.env.HEALING_E2E === "1"
-              ? "test-results/healing-artifacts"
-              : process.env.MONITORING_E2E === "1"
-                ? "test-results/monitoring-artifacts"
-                : process.env.RESILIENCE_E2E === "1"
-                  ? "test-results/resilience-artifacts"
-                  : process.env.PLATFORM_MEDIA_E2E === "1"
-                    ? "test-results/platform-media-artifacts"
-                    : process.env.STREAMING_E2E === "1"
-                      ? "test-results/media-artifacts"
-                      : "test-results/browser-artifacts",
+    process.env.STUDIO_E2E === "1"
+      ? "test-results/studio-artifacts"
+      : process.env.FINAL_E2E === "1"
+        ? "test-results/final-artifacts"
+        : process.env.DYNAMIC_E2E === "1"
+          ? "test-results/dynamic-artifacts"
+          : process.env.DEMO_E2E === "1"
+            ? "test-results/demo-artifacts"
+            : process.env.CHAOS_E2E === "1"
+              ? "test-results/chaos-artifacts"
+              : process.env.HEALING_E2E === "1"
+                ? "test-results/healing-artifacts"
+                : process.env.MONITORING_E2E === "1"
+                  ? "test-results/monitoring-artifacts"
+                  : process.env.RESILIENCE_E2E === "1"
+                    ? "test-results/resilience-artifacts"
+                    : process.env.PLATFORM_MEDIA_E2E === "1"
+                      ? "test-results/platform-media-artifacts"
+                      : process.env.STREAMING_E2E === "1"
+                        ? "test-results/media-artifacts"
+                        : "test-results/browser-artifacts",
   fullyParallel: false,
   workers: 1,
   testMatch:

@@ -32,7 +32,7 @@ export function ExperienceStatus() {
     return null;
   const status = q.isError ? "unavailable" : q.data?.state || "unavailable";
   const recovering = status === "recovering";
-  const recommendations = q.data?.recommendations;
+  const recommendations = q.isError ? undefined : q.data?.recommendations;
   return (
     <section
       className={"experience-status experience-" + status}
@@ -59,7 +59,7 @@ export function ExperienceStatus() {
               : status === "recovered"
                 ? "Back in rhythm"
                 : status === "healthy"
-                  ? "Connected & ready"
+                  ? "Live service updates"
                   : status === "failed"
                     ? "Recovery needs attention"
                     : "Connection status unavailable"}
@@ -86,7 +86,7 @@ export function ExperienceStatus() {
           Discover next <small>Demo dependency</small>
         </span>
         {recommendations?.available === true ? (
-          <a href="/live">
+          <a href="/live" target="_blank" rel="noopener noreferrer">
             <Icon name="spark" />{" "}
             {recommendations.items[0] || "Explore live channels"}
             <Icon name="arrow" />

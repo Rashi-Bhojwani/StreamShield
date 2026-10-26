@@ -126,6 +126,20 @@ The player is not artificially paused to make a successful failover look broken.
 Its loading state follows actual delivery. Recovery notices describe what is
 being repaired and whether video can continue through a backup.
 
+## Preview and verification evidence
+
+- [Studio with a synthetic camera and real audience comments](screenshots/reliable-studio/studio-desktop.png)
+- [Mobile Studio](screenshots/reliable-studio/studio-mobile.png)
+- [Healthy failure dashboard](screenshots/reliable-studio/control-healthy.png)
+- [Validation results](RELIABLE_STUDIO_VALIDATION.json)
+
+The screenshots use a generated camera test pattern and disposable test accounts.
+The chat messages traveled between separate authenticated browser contexts while
+the remote player decoded video. The four-scenario check verified visible recovery
+notices in every experiment and the actual recommendation reconnect/loading state
+during network disruption. These Linux checks do not claim physical Windows camera
+or firewall verification.
+
 ## Start or upgrade the persistent application too
 
 For a brand-new main deployment:

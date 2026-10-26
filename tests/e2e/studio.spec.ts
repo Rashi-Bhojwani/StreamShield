@@ -112,6 +112,9 @@ test("broadcaster keeps publishing while reading and replying to real viewer com
         { timeout: 30000 },
       )
       .toBe(1);
+    await expect(
+      comments.getByText("1 approximate active player", { exact: true }),
+    ).toBeVisible({ timeout: 15000 });
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
