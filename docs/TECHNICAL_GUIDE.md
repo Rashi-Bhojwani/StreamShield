@@ -1,7 +1,8 @@
 # StreamShield: complete technical guide
 
-**Implementation reviewed:** `feature/reliable-live-studio`, application commit
-`c7b37ee`, 26 October 2026. This guide describes the code on that branch. It is
+**Implementation reviewed:** `feature/reliable-live-studio`, application baseline
+`c7b37ee` with the startup-readiness correction reviewed on 27 October 2026.
+This guide describes the code on that branch. It is
 intended for developers, project reviewers, operators and technical presentations.
 
 For the exact Windows commands, use [Windows local setup](WINDOWS_LOCAL_STUDIO.md).
@@ -1121,8 +1122,14 @@ writes are not repeatedly retried as if they were harmless reads.
 The staged control supervisor starts API-2, the dependency and adapter, Observer,
 Healer, fault adapter and Chaos in dependency order, verifying readiness at each
 stage. Before READY, the interactive runner requires 30 continuous seconds of a
-genuine healthy idle baseline with no incidents, repairs or injected faults,
-followed by actual browser video element/progress checks.
+genuine healthy idle baseline with no open incidents, unverified repairs or
+injected experiments, followed by actual browser video element/progress checks.
+Completed startup history is retained: every repair must be VERIFIED and persisted,
+and every incident must be RESOLVED with verification/closure timestamps. Changes
+in that history restart the quiet window, including work completed between two
+polls. Stale observations, unavailable incident history, escalated attempts or
+unverified closure never establish readiness. A verified startup container restart
+is recorded; another restart during the subsequent browser baseline is rejected.
 
 A printed `WAITING` stage is an active bounded readiness check, not a completed
 deployment. A final FAIL report identifies the last stage and saves sanitized
@@ -1241,7 +1248,16 @@ Additional current evidence:
 - [Studio, chat and responsive design](RELIABLE_STUDIO_VALIDATION.json)
 - [Logs and manual authorization failure](SYSTEM_LOGS_VALIDATION.json)
 - [Authenticated media-control startup](MEDIA_CONTROL_READINESS_VALIDATION.json)
+- [Healthy readiness after actual startup API recovery](STARTUP_BASELINE_VALIDATION.json)
 - [Recovered dashboard screenshot](screenshots/reliable-studio/recovered-dashboard.png)
+
+The startup-readiness regression check deliberately killed only API-1 in its own
+new disposable fixture before the idle window. The independent Healer verified
+restoration and the Observer resolved the incident; both records remained present.
+A new 30-second healthy window then passed, the browser reached READY and decoded
+video, and all 13 temporary containers were cleaned up. The correction's unit suite
+passed 498 tests across 43 files. This run confirms readiness after verified
+startup recovery; it does not replace the separate four-scenario measurements.
 
 Saved artifacts include run-specific measurements, redacted fixture logs and
 screenshots under `test-results/`. Actual evidence distinguishes decoded browser

@@ -17,6 +17,7 @@ import {
   buildFixtureRuntime,
   compiledFixtureService,
   idleBaselineGate,
+  idleBaselineAssessment,
 } from "./fixture-runtime.mjs";
 import {
   prepareFixtureWorkspace,
@@ -780,6 +781,7 @@ try {
       },
       120000,
     );
+    let settledBaseline = null;
     if (profile.lightweight) {
       const gate = idleBaselineGate({ scenarioIds: selectedScenarios });
       await until(
@@ -789,7 +791,14 @@ try {
             const chaos = await api("/monitoring/chaos");
             const healer = await api("/monitoring/healing");
             const health = await api("/monitoring/snapshot");
-            return gate.observe({ chaos, healer, health });
+            const frame = { chaos, healer, health };
+            const ready = gate.observe(frame);
+            if (ready === true)
+              settledBaseline = idleBaselineAssessment(
+                frame,
+                selectedScenarios,
+              );
+            return ready;
           } catch (error) {
             gate.reset();
             throw error;
@@ -798,6 +807,29 @@ try {
         120000,
       );
       result.baseline.stableIdleMs = 30000;
+      result.baseline.startupHistory = settledBaseline.history;
+      result.baseline.startupRestarts = [];
+      for (const [name, previous] of Object.entries(baselineStartup)) {
+        const startedAt = inspect(name).State.StartedAt;
+        if (startedAt === previous) continue;
+        const component = name === "api" ? "api-1" : name;
+        check(
+          settledBaseline.history.recoveryAttempts.some(
+            (a) =>
+              a.component === component &&
+              a.state === "VERIFIED" &&
+              Date.parse(a.finishedAt) >= Date.parse(startedAt),
+          ),
+          "unverified_service_restart_during_startup:" + name,
+        );
+        result.baseline.startupRestarts.push({
+          service: name,
+          previous,
+          startedAt,
+        });
+        // From here on the browser baseline must not restart any service.
+        baselineStartup[name] = startedAt;
+      }
     }
     result.currentStage = "browser-control";
     const runningDisk = statfsSync(root);
@@ -821,10 +853,18 @@ try {
       const state = await api("/monitoring/chaos"),
         heal = await api("/monitoring/healing"),
         health = await api("/monitoring/snapshot");
+      const current = settledBaseline
+        ? idleBaselineAssessment(
+            { chaos: state, healer: heal, health },
+            selectedScenarios,
+          )
+        : null;
       check(
         state.experiments.length === 0 &&
-          heal.attempts.length === 0 &&
-          health.incidents.length === 0,
+          (settledBaseline
+            ? current.ready &&
+              current.historyIdentity === settledBaseline.historyIdentity
+            : heal.attempts.length === 0 && health.incidents.length === 0),
         "baseline_has_unrequested_fault_or_recovery",
       );
       check(
@@ -833,8 +873,11 @@ try {
         ),
         "service_restarted_during_baseline",
       );
-      result.baseline.noFaultInjected = true;
-      result.baseline.noRecoveryBeforeClick = true;
+      result.baseline.noExperimentInjected = state.experiments.length === 0;
+      result.baseline.noFaultInjected =
+        heal.attempts.length === 0 && health.incidents.length === 0;
+      result.baseline.noRecoveryBeforeClick = heal.attempts.length === 0;
+      result.baseline.noRecoveryDuringStableWindow = true;
       check(
         compose(
           "exec",
@@ -973,8 +1016,19 @@ try {
       await page.waitForTimeout(5000); // Read-only refresh/polling must not inject a fault.
       const idle = await api("/monitoring/chaos"),
         heal = await api("/monitoring/healing");
+      const health = settledBaseline ? await api("/monitoring/snapshot") : null;
+      const current = settledBaseline
+        ? idleBaselineAssessment(
+            { chaos: idle, healer: heal, health },
+            selectedScenarios,
+          )
+        : null;
       check(
-        idle.experiments.length === 0 && heal.attempts.length === 0,
+        idle.experiments.length === 0 &&
+          (settledBaseline
+            ? current.ready &&
+              current.historyIdentity === settledBaseline.historyIdentity
+            : heal.attempts.length === 0),
         "refresh_or_polling_triggered_fault",
       );
       result.baseline.refreshAndPollingNoFault = true;

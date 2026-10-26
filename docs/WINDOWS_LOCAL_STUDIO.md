@@ -67,9 +67,19 @@ npm.cmd run demo:light
 
 On Windows the interactive runner supplies supported probe budgets by default;
 explicit environment overrides remain respected. It requires 30 continuous
-seconds of genuine healthy operation with zero incidents, repairs or injected
-faults before reporting **READY**. Unavailable observations reset that window.
-Real faults remain visible; health checks are never disabled or forced green.
+seconds of genuine healthy operation with no unresolved incidents, unverified
+repairs or injected experiments before reporting **READY**. A transient startup
+incident may remain in history after its repair is VERIFIED, persisted and the
+incident is RESOLVED. It then needs a fresh 30-second quiet window; new recovery
+activity or unavailable observations restart that window. Open, escalated or
+unverified work still blocks readiness. History is retained; checks are never
+disabled or forced green.
+
+If `idle-baseline-stable` times out, inspect that run's `measurements.json` under
+`test-results/light-demo/runs/<id>`. Its last wait observation now identifies the
+unresolved repair/incident IDs, components, states and repair reasons, rather than
+only reporting historical counts. The startup-history section records completed
+repairs honestly; a recovered startup is not labelled as having had no repairs.
 
 Wait for **READY**, then use the automatically opened, signed-in Chromium window.
 Open http://127.0.0.1:5174/control/chaos in that window. Other browser profiles do
@@ -230,6 +240,7 @@ and [system logs](screenshots/reliable-studio/system-logs.png).
 - [Logs and operator-only failure validation](SYSTEM_LOGS_VALIDATION.json)
 - [Media control startup validation](MEDIA_CONTROL_READINESS_VALIDATION.json)
 - [Consistent health and recovery validation](RECOVERY_HEALTH_VALIDATION.json)
+- [Readiness after verified startup recovery](STARTUP_BASELINE_VALIDATION.json)
 - [Recovered dashboard with retained recovery timestamps](screenshots/reliable-studio/recovered-dashboard.png)
 
 The screenshots use a generated camera test pattern and disposable test accounts.

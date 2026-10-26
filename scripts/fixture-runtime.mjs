@@ -81,48 +81,117 @@ export function compiledFixtureService(service, directory) {
   };
 }
 
-// Require real, fresh component health and no injected faults or repairs before
-// declaring the interactive demo ready. Any bad sample restarts the window.
+/** Completed startup history is retained evidence, not an active outage. Missing
+ * verification, open incidents and unavailable history must still block entry. */
+export function idleBaselineAssessment({ chaos, healer, health }, scenarioIds) {
+  const bad = health.components.filter((c) => c.state !== "HEALTHY");
+  const scenarios = scenarioIds
+    ? chaos.scenarios.filter((s) => scenarioIds.includes(s.id))
+    : chaos.scenarios;
+  const stamp = (value) =>
+    typeof value === "string" && Number.isFinite(Date.parse(value));
+  const repairs = healer.attempts.map(
+    ({ id, component, state, reason, finishedAt, databasePersisted }) => ({
+      id,
+      component,
+      state,
+      reason,
+      finishedAt,
+      databasePersisted,
+    }),
+  );
+  const incidents = health.incidents.map(
+    ({ id, component, state, verified_at, resolved_at }) => ({
+      id,
+      component,
+      state,
+      verified_at,
+      resolved_at,
+    }),
+  );
+  const pendingRepairs = repairs.filter(
+    (a) =>
+      a.state !== "VERIFIED" ||
+      !stamp(a.finishedAt) ||
+      a.databasePersisted !== true,
+  );
+  const pendingIncidents = incidents.filter(
+    (i) =>
+      i.state !== "RESOLVED" || !stamp(i.verified_at) || !stamp(i.resolved_at),
+  );
+  const observationsFresh =
+    health.stale === false &&
+    health.persistence === true &&
+    health.incidentHistoryAvailable === true;
+  return {
+    ready:
+      chaos.available === true &&
+      scenarios.length > 0 &&
+      (!scenarioIds || scenarios.length === scenarioIds.length) &&
+      scenarios.every((s) => s.available === true) &&
+      healer.available === true &&
+      healer.databaseAvailable === true &&
+      healer.leader === true &&
+      observationsFresh &&
+      health.components.length > 0 &&
+      bad.length === 0 &&
+      chaos.experiments.length === 0 &&
+      pendingRepairs.length === 0 &&
+      pendingIncidents.length === 0 &&
+      health.openCount === 0,
+    // Stable across API history order; changes in completed work reset the clock
+    // even when the complete failure/recovery happened between two samples.
+    historyIdentity: JSON.stringify([
+      repairs.map((a) => [a.id, a.state, a.finishedAt]).sort(),
+      incidents
+        .map((i) => [i.id, i.state, i.verified_at, i.resolved_at])
+        .sort(),
+    ]),
+    history: { recoveryAttempts: repairs, incidents },
+    blockers: {
+      components: bad.map(({ id, state, code }) => ({ id, state, code })),
+      experiments: chaos.experiments.length,
+      recoveryAttempts: pendingRepairs,
+      incidents: pendingIncidents,
+      openCount: health.openCount,
+      observationsFresh,
+      healerAvailable: healer.available,
+      healerLeader: healer.leader,
+      databaseAvailable: healer.databaseAvailable,
+      unavailableScenarios: scenarios
+        .filter((s) => !s.available)
+        .map(({ id, reason }) => ({ id, reason })),
+    },
+  };
+}
+
+// Require fresh healthy services and a quiet window after verified startup
+// recovery. Never delete history or bypass unresolved repair/incident evidence.
 export function idleBaselineGate({
   now = () => performance.now(),
   stableMs = 30000,
   scenarioIds,
 } = {}) {
-  let since = null;
+  let since = null,
+    historyIdentity = null;
   return {
     reset() {
       since = null;
     },
     observe({ chaos, healer, health }) {
-      const bad = health.components.filter((c) => c.state !== "HEALTHY");
-      const scenarios = scenarioIds
-        ? chaos.scenarios.filter((s) => scenarioIds.includes(s.id))
-        : chaos.scenarios;
-      const ready =
-        chaos.available === true &&
-        scenarios.length > 0 &&
-        (!scenarioIds || scenarios.length === scenarioIds.length) &&
-        scenarios.every((s) => s.available === true) &&
-        healer.available === true &&
-        healer.databaseAvailable === true &&
-        healer.leader === true &&
-        health.components.length > 0 &&
-        bad.length === 0 &&
-        chaos.experiments.length === 0 &&
-        healer.attempts.length === 0 &&
-        health.incidents.length === 0;
-      if (!ready) {
+      const assessment = idleBaselineAssessment(
+        { chaos, healer, health },
+        scenarioIds,
+      );
+      if (assessment.historyIdentity !== historyIdentity) {
+        since = null;
+        historyIdentity = assessment.historyIdentity;
+      }
+      if (!assessment.ready) {
         since = null;
         return pendingFixture({
-          components: bad.map(({ id, state, code }) => ({ id, state, code })),
-          experiments: chaos.experiments.length,
-          recoveryAttempts: healer.attempts.length,
-          incidents: health.incidents.length,
-          healerAvailable: healer.available,
-          databaseAvailable: healer.databaseAvailable,
-          unavailableScenarios: scenarios
-            .filter((s) => !s.available)
-            .map(({ id, reason }) => ({ id, reason })),
+          ...assessment.blockers,
+          history: assessment.history,
         });
       }
       since ??= now();
