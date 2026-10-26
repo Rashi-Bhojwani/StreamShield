@@ -11,5 +11,6 @@ export default defineConfig({
   ],
   format: ["esm"],
   clean: true,
+  removeNodeProtocol: false,
   noExternal: ["@streamshield/shared"],
 });

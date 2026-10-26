@@ -31,6 +31,7 @@ export function healingConfig(env: Record<string, string | undefined>) {
   const c = z
     .object({
       HEALER_ENABLED: z.enum(["true", "false"]).default("false"),
+      OBS_STALE_MS: integer(6000, 120000, 12000),
       HEALER_PORT: integer(1024, 65535, 4020),
       CONTROL_PORT: integer(1024, 65535, 4021),
       HEALER_DEMO_PORT: integer(1024, 65535, 4024),

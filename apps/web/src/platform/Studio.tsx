@@ -1,7 +1,9 @@
 import { BrowserStudio } from "./BrowserStudio";
 import { categories } from "@streamshield/shared";
 import "../streaming/dynamic.css";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Chat } from "./Chat";
+import { ExperienceStatus } from "../streaming/ExperienceStatus";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -19,6 +21,7 @@ import { config } from "../config";
 function StreamEditor({ stream }: { stream: Stream }) {
   const auth = useAuth(),
     client = useQueryClient();
+  const captureContainer = useRef<HTMLDivElement>(null);
   const presence = useQuery({
     queryKey: ["presence", stream.id],
     queryFn: () =>
@@ -59,7 +62,12 @@ function StreamEditor({ stream }: { stream: Stream }) {
     }
   };
   return (
-    <article className="panel studio-stream">
+    <article
+      className={
+        "panel studio-stream" +
+        (stream.lifecycle === "ended" ? " is-ended" : " is-active")
+      }
+    >
       <div className="section-heading">
         <div>
           <p className="eyebrow">
@@ -93,12 +101,36 @@ function StreamEditor({ stream }: { stream: Stream }) {
           </a>
         </p>
       )}
-      {config.VITE_DYNAMIC_MODE && stream.lifecycle !== "ended" && (
-        <BrowserStudio
-          streamId={stream.id}
-          live={stream.status === "live"}
-          onNotice={setNotice}
-        />
+      {stream.lifecycle !== "ended" && (
+        <div className="studio-console">
+          <div className="studio-production" ref={captureContainer}>
+            {config.VITE_DYNAMIC_MODE ? (
+              <BrowserStudio
+                streamId={stream.id}
+                live={stream.status === "live"}
+                onNotice={setNotice}
+              />
+            ) : (
+              <div className="studio-obs-stage">
+                <Icon name="studio" />
+                <h4>Your stage is ready</h4>
+                <p>
+                  Create a publishing key below and connect OBS to bring your
+                  stream on air.
+                </p>
+              </div>
+            )}
+            <ExperienceStatus />
+          </div>
+          <div className="studio-conversation">
+            <Chat
+              streamId={stream.id}
+              playerContainer={captureContainer}
+              ownerUsername={auth.user?.username}
+              mode="broadcaster"
+            />
+          </div>
+        </div>
       )}
       <div className="studio-actions">
         <button
@@ -327,10 +359,13 @@ export function Studio() {
     <div className="studio-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Broadcaster Studio</p>
+          <p className="eyebrow">
+            <span className="record-dot" /> CREATOR WORKSPACE / STUDIO
+          </p>
           <h1>Your next live moment starts here.</h1>
           <p className="page-subtitle">
-            Your channel. Your broadcasts. One clear place to go live.
+            Your stage, your people. Everything you need for your next
+            broadcast.
           </p>
         </div>
         {owned && (
@@ -444,69 +479,6 @@ export function Studio() {
       ) : (
         owned && (
           <>
-            <section className="panel studio-overview">
-              <div className="channel-symbol large">
-                <Icon name="studio" />
-              </div>
-              <div>
-                <p className="eyebrow">Your channel</p>
-                <h2>{owned.displayName}</h2>
-                <p className="muted">streamshield / {owned.slug}</p>
-              </div>
-              <Link className="button secondary" to={"/channels/" + owned.slug}>
-                View channel <Icon name="arrow" />
-              </Link>
-            </section>
-            <details className="panel channel-edit">
-              <summary>Edit channel information</summary>
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  setBusy(true);
-                  try {
-                    const data = new FormData(e.currentTarget);
-                    await auth.call("/channels/" + owned.id, {
-                      method: "PATCH",
-                      body: JSON.stringify({
-                        displayName: data.get("displayName"),
-                        description: data.get("description"),
-                      }),
-                    });
-                    await channel.refetch();
-                    setNotice("Channel updated.");
-                  } catch (error) {
-                    setNotice(
-                      error instanceof Error
-                        ? error.message
-                        : "Unable to save.",
-                    );
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                <label>
-                  Channel name
-                  <input
-                    name="displayName"
-                    required
-                    maxLength={100}
-                    defaultValue={owned.displayName}
-                  />
-                </label>
-                <label>
-                  Channel description
-                  <textarea
-                    name="description"
-                    maxLength={2000}
-                    defaultValue={owned.description}
-                  />
-                </label>
-                <button className="button secondary" disabled={busy}>
-                  Save channel
-                </button>
-              </form>
-            </details>
             {creating && (
               <section className="panel new-stream">
                 <div>
@@ -605,6 +577,69 @@ export function Studio() {
                 ))}
               </div>
             )}
+            <section className="panel studio-overview">
+              <div className="channel-symbol large">
+                <Icon name="studio" />
+              </div>
+              <div>
+                <p className="eyebrow">Your channel</p>
+                <h2>{owned.displayName}</h2>
+                <p className="muted">streamshield / {owned.slug}</p>
+              </div>
+              <Link className="button secondary" to={"/channels/" + owned.slug}>
+                View channel <Icon name="arrow" />
+              </Link>
+            </section>
+            <details className="panel channel-edit">
+              <summary>Edit channel information</summary>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setBusy(true);
+                  try {
+                    const data = new FormData(e.currentTarget);
+                    await auth.call("/channels/" + owned.id, {
+                      method: "PATCH",
+                      body: JSON.stringify({
+                        displayName: data.get("displayName"),
+                        description: data.get("description"),
+                      }),
+                    });
+                    await channel.refetch();
+                    setNotice("Channel updated.");
+                  } catch (error) {
+                    setNotice(
+                      error instanceof Error
+                        ? error.message
+                        : "Unable to save.",
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                <label>
+                  Channel name
+                  <input
+                    name="displayName"
+                    required
+                    maxLength={100}
+                    defaultValue={owned.displayName}
+                  />
+                </label>
+                <label>
+                  Channel description
+                  <textarea
+                    name="description"
+                    maxLength={2000}
+                    defaultValue={owned.description}
+                  />
+                </label>
+                <button className="button secondary" disabled={busy}>
+                  Save channel
+                </button>
+              </form>
+            </details>
           </>
         )
       )}

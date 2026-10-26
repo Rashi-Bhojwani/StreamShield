@@ -16,12 +16,14 @@ import { durableSnapshot } from "./store.js";
 import { metricQueries, finitePoints, impactQueries } from "./queries.js";
 import { buildTimeline, type StateChange } from "./timeline.js";
 import type { ChaosExperiment, RecoveryAttempt } from "@streamshield/shared";
+import { experienceRouter } from "./experience.js";
 export function monitoringRouter(
   r: Resources,
   platformConfig: PlatformConfig,
   media: Config,
 ) {
   const router = express.Router();
+  router.use(experienceRouter(r));
   const fallback = localAdmission();
   router.use(async (req, res, next) => {
     res.setHeader("Cache-Control", "no-store");

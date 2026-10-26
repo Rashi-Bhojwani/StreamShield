@@ -10,6 +10,11 @@ import {
 import { fixtureProfile, demoBackupEdge } from "./fixture-profile.mjs";
 import { fixtureSupervisor } from "./fixture-supervisor.mjs";
 import {
+  buildFixtureRuntime,
+  compiledFixtureService,
+  idleBaselineGate,
+} from "./fixture-runtime.mjs";
+import {
   prepareFixtureWorkspace,
   readableFixtureBuild,
   crashTestSelection,
@@ -179,6 +184,7 @@ try {
       "build_frontend_first",
     );
     const browserCheck = await chromium.launch({
+      executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
       headless: true,
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
@@ -192,6 +198,12 @@ try {
     await new Promise((resolve) => listener.close(resolve));
     result.currentStage = "fixture-configuration";
     result.preparation = prepareFixtureWorkspace(root, dir);
+    let compiledDirectory = null;
+    if (profile.lightweight) {
+      result.currentStage = "compile-demo-runtime";
+      console.log(JSON.stringify({ stage: result.currentStage }));
+      compiledDirectory = await buildFixtureRuntime(root, dir);
+    }
     let text = readFileSync(join(root, ".env.example"), "utf8");
     const set = (k, v) => {
       if (!new RegExp("^" + k + "=", "m").test(text)) text += "\n" + k + "=\n";
@@ -200,6 +212,7 @@ try {
     for (const [k, v] of Object.entries({
       COMPOSE_PROJECT_NAME: project,
       WEB_PORT: String(webPort),
+      ...(interactive ? { BROWSER_ICE_PORT: "18189" } : {}),
       CORS_ORIGINS:
         "http://127.0.0.1:" + webPort + ",http://localhost:" + webPort,
       E2E_BASE_URL: "http://127.0.0.1:" + webPort,
@@ -208,7 +221,7 @@ try {
       CHAOS_ENVIRONMENT: "local-development",
       CHAOS_ALLOWED_SCENARIOS: selectedScenarios.join(","),
       CHAOS_OBSERVATION_WINDOW_MS: "15000",
-      CHAOS_FAULT_DURATION_MS: "8000",
+      CHAOS_FAULT_DURATION_MS: profile.lightweight ? "20000" : "8000",
       POSTGRES_DB: "fixture_" + id,
       POSTGRES_USER: "fixture",
       POSTGRES_PASSWORD: randomBytes(32).toString("base64url"),
@@ -253,6 +266,13 @@ try {
         "json",
       ),
     );
+    if (compiledDirectory) {
+      for (const [name, service] of Object.entries(source.services))
+        source.services[name] = compiledFixtureService(
+          service,
+          compiledDirectory,
+        );
+    }
     if (profile.lightweight) {
       const gatewayConfig = source.services["video-gateway"].volumes.find(
         (v) => v.target === "/etc/nginx/nginx.conf",
@@ -386,11 +406,16 @@ try {
           ),
         },
       };
+      const browserIce = (p) =>
+        interactive &&
+        name === "mediamtx" &&
+        Number(p.target) === Number(env.BROWSER_ICE_PORT);
       s.ports = (s.ports || [])
-        .filter((p) => p.protocol !== "udp")
+        .filter((p) => p.protocol !== "udp" || browserIce(p))
         .map((p) => ({
           ...p,
-          published: p.target === webPort ? String(webPort) : "0",
+          published:
+            p.target === webPort || browserIce(p) ? String(p.target) : "0",
           host_ip: "127.0.0.1",
         }));
       s.tmpfs = (s.tmpfs || []).filter((x) => !x.startsWith("/data"));
@@ -567,6 +592,37 @@ try {
         });
       return me.csrf;
     });
+    let stableApiSince = null;
+    await until(
+      "api-stable-before-registration",
+      async () => {
+        const started = performance.now();
+        try {
+          const readiness = await api("/health/ready");
+          const auth = await api("/auth/me");
+          await api("/streams");
+          const latencyMs = performance.now() - started;
+          if (readiness.status !== "ready" || !auth?.csrf || latencyMs > 2500) {
+            stableApiSince = null;
+            return pendingFixture({
+              reason: "API or dependencies have not finished warming up",
+              ready: readiness.status === "ready",
+              csrfAvailable: Boolean(auth?.csrf),
+              latencyMs,
+            });
+          }
+          stableApiSince ??= performance.now();
+          const stableForMs = performance.now() - stableApiSince;
+          return stableForMs >= 10000
+            ? true
+            : pendingFixture({ stableForMs, requiredStableMs: 10000 });
+        } catch (error) {
+          stableApiSince = null;
+          throw error;
+        }
+      },
+      120000,
+    );
     result.currentStage = "fixture-account-and-source";
     csrf = (await api("/auth/me")).csrf;
     const username = "four_" + id,
@@ -685,11 +741,32 @@ try {
       },
       120000,
     );
+    if (profile.lightweight) {
+      const gate = idleBaselineGate({ scenarioIds: selectedScenarios });
+      await until(
+        "idle-baseline-stable",
+        async () => {
+          try {
+            const chaos = await api("/monitoring/chaos");
+            const healer = await api("/monitoring/healing");
+            const health = await api("/monitoring/snapshot");
+            return gate.observe({ chaos, healer, health });
+          } catch (error) {
+            gate.reset();
+            throw error;
+          }
+        },
+        120000,
+      );
+      result.baseline.stableIdleMs = 30000;
+    }
     result.currentStage = "browser-control";
     const runningDisk = statfsSync(root);
     result.resources.runningFreeBytes = runningDisk.bavail * runningDisk.bsize;
     browser = await chromium.launch({
-      headless: !interactive || profile.smoke,
+      executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
+      headless:
+        !interactive || profile.smoke || process.argv.includes("--headless"),
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
     context = await browser.newContext({
@@ -739,9 +816,25 @@ try {
         observedAt: c.observedAt,
         latencyMs: c.latencyMs,
       }));
-      check(
-        result.baseline.components.every((c) => c.state === "HEALTHY"),
-        "baseline_components_not_healthy",
+      await until(
+        "baseline-components-healthy",
+        async () => {
+          const snapshot = await api("/monitoring/snapshot");
+          result.baseline.components = snapshot.components.map((c) => ({
+            id: c.id,
+            state: c.state,
+            code: c.code,
+            observedAt: c.observedAt,
+            latencyMs: c.latencyMs,
+          }));
+          const pending = result.baseline.components.filter(
+            (c) => c.state !== "HEALTHY",
+          );
+          return result.baseline.components.length > 0 && pending.length === 0
+            ? true
+            : pendingFixture({ components: pending });
+        },
+        120000,
       );
       result.baseline.containerStates = keep.map((name) => {
         const c = inspect(name);
@@ -955,7 +1048,9 @@ try {
         );
         let experiment,
           stopped = false,
-          fallback = false;
+          fallback = false,
+          viewerImpactObserved = false,
+          dependencyLoadingObserved = false;
         const start = performance.now();
         while (performance.now() - start < 200000) {
           if (stopRequested) throw Error("demo_stop_requested");
@@ -987,6 +1082,20 @@ try {
           experiment = s.experiments.find(
             (e) => e.id === submittedExperiment.id && e.scenario === scenario,
           );
+          if (profile.lightweight && viewer && experiment?.injectedAt) {
+            const impact = viewer.getByTestId("live-service-impact");
+            if (await impact.count())
+              viewerImpactObserved ||=
+                (await impact.getAttribute("data-state")) === "recovering";
+            const recommendations = viewer.getByTestId("recommendation-status");
+            if (
+              scenario === "network-timeout" &&
+              (await recommendations.count())
+            )
+              dependencyLoadingObserved ||=
+                (await recommendations.getAttribute("data-state")) ===
+                "reconnecting";
+          }
           if (experiment?.faultConfirmedAt && service) {
             stopped ||= inspect(service).State.Status === "exited";
             if (scenario === "crash-edge" && !fallback) {
@@ -1021,6 +1130,8 @@ try {
           experiment,
           attempts,
           stoppedObserved: stopped,
+          viewerImpactObserved,
+          dependencyLoadingObserved,
           edgeFallbackObserved: scenario === "crash-edge" ? fallback : null,
           peerUnchanged: peer
             ? inspect("edge-2").State.StartedAt === peer.State.StartedAt
@@ -1044,6 +1155,14 @@ try {
             "_" +
             experiment.reason,
         );
+        if (profile.lightweight) {
+          check(viewerImpactObserved, "live_recovery_status_not_visible");
+          if (scenario === "network-timeout")
+            check(
+              dependencyLoadingObserved,
+              "affected_recommendations_loading_not_visible",
+            );
+        }
         check(
           experiment.faultConfirmedAt &&
             experiment.incidentDetectedAt &&

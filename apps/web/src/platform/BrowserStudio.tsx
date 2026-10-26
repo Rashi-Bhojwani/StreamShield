@@ -1,3 +1,4 @@
+import { Icon } from "../ui/Icon";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type Publishing, publishingSchema } from "@streamshield/shared";
 import { useQueryClient } from "@tanstack/react-query";
@@ -368,17 +369,46 @@ export function BrowserStudio({
           {live ? "Verified LIVE" : publishing ? "Publishing" : "Preview only"}
         </span>
       </div>
-      <video
-        className="camera-preview"
-        ref={preview}
-        muted
-        playsInline
-        aria-label="Local camera preview"
-      />
+      <div className="capture-stage">
+        <video
+          className="camera-preview"
+          ref={preview}
+          muted
+          playsInline
+          aria-label="Local camera preview"
+        />
+        <div className="capture-stage-hud">
+          <span
+            className={"capture-state " + (live && publishing ? "is-live" : "")}
+          >
+            <span className="record-dot" />
+            {live && publishing
+              ? "ON AIR"
+              : publishing
+                ? "CONNECTING"
+                : "PREVIEW"}
+          </span>
+          <span>StreamShield Studio</span>
+        </div>
+        {!ready && !publishing && (
+          <div className="capture-placeholder">
+            <span>
+              <Icon name="studio" />
+            </span>
+            <h4>Make this moment yours.</h4>
+            <p>Preview your camera or share your screen to set the scene.</p>
+          </div>
+        )}
+        <div className="capture-stage-footer">
+          <span>{muted ? "Microphone muted" : "Microphone on"}</span>
+          <span>
+            {publishing ? "Keep this tab open" : "Preview stays private"}
+          </span>
+        </div>
+      </div>
       <p className="fine-print">
-        Local preview stays private until you press Start Live. Your broadcast
-        appears publicly only after media is verified. Keep this Studio tab open
-        while broadcasting. Watch links open in a separate tab.
+        Preview stays private until you go live. Keep this Studio tab open; open
+        your watch page in a separate tab.
       </p>
       <div className="device-grid">
         <label>
@@ -428,14 +458,14 @@ export function BrowserStudio({
           disabled={publishing || busy}
           onClick={() => void prepare(false)}
         >
-          Preview camera
+          <Icon name="studio" /> Preview camera
         </button>
         <button
           className="button secondary"
           disabled={publishing || busy}
           onClick={() => void prepare(true)}
         >
-          Share screen
+          <Icon name="share" /> Share screen
         </button>
         <button
           className="button secondary"
@@ -455,14 +485,14 @@ export function BrowserStudio({
           disabled={!ready || publishing || busy}
           onClick={() => void start()}
         >
-          Start Live
+          <Icon name="live" /> Start Live
         </button>
         <button
           className="button secondary danger-button"
           disabled={!hasSession}
           onClick={() => void end()}
         >
-          End Live
+          <Icon name="close" /> End Live
         </button>
         <button
           className="text-link"

@@ -24,6 +24,16 @@ import {
 import "./demonstration.css";
 const clock = (at: string | null | undefined) =>
   at ? new Date(at).toLocaleTimeString() : "Not verified";
+const viewerImpact: Record<string, string> = {
+  "crash-api":
+    "Watch for API failover and chat reconnects. Video can keep playing through the independent delivery path.",
+  "crash-video-gateway":
+    "Watch the live player: playback can freeze or buffer until fresh video segments return.",
+  "crash-edge":
+    "Watch delivery switch to the backup edge. Continuous playback is successful failover, not a failed experiment.",
+  "network-timeout":
+    "Watch Discover next in Studio or the watch page: recommendations reconnect while live video stays independent.",
+};
 export function Demonstration({
   components = [],
   stale = false,
@@ -251,6 +261,9 @@ export function Demonstration({
         <div>
           <h2>{policy?.name || "Select a scenario"}</h2>
           <p>{policy?.recovery}</p>
+          <p className="demo-viewer-impact">
+            <strong>On the live screen:</strong> {viewerImpact[selected]}
+          </p>
           <details>
             <summary>Prerequisites and impact</summary>
             <p>{policy?.prerequisites}</p>

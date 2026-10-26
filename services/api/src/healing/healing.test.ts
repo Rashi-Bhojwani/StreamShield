@@ -746,6 +746,55 @@ describe("healer scheduling and corroboration", () => {
       await t.close();
     }
   });
+  it.each([false, true])(
+    "uses Docker-confirmed exit despite a timeout; start disabled=%s",
+    async (disabled) => {
+      const t = await harness(() => [
+        component("api-1", { state: "HEALTHY" }),
+        component("api-2", {
+          code: "probe_timeout",
+          failureCode: "probe_timeout",
+        }),
+        ...deps(),
+      ]);
+      try {
+        if (disabled) t.h.c.HEALER_DISABLED_PLAYBOOKS = "api-start";
+        const control = t.control.getMockImplementation()!;
+        t.control.mockImplementation(async (path, body) =>
+          path.startsWith("/v1/inspect/")
+            ? {
+                ok: true,
+                status: 200,
+                body: { state: "exited", exitCode: 137, startedAt: "t0" },
+              }
+            : control(path, body),
+        );
+        // A refused connection may look like a timeout on the Docker host.
+        const fetch = vi
+          .spyOn(globalThis, "fetch")
+          .mockRejectedValue(new DOMException("timeout", "TimeoutError"));
+        await t.h.tick();
+        expect(t.actions).toEqual([]);
+        expect(fetch).not.toHaveBeenCalled();
+        expect(t.journal.all()[0]).toMatchObject({
+          playbook: "api-start",
+          action: "start_stopped_service",
+          state: "SCHEDULED",
+          reason: "diagnosis_revised_to_start_after_container_exit",
+          evidence: { diagnosisRevised: true, containerState: "exited" },
+        });
+        await t.h.tick();
+        expect(t.actions).toEqual(disabled ? [] : ["/v1/start:api-2"]);
+        if (!disabled)
+          expect(t.journal.all()[0]).toMatchObject({
+            state: "VERIFYING",
+            evidence: { controlReceipt: "docker_start_accepted" },
+          });
+      } finally {
+        await t.close();
+      }
+    },
+  );
   it("revises a timeout diagnosis to a start when the process is actually gone", async () => {
     const t = await harness(() => [
       component("api-1", { state: "HEALTHY" }),
@@ -877,4 +926,29 @@ describe("traffic surge scale-out and scale-in", () => {
       ).reason,
     ).toBe("service_not_allowed");
   });
+});
+
+it("uses the configured observer freshness window without accepting stale evidence", () => {
+  const now = Date.now();
+  const observation = component("api-1", {
+    observedAt: new Date(now - 14000).toISOString(),
+  });
+  expect(eligibility(observation, deps(), config(), now).reason).toBe(
+    "unconfirmed_or_stale",
+  );
+  const c = healingConfig({
+    HEALER_SECRET: "a".repeat(43),
+    CONTROL_SECRET: "b".repeat(43),
+    HEALER_ENABLED: "true",
+    OBS_STALE_MS: "20000",
+  });
+  expect(eligibility(observation, deps(), c, now).allowed).toBe(true);
+  expect(
+    eligibility(
+      { ...observation, observedAt: new Date(now - 21000).toISOString() },
+      deps(),
+      c,
+      now,
+    ).reason,
+  ).toBe("unconfirmed_or_stale");
 });

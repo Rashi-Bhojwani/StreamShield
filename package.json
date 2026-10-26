@@ -88,7 +88,8 @@
     "test:four-live": "node --import tsx scripts/four-scenario-live.mjs",
     "test:four-ui": "node --import tsx scripts/four-scenario-ui.mjs",
     "demo:light": "node --import tsx scripts/light-demo.mjs --interactive",
-    "test:light-four": "node --import tsx scripts/light-demo.mjs"
+    "test:light-four": "node --import tsx scripts/light-demo.mjs",
+    "test:studio": "node scripts/studio-e2e.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

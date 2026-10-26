@@ -210,7 +210,7 @@ export function eligibility(
   if (
     !component.confirmedAt ||
     !["UNHEALTHY", "DEGRADED"].includes(component.state) ||
-    now - Date.parse(component.observedAt) > 12000
+    now - Date.parse(component.observedAt) > c.OBS_STALE_MS
   )
     return { allowed: false, reason: "unconfirmed_or_stale" };
   // Overload is a DEGRADED symptom with its own playbook; other DEGRADED states
