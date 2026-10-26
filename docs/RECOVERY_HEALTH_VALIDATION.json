@@ -1,0 +1,93 @@
+{
+  "description": "Real fault injection, consistent current health, retained recovery sequence, and actual API failover visibility",
+  "runId": "282d20da",
+  "status": "PASS",
+  "startedAt": "2026-10-26T07:49:17.606Z",
+  "finishedAt": "2026-10-26T07:52:54.027Z",
+  "environment": "Linux Docker; Chromium; generated live source",
+  "limitations": [
+    "Physical Windows camera, Docker Desktop networking and firewall behavior were not tested.",
+    "API and edge redundancy can preserve playback; no artificial video pause is introduced."
+  ],
+  "checks": {
+    "unitTestsPassed": 481,
+    "testFilesPassed": 43,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "probeBudgets": "Interactive defaults: observation interval 4000ms, timeout 3000ms, stale 20000ms; Healer and chaos probes 3000ms"
+  },
+  "verifiedScenarios": 4,
+  "cleanedContainers": 13,
+  "userEnvUnchanged": true,
+  "scenarios": [
+    {
+      "scenario": "crash-api",
+      "status": "PASS",
+      "actualRecoveryMs": 16503,
+      "demonstrationMs": 19002,
+      "stoppedObserved": true,
+      "viewerImpactObserved": true,
+      "dependencyLoadingObserved": false,
+      "edgeFallbackObserved": null,
+      "peerUnchanged": null,
+      "controlPlaneUnchanged": true,
+      "apiBackupResponseObserved": true,
+      "stableCardLayout": true,
+      "cardHealthStates": ["HEALTHY", "PREPARING", "FAILED", "RECOVERING"],
+      "currentHealthReturnedToHealthy": true,
+      "persistentRecoverySequence": true
+    },
+    {
+      "scenario": "crash-video-gateway",
+      "status": "PASS",
+      "actualRecoveryMs": 13259,
+      "demonstrationMs": 15295,
+      "stoppedObserved": true,
+      "viewerImpactObserved": true,
+      "dependencyLoadingObserved": false,
+      "edgeFallbackObserved": null,
+      "peerUnchanged": null,
+      "controlPlaneUnchanged": true,
+      "apiBackupResponseObserved": null,
+      "stableCardLayout": true,
+      "cardHealthStates": ["HEALTHY", "PREPARING", "FAILED", "RECOVERING"],
+      "currentHealthReturnedToHealthy": true,
+      "persistentRecoverySequence": true
+    },
+    {
+      "scenario": "crash-edge",
+      "status": "PASS",
+      "actualRecoveryMs": 17383,
+      "demonstrationMs": 17389,
+      "stoppedObserved": true,
+      "viewerImpactObserved": true,
+      "dependencyLoadingObserved": false,
+      "edgeFallbackObserved": true,
+      "peerUnchanged": true,
+      "controlPlaneUnchanged": true,
+      "apiBackupResponseObserved": null,
+      "stableCardLayout": true,
+      "cardHealthStates": ["HEALTHY", "PREPARING", "FAILED", "RECOVERING"],
+      "currentHealthReturnedToHealthy": true,
+      "persistentRecoverySequence": true
+    },
+    {
+      "scenario": "network-timeout",
+      "status": "PASS",
+      "actualRecoveryMs": 26227,
+      "demonstrationMs": 26229,
+      "stoppedObserved": false,
+      "viewerImpactObserved": true,
+      "dependencyLoadingObserved": true,
+      "edgeFallbackObserved": null,
+      "peerUnchanged": null,
+      "controlPlaneUnchanged": true,
+      "apiBackupResponseObserved": null,
+      "stableCardLayout": true,
+      "cardHealthStates": ["HEALTHY", "PREPARING", "FAILED", "RECOVERING"],
+      "currentHealthReturnedToHealthy": true,
+      "persistentRecoverySequence": true
+    }
+  ]
+}

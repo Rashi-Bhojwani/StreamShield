@@ -306,7 +306,11 @@ export class ChaosEngine {
         reason:
           result.api && result.gateway
             ? null
-            : "Waiting for actual valid gateway segments to advance. Keep the live source running.",
+            : !result.api && !result.gateway
+              ? "API catalog and video delivery checks are not verified. Check the API and live source."
+              : !result.api
+                ? "API catalog reads are not verified. Video delivery checks are separate."
+                : "Waiting for actual valid gateway segments to advance. Keep the live source running.",
       };
     } catch {
       reason =
@@ -452,6 +456,9 @@ export class ChaosEngine {
         ? new Date(this.lastCompleted).toISOString()
         : null,
       activeId: experiments.find((e) => !terminal(e.state))?.id || null,
+      componentHealth: this.frame?.components.map(
+        ({ id, state, observedAt, code }) => ({ id, state, observedAt, code }),
+      ),
       faultDurationMs: this.c.CHAOS_FAULT_DURATION_MS,
       timeoutMs: this.c.CHAOS_TIMEOUT_MS,
       scenarios: scenarios.map((s) => ({

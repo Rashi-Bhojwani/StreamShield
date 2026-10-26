@@ -132,6 +132,12 @@ export interface ChaosSnapshot {
   staleAfterMs?: number;
   unavailableReason?: string | null;
   activeId: string | null;
+  componentHealth?: {
+    id: string;
+    state: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | "UNKNOWN" | "RECOVERING";
+    observedAt: string;
+    code: string;
+  }[];
   crashBaseline?: CrashBaselineObservation;
   observationWindowMs?: number;
   faultDurationMs: number;

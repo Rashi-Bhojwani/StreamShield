@@ -142,6 +142,61 @@ it("does not advertise stale history as active live recovery", () => {
     scenario: null,
   });
 });
+it("projects current API health without disclosing private probe details", () => {
+  const s = snapshot();
+  s.componentHealth = [
+    {
+      id: "api-1",
+      state: "UNHEALTHY",
+      observedAt: new Date().toISOString(),
+      code: "private-probe-detail",
+    },
+    {
+      id: "api-2",
+      state: "HEALTHY",
+      observedAt: new Date().toISOString(),
+      code: "probe_ok",
+    },
+  ];
+  expect(experienceSummary(s, dependency).api).toEqual({
+    primary: "unhealthy",
+    backup: "healthy",
+    servedBy: null,
+  });
+  expect(JSON.stringify(experienceSummary(s, dependency))).not.toContain(
+    "private-probe-detail",
+  );
+  s.observedAt = new Date(Date.now() - 60000).toISOString();
+  expect(experienceSummary(s, dependency).api?.primary).toBe("unknown");
+});
+it("identifies the API that actually serves this public status response", async () => {
+  vi.stubEnv("API_INSTANCE_ID", "api-2");
+  const s = snapshot();
+  s.componentHealth = ["api-1", "api-2"].map((id) => ({
+    id,
+    state: "HEALTHY",
+    observedAt: new Date().toISOString(),
+    code: "probe_ok",
+  }));
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockImplementation(async (url: string) =>
+        Response.json(url.endsWith("/dependency") ? dependency : s),
+      ),
+  );
+  const response = await request(app()).get("/experience");
+  expect(response.status).toBe(200);
+  expect(response.body.api).toEqual({
+    primary: "healthy",
+    backup: "healthy",
+    servedBy: "api-2",
+  });
+  expect(JSON.stringify(response.body)).not.toMatch(
+    /private-controller-secret|private-healer-secret/,
+  );
+});
 it("clearly distinguishes an unmet human prerequisite from automatic recovery and human restoration", () => {
   const s = snapshot(),
     e = experiment("media-authority-loss");

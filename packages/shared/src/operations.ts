@@ -134,6 +134,23 @@ export const chaosSnapshotSchema = z.object({
   staleAfterMs: z.number().int().min(6000).max(120000).optional(),
   unavailableReason: z.string().nullable().optional(),
   activeId: z.uuid().nullable(),
+  componentHealth: z
+    .array(
+      z.object({
+        id: z.string().max(40),
+        state: z.enum([
+          "HEALTHY",
+          "DEGRADED",
+          "UNHEALTHY",
+          "UNKNOWN",
+          "RECOVERING",
+        ]),
+        observedAt: stamp,
+        code: z.string().max(120),
+      }),
+    )
+    .max(20)
+    .optional(),
   crashBaseline: z
     .object({
       observedAt: stamp,

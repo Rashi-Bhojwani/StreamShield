@@ -575,6 +575,29 @@ textarea {
   padding-left: 14px;
   min-width: 0;
 }
+.experience-with-api > .experience-summary {
+  grid-column: 1 / -1;
+}
+.experience-api {
+  padding: 12px;
+  border: 1px solid #5d3f49;
+  border-radius: 8px;
+  background: #171215;
+}
+.experience-api p {
+  margin: 7px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.experience-api p span {
+  text-transform: capitalize;
+}
+.experience-api [role="status"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ffd18e;
+}
 .experience-recommendations .eyebrow {
   display: flex;
   flex-wrap: wrap;

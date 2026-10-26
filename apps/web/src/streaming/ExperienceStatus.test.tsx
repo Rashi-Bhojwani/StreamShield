@@ -64,6 +64,24 @@ it("shows verified restoration without leaving an artificial loading state", asy
     screen.queryByText("Reconnecting recommendations…"),
   ).not.toBeInTheDocument();
 });
+it("shows the actual serving API and recovering primary without claiming a video outage", async () => {
+  vi.mocked(platformRequest).mockResolvedValue({
+    ...value(),
+    scenario: "crash-api",
+    api: { primary: "recovering", backup: "healthy", servedBy: "api-2" },
+  });
+  mount();
+  expect(await screen.findByTestId("api-continuity")).toHaveAttribute(
+    "data-served-by",
+    "api-2",
+  );
+  expect(screen.getByTestId("api-continuity")).toHaveTextContent(
+    "API-1: recovering",
+  );
+  expect(screen.getByTestId("api-continuity")).toHaveTextContent(
+    "Video delivery uses its own connection",
+  );
+});
 it("does not show stale success when status requests fail", async () => {
   vi.mocked(platformRequest).mockRejectedValue(Error("Unavailable"));
   mount();

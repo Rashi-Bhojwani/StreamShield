@@ -1049,6 +1049,25 @@ try {
           120000,
         );
         result.currentStage = "scenario-execution:" + scenario;
+        const cardHealthStates = new Set();
+        let apiBackupResponseObserved = false;
+        let actionTopBefore = null;
+        if (existingUi) {
+          await until(
+            "card-healthy-before:" + scenario,
+            async () =>
+              (await page
+                .getByTestId("scenario-health-" + scenario)
+                .textContent()) === "HEALTHY",
+            30000,
+          );
+          cardHealthStates.add("HEALTHY");
+          actionTopBefore = await page
+            .locator(".demo-action")
+            .evaluate(
+              (element) => element.getBoundingClientRect().top + window.scrollY,
+            );
+        }
 
         const initial = service ? inspect(service) : null,
           peer = scenario === "crash-edge" ? inspect("edge-2") : null;
@@ -1121,7 +1140,23 @@ try {
           experiment = s.experiments.find(
             (e) => e.id === submittedExperiment.id && e.scenario === scenario,
           );
+          if (existingUi)
+            cardHealthStates.add(
+              await page
+                .getByTestId("scenario-health-" + scenario)
+                .textContent(),
+            );
           if (profile.lightweight && viewer && experiment?.injectedAt) {
+            if (
+              scenario === "crash-api" &&
+              experiment.faultConfirmedAt &&
+              !experiment.verifiedAt &&
+              (await viewer.getByTestId("api-continuity").count())
+            )
+              apiBackupResponseObserved ||=
+                (await viewer
+                  .getByTestId("api-continuity")
+                  .getAttribute("data-served-by")) === "api-2";
             const impact = viewer.getByTestId("live-service-impact");
             if (await impact.count())
               viewerImpactObserved ||=
@@ -1178,6 +1213,8 @@ try {
           controlPlaneUnchanged:
             inspect("control-plane").State.StartedAt === controlPlaneStartedAt,
           actualRecoveryMs: experiment.measurements.restorationMs,
+          apiBackupResponseObserved:
+            scenario === "crash-api" ? apiBackupResponseObserved : null,
           demonstrationMs: experiment.measurements.demonstrationMs,
         };
         result.scenarios.push(record);
@@ -1271,6 +1308,41 @@ try {
               exact: true,
             })
             .waitFor();
+          await until(
+            "card-healthy-after:" + scenario,
+            async () =>
+              (await page
+                .getByTestId("scenario-health-" + scenario)
+                .textContent()) === "HEALTHY",
+            30000,
+          );
+          cardHealthStates.add("HEALTHY");
+          check(
+            (await page
+              .getByTestId("demo-recovery-cycle")
+              .locator('[data-confirmed="true"]')
+              .count()) === 4,
+            "missing_persistent_recovery_sequence",
+          );
+          const actionTopAfter = await page
+            .locator(".demo-action")
+            .evaluate(
+              (element) => element.getBoundingClientRect().top + window.scrollY,
+            );
+          record.stableCardLayout =
+            Math.abs(actionTopAfter - actionTopBefore) <= 2;
+          check(
+            record.stableCardLayout,
+            "card_layout_shifted_between_ready_and_recovered",
+          );
+          record.cardHealthStates = [...cardHealthStates];
+          record.currentHealthReturnedToHealthy = true;
+          record.persistentRecoverySequence = true;
+          if (profile.lightweight && scenario === "crash-api")
+            check(
+              apiBackupResponseObserved,
+              "actual_backup_api_response_not_shown",
+            );
           record.browserPlayback = await browserVideo();
           record.existingUiVerifiedResult = true;
           await viewer.screenshot({

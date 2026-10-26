@@ -158,6 +158,21 @@ two-second keyframe interval. OBS is separate from the browser's Start Live butt
 Run one scenario at a time. Acknowledge impact and confirm the exact target.
 Wait for verified recovery and healthy readiness/cooldown before the next one.
 
+Selecting a card only selects the scenario. Choose **Run failure demonstration**,
+acknowledge its impact, type the target (for example `api-1`), then choose
+**Inject controlled failure** to actually start it.
+
+The card and **Service health** header use the same fresh controller observations.
+A real experiment shows **Healthy → Preparing → Failed → Recovering → Healthy**;
+the four timestamp boxes retain the healthy baseline, confirmed failure, recovery
+action and independently verified restoration. A request rejected before injection
+is labelled **No failure injected**. An uncertain injection or unverified recovery
+remains explicitly unverified.
+
+**Demo readiness** is separate from service health: cooldown or a pending functional
+check can block another experiment while the services are healthy. Its panel and
+card notes keep their space during refreshes so the controls do not jump around.
+
 | Failure                  | Confirm           | Actual audience impact                                                                                                                                                                                             |
 | ------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | API crash                | `api-1`           | Requests can fail over to API-2; chat/account requests may reconnect. Independent video can continue.                                                                                                              |
@@ -167,6 +182,10 @@ Wait for verified recovery and healthy readiness/cooldown before the next one.
 | Media authorization loss | `media-authority` | Both real HLS routes reject new playlists and segments with HTTP 503. Buffered video drains and stops. The system reports **Human action required**; automatic recovery cannot recreate missing signing authority. |
 
 Studio and Watch show **Live service impact** during an actual experiment.
+Their **Live API connection** panel shows primary and backup health and which API
+actually served its latest response. During API-1 recovery, watch for responses
+served by API-2. Video uses its own delivery path and can keep playing. Use the
+video gateway crash to demonstrate a real video delivery interruption.
 **Discover next** shows its genuine dependency loading/reconnect state. These
 read-only viewer projections do not grant administrator or Docker authority.
 Production deployments do not expose the optional development endpoint.
@@ -210,6 +229,8 @@ and [system logs](screenshots/reliable-studio/system-logs.png).
 - [Validation results](RELIABLE_STUDIO_VALIDATION.json)
 - [Logs and operator-only failure validation](SYSTEM_LOGS_VALIDATION.json)
 - [Media control startup validation](MEDIA_CONTROL_READINESS_VALIDATION.json)
+- [Consistent health and recovery validation](RECOVERY_HEALTH_VALIDATION.json)
+- [Recovered dashboard with retained recovery timestamps](screenshots/reliable-studio/recovered-dashboard.png)
 
 The screenshots use a generated camera test pattern and disposable test accounts.
 The chat messages traveled between separate authenticated browser contexts while

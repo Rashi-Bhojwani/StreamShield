@@ -22,6 +22,25 @@ export const experienceSchema = z.object({
     ])
     .nullable(),
   message: z.string().max(400),
+  api: z
+    .object({
+      primary: z.enum([
+        "healthy",
+        "degraded",
+        "unhealthy",
+        "unknown",
+        "recovering",
+      ]),
+      backup: z.enum([
+        "healthy",
+        "degraded",
+        "unhealthy",
+        "unknown",
+        "recovering",
+      ]),
+      servedBy: z.enum(["api-1", "api-2", "api-3"]).nullable(),
+    })
+    .optional(),
   recommendations: z.object({
     available: z.boolean().nullable(),
     items: z.array(z.string().max(120)).max(4),

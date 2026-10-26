@@ -33,9 +33,14 @@ export function ExperienceStatus() {
   const status = q.isError ? "unavailable" : q.data?.state || "unavailable";
   const recovering = status === "recovering";
   const recommendations = q.isError ? undefined : q.data?.recommendations;
+  const api = q.isError ? undefined : q.data?.api;
   return (
     <section
-      className={"experience-status experience-" + status}
+      className={
+        "experience-status experience-" +
+        status +
+        (api ? " experience-with-api" : "")
+      }
       aria-label="Live service impact"
       data-testid="live-service-impact"
       data-state={status}
@@ -73,6 +78,32 @@ export function ExperienceStatus() {
           </p>
         </div>
       </div>
+      {api && (
+        <div
+          className="experience-api"
+          data-testid="api-continuity"
+          data-primary={api.primary}
+          data-served-by={api.servedBy || "unknown"}
+        >
+          <strong>Live API connection</strong>
+          <p>
+            API-1: <span>{api.primary}</span> · API-2: <span>{api.backup}</span>
+          </p>
+          {api.servedBy && (
+            <p>
+              This response was served by{" "}
+              <strong>{api.servedBy.toUpperCase()}</strong>.
+            </p>
+          )}
+          {api.primary !== "healthy" && api.backup === "healthy" && (
+            <p role="status">
+              <span className="recovery-spinner" aria-hidden="true" />
+              The backup API is available while API-1 is checked. Video delivery
+              uses its own connection.
+            </p>
+          )}
+        </div>
+      )}
       <div
         className="experience-recommendations"
         data-testid="recommendation-status"

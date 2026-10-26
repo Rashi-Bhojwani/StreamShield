@@ -20,6 +20,10 @@ import {
   demoProgress,
   demoTerminal,
   scenarioPresentationState,
+  systemPresentationState,
+  recoveryVerified,
+  definitelyNoFaultInjected,
+  faultMayHaveBeenInjected,
 } from "./demo-model";
 import "./demonstration.css";
 const clock = (at: string | null | undefined) =>
@@ -66,6 +70,7 @@ export function Demonstration({
         !crashOnly || ["crash-api", "crash-video-gateway"].includes(e.scenario),
     );
   const functional = q.data?.crashBaseline;
+  const currentHealth = q.data?.componentHealth ?? components;
   const observationFresh =
     !!q.data?.available &&
     !q.isError &&
@@ -87,12 +92,45 @@ export function Demonstration({
       ? functional?.reason ||
         "BLOCKED: independent API and gateway streaming baseline is not verified. Keep a live source running and wait for fresh functional checks."
       : null;
+  const healthFresh =
+    observationFresh &&
+    (q.data?.componentHealth
+      ? q.data.componentHealth.every(
+          (component) =>
+            observationFreshness(
+              component.observedAt,
+              q.serverNow,
+              q.data?.staleAfterMs,
+            ) === "fresh",
+        )
+      : !stale);
+  function cardState(id: (typeof liveDemoIds)[number]) {
+    const s = scenarios.find((scenario) => scenario.id === id);
+    const targetIds = [
+      ...(s?.targets || []),
+      ...(id === "crash-edge" ? ["edge-2"] : []),
+    ];
+    const healthy =
+      targetIds.length > 0 &&
+      targetIds.every((target) =>
+        currentHealth.some(
+          (component) =>
+            component.id === target && component.state === "HEALTHY",
+        ),
+      );
+    return scenarioPresentationState(
+      q.data?.experiments.find((e) => e.scenario === id),
+      healthy,
+      healthFresh &&
+        targetIds.every((id) => currentHealth.some((c) => c.id === id)),
+    );
+  }
   const denial =
     (experiment?.state === "AWAITING_OPERATOR"
       ? "Human action required. Restore the simulated external media authorization below before running another failure."
       : scenarioDenial(policy, q.reason)) ||
     functionalDenial ||
-    (stale
+    (!healthFresh
       ? "Monitoring data is stale; wait for current health probes."
       : null);
   const progress = demoProgress(
@@ -102,30 +140,23 @@ export function Demonstration({
   );
   const failed =
     experiment &&
-    experiment.injectedAt &&
+    faultMayHaveBeenInjected(experiment) &&
     ["FAILED", "TIMED_OUT"].includes(experiment.state);
   const safelyRestored =
     experiment?.events.some((event) => event.kind === "BASELINE_REVERIFIED") &&
     !!experiment.evidence.terminalBaselineReverifiedAt;
-  const status =
-    experiment?.state === "AWAITING_OPERATOR"
-      ? "Human action required"
-      : failed && !safelyRestored
-        ? "Recovery Failed"
-        : progress.active
-          ? "Recovering"
-          : q.reason ||
-              functionalDenial ||
-              (functional && (!functional.api || !functional.gateway)) ||
-              stale ||
-              components.some(
-                (c) =>
-                  c.state !== "HEALTHY" &&
-                  c.code !== "spare_standby" &&
-                  !idleLoadObservation(c),
-              )
-            ? "Degraded"
-            : "Healthy";
+  const status = systemPresentationState(
+    liveDemoIds.map(cardState),
+    currentHealth.length > 0 &&
+      currentHealth.every(
+        (c) =>
+          c.state === "HEALTHY" ||
+          c.code === "spare_standby" ||
+          idleLoadObservation(c),
+      ),
+    healthFresh,
+  );
+  const noFaultInjected = definitelyNoFaultInjected(experiment);
   async function restoreMedia() {
     if (!experiment || restoring || restoreConfirmation !== "media-authority")
       return;
@@ -191,10 +222,11 @@ export function Demonstration({
             "demo-system status-" + status.toLowerCase().replaceAll(" ", "-")
           }
           role="status"
+          data-testid="demo-system-health"
         >
           {crashOnly && status === "Healthy"
             ? "SYSTEM HEALTHY"
-            : "System status: " + status}
+            : "Service health: " + status}
         </span>
       </header>
       {crashOnly && (
@@ -217,27 +249,21 @@ export function Demonstration({
           const reason =
             scenarioDenial(s, q.reason) ||
             functionalDenial ||
-            (stale ? "Monitoring data is stale." : null);
+            (!healthFresh ? "Monitoring data is stale." : null);
           const copy = demoNames[id];
           const scenarioResult = q.data?.experiments.find(
             (e) => e.scenario === id,
           );
           // A cooldown blocks another injection; it does not make a recovered
           // service unhealthy. Current health and admission are separate facts.
-          const targetIds = [
-            ...(s?.targets || []),
-            ...(id === "crash-edge" ? ["edge-2"] : []),
-          ];
-          const scenarioStatus = scenarioPresentationState(
-            scenarioResult,
-            targetIds.length > 0 &&
-              targetIds.every((target) =>
-                components.some(
-                  (c) => c.id === target && c.state === "HEALTHY",
-                ),
-              ),
-            observationFresh && !stale,
-          );
+          const scenarioStatus = cardState(id);
+          const note =
+            reason ||
+            (definitelyNoFaultInjected(scenarioResult)
+              ? "Last request ended before a fault was injected."
+              : recoveryVerified(scenarioResult)
+                ? "Recovery independently verified; current service health shown above."
+                : "Health comes from current service checks. Demo readiness is checked separately.");
           if (crashOnly)
             return (
               <article
@@ -284,17 +310,19 @@ export function Demonstration({
               <strong>{copy[0]}</strong>
               <span>{copy[1]}</span>
               <span
+                data-testid={"scenario-health-" + id}
+                data-health={scenarioStatus}
                 className={
-                  ["HEALTHY", "HEALED", "RESTORED BY OPERATOR"].includes(
-                    scenarioStatus,
-                  )
+                  scenarioStatus === "HEALTHY"
                     ? "demo-ready"
                     : "demo-unavailable"
                 }
               >
                 {scenarioStatus}
               </span>
-              {reason && <small>{reason}</small>}
+              <small className="demo-card-note" title={note}>
+                {note}
+              </small>
             </button>
           );
         })}
@@ -308,6 +336,11 @@ export function Demonstration({
           <p>{policy?.recovery}</p>
           <p className="demo-viewer-impact">
             <strong>On the live screen:</strong> {viewerImpact[selected]}
+          </p>
+          <p className="demo-confirm-hint">
+            The button opens a confirmation. A fault starts only after you
+            acknowledge its impact, enter the target and choose Inject
+            controlled failure.
           </p>
           <details>
             <summary>Prerequisites and impact</summary>
@@ -325,13 +358,61 @@ export function Demonstration({
           </button>
         )}
       </section>
-      {denial && (
-        <div className="demo-blocked" role={q.isError ? "alert" : "status"}>
-          <strong>{denial}</strong>
-          <p>Next step: {blockedNextStep(denial)}</p>
-          <button onClick={() => void q.refetch()}>Refresh readiness</button>
-        </div>
-      )}
+      <div
+        className={
+          "demo-blocked demo-readiness" + (denial ? "" : " demo-admitted")
+        }
+        role={q.isError ? "alert" : "status"}
+        data-testid="demo-readiness"
+        data-ready={!denial}
+      >
+        <strong>
+          {denial
+            ? "Demo waiting: " + denial
+            : "Ready to run a controlled failure"}
+        </strong>
+        <p>
+          {denial
+            ? "Next step: " + blockedNextStep(denial)
+            : "Service health and permission to inject a failure are separate. Cooldowns and functional checks can block another demo while services stay healthy."}
+        </p>
+        <button onClick={() => void q.refetch()}>Refresh readiness</button>
+      </div>
+      <ol
+        className="demo-cycle"
+        aria-label="Failure and recovery sequence"
+        data-testid="demo-recovery-cycle"
+      >
+        {[
+          [
+            "Healthy baseline",
+            experiment?.evidence.baselineObservedAt ?? progress.stages[0]?.at,
+          ],
+          ["Failure confirmed", experiment?.faultConfirmedAt],
+          [
+            experiment?.scenario === "media-authority-loss"
+              ? "Human action required"
+              : "Recovering",
+            experiment?.actionStartedAt ||
+              experiment?.events.find((e) =>
+                ["CIRCUIT_OPEN", "HUMAN_ACTION_REQUIRED"].includes(e.kind),
+              )?.at,
+          ],
+          [
+            "Healthy · verified",
+            recoveryVerified(experiment) ? experiment?.verifiedAt : null,
+          ],
+        ].map(([label, at]) => (
+          <li
+            key={String(label)}
+            data-confirmed={typeof at === "string"}
+            className={typeof at === "string" ? "confirmed" : "pending"}
+          >
+            <strong>{String(label)}</strong>
+            <time>{clock(typeof at === "string" ? at : null)}</time>
+          </li>
+        ))}
+      </ol>
       <section className="demo-live" aria-label="Live recovery timeline">
         {experiment?.scenario === "media-authority-loss" &&
           experiment.injectedAt &&
@@ -475,17 +556,26 @@ export function Demonstration({
             </p>
           )}
         <h2>
-          {experiment?.scenario === "media-authority-loss" &&
-          experiment.state === "COMPLETED"
-            ? "Human restoration verified · not automatically healed"
-            : failed
-              ? safelyRestored
-                ? "Previous demo failed; safe baseline reverified"
-                : "Recovery failed — inspect the evidence"
-              : progress.stages[6]?.at
-                ? "Verified demonstration result"
-                : "Recovery result"}
+          {noFaultInjected
+            ? "No failure was injected"
+            : experiment?.scenario === "media-authority-loss" &&
+                experiment.state === "COMPLETED"
+              ? "Human restoration verified · not automatically healed"
+              : failed
+                ? safelyRestored
+                  ? "Previous demo failed; safe baseline reverified"
+                  : "Recovery failed — inspect the evidence"
+                : progress.stages[6]?.at
+                  ? "Verified demonstration result"
+                  : "Recovery result"}
         </h2>
+        {noFaultInjected && (
+          <p>
+            The request ended before any fault was confirmed. The services were
+            left running. Inspect the recorded reason below; this was not a
+            successful crash demonstration.
+          </p>
+        )}
         {safelyRestored && (
           <p>
             The original outcome remains{" "}
@@ -606,21 +696,24 @@ export function Demonstration({
       )}
       <section className="demo-health" aria-label="Live component health">
         <h2>Live component health</h2>
-        {components.length ? (
+        {currentHealth.length ? (
           <ul>
-            {components
+            {currentHealth
               .filter((c) => !["api-tier", "api-3"].includes(c.id))
               .map((c) => (
                 <li key={c.id}>
-                  <strong>{c.name}</strong>
+                  <strong>
+                    {components.find((component) => component.id === c.id)
+                      ?.name || c.id}
+                  </strong>
                   <span>
-                    {stale
+                    {!healthFresh
                       ? "Unknown — observations stale"
                       : c.state.toLowerCase()}
                   </span>
                   <small>
-                    {stale ? "Wait for fresh probes" : c.code} ·{" "}
-                    {c.latencyMs == null
+                    {!healthFresh ? "Wait for fresh probes" : c.code} ·{" "}
+                    {!("latencyMs" in c) || c.latencyMs == null
                       ? "Latency not measured"
                       : c.latencyMs + " ms"}
                   </small>

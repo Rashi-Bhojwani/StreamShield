@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   parseChaosSnapshot,
   type ChaosSnapshot,
@@ -19,6 +20,7 @@ export function Confirmation({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
+  const cache = useQueryClient();
   const ref = useRef<HTMLDialogElement>(null),
     identity = useRef(crypto.randomUUID()),
     inFlight = useRef(false),
@@ -68,6 +70,22 @@ export function Confirmation({
         }
       }
       if (result) {
+        const created = result;
+        await cache.cancelQueries({ queryKey: ["monitoring", "chaos"] });
+        cache.setQueryData<ChaosSnapshot>(
+          ["monitoring", "chaos"],
+          (previous) =>
+            previous
+              ? {
+                  ...previous,
+                  activeId: created.id,
+                  experiments: [
+                    created,
+                    ...previous.experiments.filter((e) => e.id !== created.id),
+                  ].slice(0, 100),
+                }
+              : previous,
+        );
         onCreated(result.id);
         onClose();
       }

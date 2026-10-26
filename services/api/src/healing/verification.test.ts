@@ -4,6 +4,43 @@ import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import type { RecoveryAttempt } from "@streamshield/shared";
 import { Verifier, type Frame } from "./verification.js";
+it.each(["api", "video", "none"])(
+  "keeps independent functional baseline results when %s checks fail",
+  async (failure) => {
+    const dir = mkdtempSync(join(tmpdir(), "ss-functional-baseline-"));
+    try {
+      const file = join(dir, "targets.json");
+      writeFileSync(
+        file,
+        JSON.stringify(
+          ["api-1", "api-2", "api-gateway", "video-gateway"].map((id) => ({
+            id,
+            url: "http://" + id + "/health",
+          })),
+        ),
+      );
+      const v = new Verifier({ HEALER_PROBE_TIMEOUT_MS: 500 }, file);
+      vi.spyOn(v, "text").mockImplementation(async (url) => {
+        if (failure === "api" && url.includes("api-1"))
+          throw Error("probe_timeout");
+        return url.endsWith("/health")
+          ? JSON.stringify({ status: "ready" })
+          : JSON.stringify({ streams: [] });
+      });
+      vi.spyOn(v, "paths").mockResolvedValue(["live"]);
+      vi.spyOn(v, "hls").mockImplementation(async () => {
+        if (failure === "video") throw Error("gateway_hls_segment_invalid");
+        return { ok: true, paths: 1, progressing: 1 };
+      });
+      expect(await v.crashBaseline()).toMatchObject({
+        api: failure !== "api",
+        gateway: failure !== "video",
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
 it("requires a live manifest and matching serving identity for edge routing evidence", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ss-edge-proof-"));
   try {

@@ -24,29 +24,73 @@ export const demoNames = {
 const completed = (e: ChaosExperiment) =>
   ["COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state);
 export const demoTerminal = completed;
+export function faultMayHaveBeenInjected(e: ChaosExperiment | undefined) {
+  return (
+    !!e &&
+    (!!e.injectedAt ||
+      !!e.faultConfirmedAt ||
+      (e.events.some((event) => event.kind === "INJECTING") &&
+        !e.events.some((event) => event.kind === "NO_ACCEPTED_FAULT")))
+  );
+}
+export function definitelyNoFaultInjected(e: ChaosExperiment | undefined) {
+  return !!e && completed(e) && !faultMayHaveBeenInjected(e);
+}
+export function baselineReverified(e: ChaosExperiment | undefined) {
+  return (
+    !!e?.evidence.terminalBaselineReverifiedAt &&
+    e.events.some((event) => event.kind === "BASELINE_REVERIFIED")
+  );
+}
+export function recoveryVerified(e: ChaosExperiment | undefined) {
+  return !!e?.verifiedAt && e.evidence.independentBehaviorVerified === true;
+}
 export function scenarioPresentationState(
   e: ChaosExperiment | undefined,
   healthy: boolean,
   fresh: boolean,
 ) {
-  if (!fresh) return "DEGRADED";
+  if (!fresh) return "UNKNOWN";
   if (e?.state === "AWAITING_OPERATOR") return "HUMAN ACTION REQUIRED";
-  if (e?.scenario === "media-authority-loss" && e.state === "COMPLETED")
-    return e.verifiedAt && e.evidence.independentBehaviorVerified === true
-      ? "RESTORED BY OPERATOR"
-      : "DEGRADED";
-  if (e && !completed(e))
-    return e.actionStartedAt || e.state === "VERIFYING" || !e.faultConfirmedAt
+  if (e && !completed(e)) {
+    if (healthy && recoveryVerified(e)) return "HEALTHY";
+    if (!e.faultConfirmedAt) return "PREPARING";
+    return e.actionStartedAt || e.state === "VERIFYING"
       ? "RECOVERING"
       : "FAILED";
-  if (e && ["FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state))
-    return "DEGRADED";
-  if (!healthy) return "DEGRADED";
-  if (e?.state === "COMPLETED")
-    return e.verifiedAt && e.evidence.independentBehaviorVerified === true
-      ? "HEALED"
+  }
+  if (!healthy)
+    return e &&
+      faultMayHaveBeenInjected(e) &&
+      !baselineReverified(e) &&
+      ["FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state)
+      ? "RECOVERY FAILED"
       : "DEGRADED";
+  // A denied/cancelled request that injected nothing is history, not an outage.
+  if (
+    e &&
+    faultMayHaveBeenInjected(e) &&
+    !baselineReverified(e) &&
+    !(e.state === "COMPLETED" && recoveryVerified(e))
+  )
+    return "RECOVERY UNVERIFIED";
   return "HEALTHY";
+}
+export function systemPresentationState(
+  states: string[],
+  healthy: boolean,
+  fresh: boolean,
+) {
+  if (!fresh) return "Unknown";
+  if (states.includes("HUMAN ACTION REQUIRED")) return "Human action required";
+  if (states.includes("RECOVERY FAILED")) return "Recovery failed";
+  if (states.includes("FAILED")) return "Failure detected";
+  if (states.includes("RECOVERING")) return "Recovering";
+  if (states.includes("PREPARING")) return "Preparing failure";
+  if (states.includes("RECOVERY UNVERIFIED")) return "Recovery unverified";
+  if (states.includes("UNKNOWN")) return "Unknown";
+  if (states.includes("DEGRADED")) return "Degraded";
+  return healthy ? "Healthy" : "Degraded";
 }
 export function demoProgress(
   e: ChaosExperiment | undefined,

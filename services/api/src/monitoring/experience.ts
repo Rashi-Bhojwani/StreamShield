@@ -64,11 +64,37 @@ export function experienceSummary(
           : restored && recent
             ? "recovered"
             : "healthy";
+  const apiHealth = (id: string): NonNullable<Experience["api"]>["primary"] => {
+    const c = snapshot.componentHealth?.find((c) => c.id === id);
+    if (
+      !fresh ||
+      !c ||
+      observationFreshness(c.observedAt, now, snapshot.staleAfterMs) !== "fresh"
+    )
+      return "unknown";
+    if (
+      id === "api-1" &&
+      experiment?.scenario === "crash-api" &&
+      experiment.faultConfirmedAt &&
+      !terminal &&
+      !experiment.verifiedAt &&
+      c.state === "HEALTHY"
+    )
+      return "recovering";
+    return c.state.toLowerCase() as NonNullable<Experience["api"]>["primary"];
+  };
   return experienceSchema.parse({
     enabled: true,
     available: fresh,
     observedAt: fresh ? snapshot.observedAt : null,
     state,
+    api: snapshot.componentHealth
+      ? {
+          primary: apiHealth("api-1"),
+          backup: apiHealth("api-2"),
+          servedBy: null,
+        }
+      : undefined,
     scenario: state === "healthy" || state === "unavailable" ? null : scenario,
     message:
       state === "unavailable"
@@ -168,7 +194,18 @@ export function experienceRouter(r: Resources) {
         const value = await pending;
         cached = { until: Date.now() + 1500, value };
       }
-      res.json(cached.value);
+      const instance = process.env.API_INSTANCE_ID;
+      res.json({
+        ...cached.value,
+        api: cached.value.api
+          ? {
+              ...cached.value.api,
+              servedBy: ["api-1", "api-2", "api-3"].includes(instance || "")
+                ? instance
+                : null,
+            }
+          : undefined,
+      });
     } catch (error) {
       next(error);
     }

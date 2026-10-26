@@ -382,7 +382,85 @@ it("shows verified healthy recovery during cooldown while keeping injection disa
       ]}
     />,
   );
-  await screen.findByText("HEALED", { exact: true });
+  await waitFor(() =>
+    expect(screen.getByTestId("scenario-health-crash-api")).toHaveTextContent(
+      "HEALTHY",
+    ),
+  );
+  expect(
+    screen.getByRole("button", { name: "Run failure demonstration" }),
+  ).toBeDisabled();
+});
+it("uses one current health snapshot and keeps readiness mounted when a preflight request fails", async () => {
+  const f = fixture();
+  await f.call("/monitoring/chaos/experiments", {
+    method: "POST",
+    body: JSON.stringify({
+      id: crypto.randomUUID(),
+      scenario: "crash-api",
+      confirmation: "api-1",
+    }),
+  });
+  const e = f.state.experiments[0]!;
+  e.state = "FAILED";
+  e.finishedAt = f.state.serverTime!;
+  e.reason = "Preflight changed; no fault injected";
+  const ids = [
+    "api-1",
+    "api-2",
+    "api-gateway",
+    "video-gateway",
+    "edge-1",
+    "edge-2",
+    "demo-dependency",
+  ];
+  f.state = {
+    ...f.state,
+    activeId: null,
+    componentHealth: ids.map((id) => ({
+      id,
+      state: "HEALTHY",
+      code: "probe_ok",
+      observedAt: f.state.serverTime!,
+    })),
+  };
+  f.mount(
+    <Demonstration
+      components={[{ id: "api-1", state: "UNHEALTHY" } as ComponentObservation]}
+      stale
+    />,
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId("scenario-health-crash-api")).toHaveTextContent(
+      "HEALTHY",
+    ),
+  );
+  expect(screen.getByTestId("demo-system-health")).toHaveTextContent(
+    "Service health: Healthy",
+  );
+  expect(
+    screen.getByRole("heading", { name: "No failure was injected" }),
+  ).toBeVisible();
+  const readiness = screen.getByTestId("demo-readiness");
+  f.state = {
+    ...f.state,
+    scenarios: f.state.scenarios.map((s) =>
+      s.id === "crash-api"
+        ? {
+            ...s,
+            available: false,
+            reason: "API catalog reads are not verified",
+          }
+        : s,
+    ),
+  };
+  fireEvent.click(screen.getByRole("button", { name: "Refresh readiness" }));
+  await waitFor(() => expect(readiness).toHaveAttribute("data-ready", "false"));
+  expect(screen.getByTestId("demo-readiness")).toBe(readiness);
+  expect(screen.getByTestId("scenario-health-crash-api")).toHaveTextContent(
+    "HEALTHY",
+  );
+  expect(screen.getByTestId("demo-system-health")).toHaveTextContent("Healthy");
   expect(
     screen.getByRole("button", { name: "Run failure demonstration" }),
   ).toBeDisabled();
