@@ -390,10 +390,13 @@ it("shows verified healthy recovery during cooldown while keeping injection disa
 
 it("offers only the two explicitly labelled crash actions on the focused page", async () => {
   const f = fixture();
+  const stamp = new Date().toISOString();
   f.state = {
     ...f.state,
+    serverTime: stamp,
+    observedAt: stamp,
     crashBaseline: {
-      observedAt: new Date().toISOString(),
+      observedAt: stamp,
       api: true,
       gateway: true,
       sourceCount: 1,

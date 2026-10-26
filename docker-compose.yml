@@ -131,6 +131,7 @@ services:
       MEDIA_API_USER: ${MEDIA_API_USER:?required}
       MEDIA_API_PASSWORD: ${MEDIA_API_PASSWORD:?Run npm run setup:media}
       MEDIA_PROBE_TIMEOUT_MS: ${MEDIA_PROBE_TIMEOUT_MS:?required}
+      MEDIA_CONTROL_TIMEOUT_MS: ${MEDIA_CONTROL_TIMEOUT_MS:-5000}
       MEDIA_STATUS_CACHE_MS: ${MEDIA_STATUS_CACHE_MS:?required}
     depends_on:
       migrate:

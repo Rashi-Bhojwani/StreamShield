@@ -75,6 +75,19 @@ Wait for **READY**, then use the automatically opened, signed-in Chromium window
 Open http://127.0.0.1:5174/control/chaos in that window. Other browser profiles do
 not inherit its administrator session. Keep the terminal and browser open.
 
+Before requesting the sample stream's publishing key, startup checks the authenticated
+RTMP and browser-publisher control inventories and requires three seconds of successful
+checks. `media-control-readiness` is a normal waiting stage. Control operations have a
+separate five-second budget (`MEDIA_CONTROL_TIMEOUT_MS`); the shorter media health
+probe budget stays unchanged. Inventory reads run together under that bounded deadline.
+Keys remain revoked if disconnection cannot be confirmed; writes are not blindly retried.
+
+If this stage fails, its final error identifies `media_control_timeout`,
+`media_control_unreachable`, `media_control_auth_denied`,
+`media_control_invalid_response`, or another reviewed control error. Keep the saved
+run artifacts. A fresh sample has no OBS publisher to stop: the old generic "Stop OBS"
+message did not identify the underlying control-read failure.
+
 ## Broadcast and read your comments
 
 1. Use Studio on **5174** for a stream that should experience these failures.
@@ -196,6 +209,7 @@ and [system logs](screenshots/reliable-studio/system-logs.png).
 - [Healthy failure dashboard](screenshots/reliable-studio/control-healthy.png)
 - [Validation results](RELIABLE_STUDIO_VALIDATION.json)
 - [Logs and operator-only failure validation](SYSTEM_LOGS_VALIDATION.json)
+- [Media control startup validation](MEDIA_CONTROL_READINESS_VALIDATION.json)
 
 The screenshots use a generated camera test pattern and disposable test accounts.
 The chat messages traveled between separate authenticated browser contexts while

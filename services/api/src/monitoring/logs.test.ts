@@ -84,30 +84,73 @@ it("returns bounded newest-first events and explicitly reports missing history s
     ),
   ).toBe(true);
 });
-it("rejects log readers without administrator permission before touching history", async () => {
-  const query = vi.fn();
+it.each(["/logs", "/media-control-readiness"])(
+  "rejects nonadministrative reads of %s before accessing private resources",
+  async (path) => {
+    const query = vi.fn();
+    vi.mocked(requireUser).mockResolvedValue({
+      user: { id: "viewer", role: "viewer" },
+    } as never);
+    const app = express();
+    app.use(
+      monitoringRouter(
+        { db: { query } } as unknown as Resources,
+        {} as PlatformConfig,
+        {} as Config,
+      ),
+    );
+    app.use(
+      (
+        e: PlatformError,
+        _q: express.Request,
+        r: express.Response,
+        _next: express.NextFunction,
+      ) => r.status(e.status).json({ code: e.code }),
+    );
+    const r = await request(app).get(path);
+    expect(r.status).toBe(403);
+    expect(query).not.toHaveBeenCalled();
+  },
+);
+it("returns a safe media readiness diagnostic after administrator authorization", async () => {
   vi.mocked(requireUser).mockResolvedValue({
-    user: { id: "viewer", role: "viewer" },
+    user: { id: "admin", role: "administrator" },
   } as never);
-  const app = express();
-  app.use(
-    monitoringRouter(
-      { db: { query } } as unknown as Resources,
-      {} as PlatformConfig,
-      {} as Config,
-    ),
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response("private upstream password", { status: 401 }),
+      ),
   );
-  app.use(
-    (
-      e: PlatformError,
-      _q: express.Request,
-      r: express.Response,
-      _next: express.NextFunction,
-    ) => r.status(e.status).json({ code: e.code }),
-  );
-  const r = await request(app).get("/logs");
-  expect(r.status).toBe(403);
-  expect(query).not.toHaveBeenCalled();
+  try {
+    const app = express();
+    app.use(
+      monitoringRouter(
+        { redis: { isReady: false } } as unknown as Resources,
+        { DYNAMIC_ENABLED: true } as PlatformConfig,
+        {
+          MEDIA_PROBE_TIMEOUT_MS: 1000,
+          MEDIA_CONTROL_TIMEOUT_MS: 1000,
+          MEDIA_API_BASE_URL: "http://private-media:9997",
+          MEDIA_API_USER: "private",
+          MEDIA_API_PASSWORD: "private",
+        } as Config,
+      ),
+    );
+    const r = await request(app).get("/media-control-readiness");
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({
+      available: false,
+      reason: "media_control_auth_denied",
+    });
+    expect(JSON.stringify(r.body)).not.toMatch(
+      /private|password|Authorization/,
+    );
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 it("marks a fully unavailable database as missing logs instead of healthy empty history", async () => {
   const app = express();

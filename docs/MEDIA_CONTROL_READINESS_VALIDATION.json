@@ -1,0 +1,32 @@
+{
+  "platform": "Linux cloud; actual Docker startup and synthetic-camera browser test, not a physical Windows hardware test",
+  "baseCommit": "35e8a420a0a4840b97c7acb977aff08e509fce64",
+  "checks": {
+    "unitTests": 469,
+    "unitFiles": 43,
+    "platformIntegrationChecks": 23,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "format": "PASS",
+    "build": "PASS",
+    "cameraPlaybackCommentsAndEndLive": "PASS"
+  },
+  "mediaControlBudget": {
+    "probeTimeoutMs": 1500,
+    "controlTimeoutMs": 5000
+  },
+  "startup": {
+    "status": "READY",
+    "mediaControlReadinessStageObserved": true,
+    "sampleDecodedPlaybackVerified": true,
+    "publishingWritesRetried": false
+  },
+  "security": {
+    "keyRevocationPreserved": true,
+    "onlyOwnedPathPublishersDisconnected": true,
+    "readersAndOtherStreamsPreserved": true,
+    "failedInventoryPreventsControlActions": true,
+    "privateReadinessRequiresAdministrator": true,
+    "errorResponsesExcludeCredentials": true
+  }
+}

@@ -18,6 +18,10 @@ import { buildTimeline, type StateChange } from "./timeline.js";
 import type { ChaosExperiment, RecoveryAttempt } from "@streamshield/shared";
 import { experienceRouter } from "./experience.js";
 import { logRoutes } from "./logs.js";
+import {
+  publisherConnections,
+  MediaControlError,
+} from "../platform/media-control.js";
 export function monitoringRouter(
   r: Resources,
   platformConfig: PlatformConfig,
@@ -71,6 +75,20 @@ export function monitoringRouter(
   });
   router.use(capacityAdminRoutes(r));
   logRoutes(router, r);
+  router.get("/media-control-readiness", async (_req, res) => {
+    let available = false;
+    let reason: string | null = null;
+    try {
+      await publisherConnections(media, platformConfig.DYNAMIC_ENABLED);
+      available = true;
+    } catch (error) {
+      reason =
+        error instanceof MediaControlError
+          ? error.code
+          : "media_control_unreachable";
+    }
+    res.json({ available, reason, observedAt: new Date().toISOString() });
+  });
   recoveryRoutes(router, r);
   chaosRoutes(router, r, platformConfig, media);
   router.get("/snapshot", async (_req, res, next) => {

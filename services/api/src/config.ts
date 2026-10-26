@@ -122,6 +122,12 @@ const schema = z.object({
     .refine((v) => v !== "any"),
   MEDIA_API_PASSWORD: z.string().min(24),
   MEDIA_PROBE_TIMEOUT_MS: duration,
+  MEDIA_CONTROL_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(500)
+    .max(9000)
+    .default(5000),
   MEDIA_STATUS_CACHE_MS: z.coerce.number().int().min(0).max(10000),
   NODE_ENV: z.enum(["development", "test", "production"]),
   API_HOST: z

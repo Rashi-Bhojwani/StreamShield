@@ -672,6 +672,34 @@ try {
         description: "Bounded generated sample video; not production content",
       },
     });
+    let mediaControlStableSince = null;
+    await until(
+      "media-control-readiness",
+      async () => {
+        try {
+          const state = await api("/monitoring/media-control-readiness");
+          if (!state.available) {
+            mediaControlStableSince = null;
+            const reason = /^media_control_[a-z_]{1,40}$/.test(
+              String(state.reason),
+            )
+              ? state.reason
+              : "media_control_unavailable";
+            throw Error("Media control is not ready (" + reason + ").");
+          }
+          mediaControlStableSince ??= performance.now();
+          const stableForMs = performance.now() - mediaControlStableSince;
+          return stableForMs >= 3000
+            ? true
+            : pendingFixture({ stableForMs, requiredStableMs: 3000 });
+        } catch (error) {
+          mediaControlStableSince = null;
+          throw error;
+        }
+      },
+      90000,
+    );
+    result.currentStage = "fixture-account-and-source";
     const key = await api("/studio/streams/" + stream.id + "/publishing", {
       method: "POST",
     });
