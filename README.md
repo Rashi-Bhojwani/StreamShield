@@ -1,6 +1,9 @@
 # StreamShield Live + Control
 
 **Current Windows setup:** [Run the persistent app and failure dashboard together](docs/WINDOWS_LOCAL_STUDIO.md).
+
+**Complete technical guide:** [Architecture, technologies, streaming, data, failure effects, healing, security and operations](docs/TECHNICAL_GUIDE.md).
+
 This branch includes the compiled demo runtime, stable idle baseline, browser media
 port isolation, broadcaster chat beside the live preview, visible service impact,
 understandable system logs at `/control/logs`, an operator-only media authorization
