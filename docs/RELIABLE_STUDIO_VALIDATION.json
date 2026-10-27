@@ -1,0 +1,65 @@
+{
+  "platform": "Linux cloud; synthetic capture, not a physical Windows device test",
+  "baseCommit": "61ff87fc2917ec9d629222f6d294cc2681576552",
+  "checks": {
+    "unitTests": 441,
+    "unitFiles": 41,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "format": "PASS",
+    "build": "PASS",
+    "platformIntegrationNamedChecks": 23,
+    "foundationAndPlatformBrowserTests": 10,
+    "studioCameraAndChat": "PASS: decoded remote synthetic-camera video, viewer-to-Studio comments, Studio replies, exactly one audience player, desktop/mobile layout, and ended-session verification"
+  },
+  "liveFailures": {
+    "run": "e800ae5e",
+    "status": "PASS",
+    "verifiedScenarios": 4,
+    "stableIdleMs": 30000,
+    "envUnchanged": true,
+    "cleanedContainers": 13,
+    "scenarios": [
+      {
+        "scenario": "crash-api",
+        "status": "PASS",
+        "recoveryMs": 20644,
+        "viewerImpactObserved": true,
+        "dependencyLoadingObserved": false,
+        "independentBehaviorVerified": true
+      },
+      {
+        "scenario": "crash-video-gateway",
+        "status": "PASS",
+        "recoveryMs": 15282,
+        "viewerImpactObserved": true,
+        "dependencyLoadingObserved": false,
+        "independentBehaviorVerified": true
+      },
+      {
+        "scenario": "crash-edge",
+        "status": "PASS",
+        "recoveryMs": 16325,
+        "viewerImpactObserved": true,
+        "dependencyLoadingObserved": false,
+        "independentBehaviorVerified": true
+      },
+      {
+        "scenario": "network-timeout",
+        "status": "PASS",
+        "recoveryMs": 38414,
+        "viewerImpactObserved": true,
+        "dependencyLoadingObserved": true,
+        "independentBehaviorVerified": true
+      }
+    ]
+  },
+  "mainApplication": {
+    "status": 200,
+    "readiness": {
+      "status": "ready",
+      "service": "streamshield-api"
+    },
+    "retainedDuringTests": true
+  }
+}

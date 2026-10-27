@@ -1,3 +1,4 @@
+import { ExperienceStatus } from "./ExperienceStatus";
 import type { PlaybackObservation } from "@streamshield/shared";
 import { Chat } from "../platform/Chat";
 import { useRef, useState } from "react";
@@ -131,6 +132,7 @@ export default function Watch() {
               Stream health overlay: {showHealth ? "on" : "off"}
             </button>
           )}
+          <ExperienceStatus />
           <div className="watch-information">
             <div className="stream-identity">
               <span className="channel-symbol large">

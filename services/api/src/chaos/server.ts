@@ -31,6 +31,15 @@ app.get("/health", (_q, r) =>
     )
     .json({ alive: !!engine.lastCompleted, enabled: c.enabled }),
 );
+// Private Nginx auth subrequest: status only, no credentials or control access.
+app.get("/media-access", (_q, r) => {
+  r.setHeader("Cache-Control", "no-store");
+  if (c.CHAOS_MEDIA_GATE_ENABLED !== "true") {
+    r.sendStatus(404);
+    return;
+  }
+  r.sendStatus(engine.mediaAccessBlocked() ? 403 : 204);
+});
 app.use((q, r, next) => {
   r.setHeader("Cache-Control", "no-store");
   if (!equal(q.headers.authorization || "", "Bearer " + c.CHAOS_SECRET)) {
@@ -67,6 +76,20 @@ app.post("/experiments/:id/cancel", (q, r, next) => {
     next(e);
   }
 });
+app.post("/experiments/:id/restore-media-authority", (q, r, next) => {
+  try {
+    const id = z.uuid().parse(q.params.id);
+    const b = z
+      .object({ actor: z.uuid(), confirmation: z.literal("media-authority") })
+      .strict()
+      .parse(q.body);
+    r.status(202).json(
+      engine.requestOperatorReset(id, b.actor, b.confirmation),
+    );
+  } catch (e) {
+    next(e);
+  }
+});
 app.use((_q, r) => r.sendStatus(404));
 app.use(
   (
@@ -93,6 +116,8 @@ app.use(
       "prerequisites_unavailable",
       "audit_unavailable",
       "experiment_not_found",
+      "operator_restore_required",
+      "fault_not_confirmed",
     ];
     r.status(
       code === "experiment_rate_limit"

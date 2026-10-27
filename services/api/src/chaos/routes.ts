@@ -195,6 +195,51 @@ export function chaosRoutes(
       );
     }
   });
+  router.post(
+    "/chaos/experiments/:id/restore-media-authority",
+    async (req, res, next) => {
+      try {
+        checkCsrf(
+          req.headers.origin,
+          req.headers["x-csrf-token"],
+          req.headers.cookie,
+          media.CORS_ORIGINS,
+          c,
+        );
+        if (
+          process.env.NODE_ENV !== "development" ||
+          process.env.CHAOS_ENABLED !== "true" ||
+          process.env.CHAOS_ENVIRONMENT !== "local-development"
+        )
+          throw new PlatformError(
+            403,
+            "CHAOS_DISABLED",
+            "Operator demo reset requires explicitly enabled local development.",
+          );
+        const id = z.uuid().parse(req.params.id);
+        const b = z
+          .object({ confirmation: z.literal("media-authority") })
+          .strict()
+          .parse(req.body);
+        res.status(202).json(
+          await forward("/experiments/" + id + "/restore-media-authority", {
+            ...b,
+            actor: z.uuid().parse(res.locals.monitoringActor),
+          }),
+        );
+      } catch (e) {
+        next(
+          e instanceof z.ZodError
+            ? new PlatformError(
+                400,
+                "INVALID_RESTORATION",
+                "Confirm media-authority to restore this simulated external prerequisite.",
+              )
+            : e,
+        );
+      }
+    },
+  );
   // Browser-observed numeric evidence only (clearly labelled as such). Only the
   // administrator who ran the experiment may append, bounded per experiment.
   const evidenceSchema = z

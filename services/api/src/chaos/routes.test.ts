@@ -53,6 +53,31 @@ it("denies a correctly signed administrative mutation in production before forwa
   expect(r.body.code).toBe("CHAOS_DISABLED");
   expect(fetch).not.toHaveBeenCalled();
 });
+it.each(["production", "bad-confirmation", "no-csrf"])(
+  "denies unsafe manual restoration requests: %s",
+  async (kind) => {
+    vi.stubEnv(
+      "NODE_ENV",
+      kind === "production" ? "production" : "development",
+    );
+    vi.stubEnv("CHAOS_ENABLED", "true");
+    vi.stubEnv("CHAOS_ENVIRONMENT", "local-development");
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const r = await request(app())
+      .post(
+        "/chaos/experiments/c8e2077f-bafb-4e21-bc94-5e152f7b2aaf/restore-media-authority",
+      )
+      .set("Origin", origin)
+      .set("Cookie", "ss_csrf=" + nonce)
+      .set("X-CSRF-Token", kind === "no-csrf" ? "" : csrfToken(nonce, c))
+      .send({
+        confirmation: kind === "bad-confirmation" ? "wrong" : "media-authority",
+      });
+    expect(r.status).toBe(kind === "bad-confirmation" ? 400 : 403);
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);
 it.each(["missing", "forged", "cross-origin"])(
   "denies %s CSRF before forwarding",
   async (kind) => {

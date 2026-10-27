@@ -14,7 +14,7 @@ import type {
   ChaosExperiment,
   ComponentObservation,
 } from "@streamshield/shared";
-import { primaryDemoIds } from "@streamshield/shared";
+import { liveDemoIds } from "@streamshield/shared";
 import { AuthContext, type Auth } from "../platform/auth-context";
 import { RequestError } from "../platform/request";
 import { scenarios } from "../../../../services/api/src/chaos/config";
@@ -142,7 +142,7 @@ function fixture() {
     },
   };
 }
-it("renders exactly the same four primary scenarios on Chaos, Demo and Presentation", async () => {
+it("renders the same five scenarios on Chaos, Demo and Presentation", async () => {
   for (const page of [
     <ChaosLab />,
     <ChaosDemo components={[]} stale={false} topology={null} />,
@@ -156,7 +156,7 @@ it("renders exactly the same four primary scenarios on Chaos, Demo and Presentat
         [...container.querySelectorAll("[data-scenario]")].map((n) =>
           n.getAttribute("data-scenario"),
         ),
-      ).toEqual(primaryDemoIds),
+      ).toEqual(liveDemoIds),
     );
     expect(
       screen.getAllByRole("button", { name: "Run failure demonstration" }),
@@ -182,7 +182,7 @@ it("disables all Presentation buttons on stale data even when old scenario avail
   };
   const { container } = f.mount(<Presentation components={[]} stale={false} />);
   await waitFor(() =>
-    expect(container.querySelectorAll("button[data-scenario]")).toHaveLength(4),
+    expect(container.querySelectorAll("button[data-scenario]")).toHaveLength(5),
   );
   expect(
     screen.getByRole("button", { name: "Run failure demonstration" }),
@@ -382,7 +382,85 @@ it("shows verified healthy recovery during cooldown while keeping injection disa
       ]}
     />,
   );
-  await screen.findByText("HEALED", { exact: true });
+  await waitFor(() =>
+    expect(screen.getByTestId("scenario-health-crash-api")).toHaveTextContent(
+      "HEALTHY",
+    ),
+  );
+  expect(
+    screen.getByRole("button", { name: "Run failure demonstration" }),
+  ).toBeDisabled();
+});
+it("uses one current health snapshot and keeps readiness mounted when a preflight request fails", async () => {
+  const f = fixture();
+  await f.call("/monitoring/chaos/experiments", {
+    method: "POST",
+    body: JSON.stringify({
+      id: crypto.randomUUID(),
+      scenario: "crash-api",
+      confirmation: "api-1",
+    }),
+  });
+  const e = f.state.experiments[0]!;
+  e.state = "FAILED";
+  e.finishedAt = f.state.serverTime!;
+  e.reason = "Preflight changed; no fault injected";
+  const ids = [
+    "api-1",
+    "api-2",
+    "api-gateway",
+    "video-gateway",
+    "edge-1",
+    "edge-2",
+    "demo-dependency",
+  ];
+  f.state = {
+    ...f.state,
+    activeId: null,
+    componentHealth: ids.map((id) => ({
+      id,
+      state: "HEALTHY",
+      code: "probe_ok",
+      observedAt: f.state.serverTime!,
+    })),
+  };
+  f.mount(
+    <Demonstration
+      components={[{ id: "api-1", state: "UNHEALTHY" } as ComponentObservation]}
+      stale
+    />,
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId("scenario-health-crash-api")).toHaveTextContent(
+      "HEALTHY",
+    ),
+  );
+  expect(screen.getByTestId("demo-system-health")).toHaveTextContent(
+    "Service health: Healthy",
+  );
+  expect(
+    screen.getByRole("heading", { name: "No failure was injected" }),
+  ).toBeVisible();
+  const readiness = screen.getByTestId("demo-readiness");
+  f.state = {
+    ...f.state,
+    scenarios: f.state.scenarios.map((s) =>
+      s.id === "crash-api"
+        ? {
+            ...s,
+            available: false,
+            reason: "API catalog reads are not verified",
+          }
+        : s,
+    ),
+  };
+  fireEvent.click(screen.getByRole("button", { name: "Refresh readiness" }));
+  await waitFor(() => expect(readiness).toHaveAttribute("data-ready", "false"));
+  expect(screen.getByTestId("demo-readiness")).toBe(readiness);
+  expect(screen.getByTestId("scenario-health-crash-api")).toHaveTextContent(
+    "HEALTHY",
+  );
+  expect(screen.getByTestId("demo-system-health")).toHaveTextContent("Healthy");
   expect(
     screen.getByRole("button", { name: "Run failure demonstration" }),
   ).toBeDisabled();
@@ -390,10 +468,13 @@ it("shows verified healthy recovery during cooldown while keeping injection disa
 
 it("offers only the two explicitly labelled crash actions on the focused page", async () => {
   const f = fixture();
+  const stamp = new Date().toISOString();
   f.state = {
     ...f.state,
+    serverTime: stamp,
+    observedAt: stamp,
     crashBaseline: {
-      observedAt: new Date().toISOString(),
+      observedAt: stamp,
       api: true,
       gateway: true,
       sourceCount: 1,

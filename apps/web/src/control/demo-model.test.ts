@@ -4,6 +4,8 @@ import {
   demoProgress,
   blockedNextStep,
   scenarioPresentationState,
+  systemPresentationState,
+  definitelyNoFaultInjected,
 } from "./demo-model";
 const now = Date.now();
 const experiment = {
@@ -18,7 +20,7 @@ const experiment = {
   evidence: { observationWindowMs: 15000 },
   events: [],
 } as unknown as ChaosExperiment;
-it("never labels unverified, stale, or failed recovery HEALED", () => {
+it("requires actual verification and current fresh health after a confirmed fault", () => {
   expect(scenarioPresentationState(undefined, true, true)).toBe("HEALTHY");
   expect(scenarioPresentationState(experiment, false, true)).toBe("RECOVERING");
   const healed = {
@@ -27,14 +29,103 @@ it("never labels unverified, stale, or failed recovery HEALED", () => {
     verifiedAt: new Date(now).toISOString(),
     evidence: { independentBehaviorVerified: true },
   };
-  expect(scenarioPresentationState(healed, true, true)).toBe("HEALED");
+  expect(scenarioPresentationState(healed, true, true)).toBe("HEALTHY");
   expect(
     scenarioPresentationState({ ...healed, verifiedAt: null }, true, true),
-  ).toBe("DEGRADED");
-  expect(scenarioPresentationState(healed, true, false)).toBe("DEGRADED");
+  ).toBe("RECOVERY UNVERIFIED");
+  expect(scenarioPresentationState(healed, true, false)).toBe("UNKNOWN");
   expect(
     scenarioPresentationState({ ...healed, state: "TIMED_OUT" }, true, true),
-  ).toBe("DEGRADED");
+  ).toBe("RECOVERY UNVERIFIED");
+});
+it("shows a genuine Healthy to Failed to Recovering to Healthy cycle", () => {
+  expect(scenarioPresentationState(undefined, true, true)).toBe("HEALTHY");
+  expect(
+    scenarioPresentationState(
+      { ...experiment, state: "FAULT_CONFIRMED", actionStartedAt: null },
+      false,
+      true,
+    ),
+  ).toBe("FAILED");
+  expect(scenarioPresentationState(experiment, false, true)).toBe("RECOVERING");
+  expect(
+    scenarioPresentationState(
+      {
+        ...experiment,
+        state: "COMPLETED",
+        verifiedAt: new Date(now).toISOString(),
+        evidence: { independentBehaviorVerified: true },
+      },
+      true,
+      true,
+    ),
+  ).toBe("HEALTHY");
+});
+it("does not retain a false outage from a request rejected before injection", () => {
+  const denied = {
+    ...experiment,
+    state: "FAILED",
+    injectedAt: null,
+    faultConfirmedAt: null,
+  } as ChaosExperiment;
+  expect(scenarioPresentationState(denied, true, true)).toBe("HEALTHY");
+  expect(scenarioPresentationState(denied, false, true)).toBe("DEGRADED");
+});
+it("does not declare no fault or healthy recovery when injection acceptance is ambiguous", () => {
+  const e = {
+    ...experiment,
+    state: "FAILED",
+    injectedAt: null,
+    faultConfirmedAt: null,
+    events: [
+      {
+        kind: "INJECTING",
+        at: new Date(now).toISOString(),
+        detail: "intent recorded",
+      },
+    ],
+  } as ChaosExperiment;
+  expect(definitelyNoFaultInjected(e)).toBe(false);
+  expect(scenarioPresentationState(e, true, true)).toBe("RECOVERY UNVERIFIED");
+  e.events.push({
+    kind: "NO_ACCEPTED_FAULT",
+    at: new Date(now).toISOString(),
+    detail: "adapter confirmed absent",
+  });
+  expect(definitelyNoFaultInjected(e)).toBe(true);
+  expect(scenarioPresentationState(e, true, true)).toBe("HEALTHY");
+});
+it("uses independent baseline re-verification without rewriting failed history", () => {
+  const e = {
+    ...experiment,
+    state: "TIMED_OUT",
+    evidence: { terminalBaselineReverifiedAt: new Date(now).toISOString() },
+    events: [
+      {
+        kind: "BASELINE_REVERIFIED",
+        at: new Date(now).toISOString(),
+        detail: "actual functional checks",
+      },
+    ],
+  } as ChaosExperiment;
+  expect(scenarioPresentationState(e, true, true)).toBe("HEALTHY");
+  expect(scenarioPresentationState(e, false, true)).toBe("DEGRADED");
+  expect(e.state).toBe("TIMED_OUT");
+});
+it("does not show a healthy header when a card has an unresolved recovery", () => {
+  expect(
+    systemPresentationState(["HEALTHY", "RECOVERY UNVERIFIED"], true, true),
+  ).toBe("Recovery unverified");
+  expect(systemPresentationState(["HEALTHY", "FAILED"], false, true)).toBe(
+    "Failure detected",
+  );
+  expect(systemPresentationState(["HEALTHY", "RECOVERING"], false, true)).toBe(
+    "Recovering",
+  );
+  expect(systemPresentationState(["HEALTHY"], true, true)).toBe("Healthy");
+  expect(systemPresentationState(["HEALTHY", "DEGRADED"], true, true)).toBe(
+    "Degraded",
+  );
 });
 it("does not turn elapsed observation time into verified recovery", () => {
   const p = demoProgress(experiment, now);

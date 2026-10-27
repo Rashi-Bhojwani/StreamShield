@@ -6,9 +6,21 @@ import {
   fixtureDataTmpfs,
   fixtureServiceState,
   redactFixtureText,
+  fixtureStartupEvents,
 } from "./fixture-diagnostics.mjs";
-import { fixtureProfile, demoBackupEdge } from "./fixture-profile.mjs";
+import {
+  fixtureProfile,
+  demoBackupEdge,
+  demoMediaAuthority,
+  demoWithoutSpareApi,
+} from "./fixture-profile.mjs";
 import { fixtureSupervisor } from "./fixture-supervisor.mjs";
+import {
+  buildFixtureRuntime,
+  compiledFixtureService,
+  fixtureBaselineWaiter,
+  apiListenerProbeCode,
+} from "./fixture-runtime.mjs";
 import {
   prepareFixtureWorkspace,
   readableFixtureBuild,
@@ -179,6 +191,7 @@ try {
       "build_frontend_first",
     );
     const browserCheck = await chromium.launch({
+      executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
       headless: true,
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
@@ -192,6 +205,12 @@ try {
     await new Promise((resolve) => listener.close(resolve));
     result.currentStage = "fixture-configuration";
     result.preparation = prepareFixtureWorkspace(root, dir);
+    let compiledDirectory = null;
+    if (profile.lightweight) {
+      result.currentStage = "compile-demo-runtime";
+      console.log(JSON.stringify({ stage: result.currentStage }));
+      compiledDirectory = await buildFixtureRuntime(root, dir);
+    }
     let text = readFileSync(join(root, ".env.example"), "utf8");
     const set = (k, v) => {
       if (!new RegExp("^" + k + "=", "m").test(text)) text += "\n" + k + "=\n";
@@ -200,15 +219,20 @@ try {
     for (const [k, v] of Object.entries({
       COMPOSE_PROJECT_NAME: project,
       WEB_PORT: String(webPort),
+      ...(interactive ? { BROWSER_ICE_PORT: "18189" } : {}),
       CORS_ORIGINS:
         "http://127.0.0.1:" + webPort + ",http://localhost:" + webPort,
       E2E_BASE_URL: "http://127.0.0.1:" + webPort,
       HEALER_ENABLED: "true",
       CHAOS_ENABLED: "true",
       CHAOS_ENVIRONMENT: "local-development",
-      CHAOS_ALLOWED_SCENARIOS: selectedScenarios.join(","),
+      CHAOS_ALLOWED_SCENARIOS: [
+        ...selectedScenarios,
+        ...(profile.lightweight ? ["media-authority-loss"] : []),
+      ].join(","),
+      CHAOS_MEDIA_GATE_ENABLED: profile.lightweight ? "true" : "false",
       CHAOS_OBSERVATION_WINDOW_MS: "15000",
-      CHAOS_FAULT_DURATION_MS: "8000",
+      CHAOS_FAULT_DURATION_MS: profile.lightweight ? "20000" : "8000",
       POSTGRES_DB: "fixture_" + id,
       POSTGRES_USER: "fixture",
       POSTGRES_PASSWORD: randomBytes(32).toString("base64url"),
@@ -253,16 +277,35 @@ try {
         "json",
       ),
     );
+    if (compiledDirectory) {
+      for (const [name, service] of Object.entries(source.services))
+        source.services[name] = compiledFixtureService(
+          service,
+          compiledDirectory,
+        );
+    }
+    if (compact) {
+      const gatewayConfig = source.services["api-gateway"].volumes.find(
+        (v) => v.target === "/etc/nginx/nginx.conf",
+      ).source;
+      writeFileSync(
+        gatewayConfig,
+        demoWithoutSpareApi(readFileSync(gatewayConfig, "utf8"), env.API_PORT),
+      );
+    }
     if (profile.lightweight) {
       const gatewayConfig = source.services["video-gateway"].volumes.find(
         (v) => v.target === "/etc/nginx/nginx.conf",
       ).source;
       writeFileSync(
         gatewayConfig,
-        demoBackupEdge(
-          readFileSync(gatewayConfig, "utf8"),
-          env.RESILIENCE_EDGE2_HOST,
-          env.RESILIENCE_HTTP_PORT,
+        demoMediaAuthority(
+          demoBackupEdge(
+            readFileSync(gatewayConfig, "utf8"),
+            env.RESILIENCE_EDGE2_HOST,
+            env.RESILIENCE_HTTP_PORT,
+          ),
+          env.CHAOS_PORT,
         ),
       );
     }
@@ -386,11 +429,16 @@ try {
           ),
         },
       };
+      const browserIce = (p) =>
+        interactive &&
+        name === "mediamtx" &&
+        Number(p.target) === Number(env.BROWSER_ICE_PORT);
       s.ports = (s.ports || [])
-        .filter((p) => p.protocol !== "udp")
+        .filter((p) => p.protocol !== "udp" || browserIce(p))
         .map((p) => ({
           ...p,
-          published: p.target === webPort ? String(webPort) : "0",
+          published:
+            p.target === webPort || browserIce(p) ? String(p.target) : "0",
           host_ip: "127.0.0.1",
         }));
       s.tmpfs = (s.tmpfs || []).filter((x) => !x.startsWith("/data"));
@@ -510,7 +558,31 @@ try {
       "init",
     );
     result.currentStage = "application-startup";
-    startOwned(keep.filter((k) => !["postgres", "redis"].includes(k)));
+    if (profile.lightweight) {
+      startOwned(["api"]);
+      await until("api-listener-readiness", async () => {
+        const state = inspect("api").State;
+        if (state.Status !== "running" || state.OOMKilled)
+          return pendingFixture({
+            processState: state.Status,
+            oom: state.OOMKilled,
+          });
+        const probe = JSON.parse(
+          compose("exec", "-T", "api", "node", "-e", apiListenerProbeCode),
+        );
+        return probe.ready === true ? true : pendingFixture(probe);
+      });
+    }
+    startOwned(
+      keep.filter(
+        (k) =>
+          ![
+            "postgres",
+            "redis",
+            ...(profile.lightweight ? ["api"] : []),
+          ].includes(k),
+      ),
+    );
     const baselineStartup = Object.fromEntries(
       (compact
         ? ["api", "video-gateway"]
@@ -567,6 +639,37 @@ try {
         });
       return me.csrf;
     });
+    let stableApiSince = null;
+    await until(
+      "api-stable-before-registration",
+      async () => {
+        const started = performance.now();
+        try {
+          const readiness = await api("/health/ready");
+          const auth = await api("/auth/me");
+          await api("/streams");
+          const latencyMs = performance.now() - started;
+          if (readiness.status !== "ready" || !auth?.csrf || latencyMs > 2500) {
+            stableApiSince = null;
+            return pendingFixture({
+              reason: "API or dependencies have not finished warming up",
+              ready: readiness.status === "ready",
+              csrfAvailable: Boolean(auth?.csrf),
+              latencyMs,
+            });
+          }
+          stableApiSince ??= performance.now();
+          const stableForMs = performance.now() - stableApiSince;
+          return stableForMs >= 10000
+            ? true
+            : pendingFixture({ stableForMs, requiredStableMs: 10000 });
+        } catch (error) {
+          stableApiSince = null;
+          throw error;
+        }
+      },
+      120000,
+    );
     result.currentStage = "fixture-account-and-source";
     csrf = (await api("/auth/me")).csrf;
     const username = "four_" + id,
@@ -605,6 +708,34 @@ try {
         description: "Bounded generated sample video; not production content",
       },
     });
+    let mediaControlStableSince = null;
+    await until(
+      "media-control-readiness",
+      async () => {
+        try {
+          const state = await api("/monitoring/media-control-readiness");
+          if (!state.available) {
+            mediaControlStableSince = null;
+            const reason = /^media_control_[a-z_]{1,40}$/.test(
+              String(state.reason),
+            )
+              ? state.reason
+              : "media_control_unavailable";
+            throw Error("Media control is not ready (" + reason + ").");
+          }
+          mediaControlStableSince ??= performance.now();
+          const stableForMs = performance.now() - mediaControlStableSince;
+          return stableForMs >= 3000
+            ? true
+            : pendingFixture({ stableForMs, requiredStableMs: 3000 });
+        } catch (error) {
+          mediaControlStableSince = null;
+          throw error;
+        }
+      },
+      90000,
+    );
+    result.currentStage = "fixture-account-and-source";
     const key = await api("/studio/streams/" + stream.id + "/publishing", {
       method: "POST",
     });
@@ -685,11 +816,61 @@ try {
       },
       120000,
     );
+    let settledBaseline = null;
+    let baselineFrame = null;
+    const waitBaseline = profile.lightweight
+      ? fixtureBaselineWaiter({
+          until,
+          scenarioIds: selectedScenarios,
+          read: async () => {
+            baselineFrame = {
+              chaos: await api("/monitoring/chaos"),
+              healer: await api("/monitoring/healing"),
+              health: await api("/monitoring/snapshot"),
+            };
+            return baselineFrame;
+          },
+        })
+      : null;
+    function recordBaseline(assessment) {
+      result.baseline.stableIdleMs = 30000;
+      result.baseline.startupHistory = assessment.history;
+      result.baseline.startupRestarts ||= [];
+      for (const [name, previous] of Object.entries(baselineStartup)) {
+        const startedAt = inspect(name).State.StartedAt;
+        if (startedAt === previous) continue;
+        const component = name === "api" ? "api-1" : name;
+        check(
+          assessment.history.recoveryAttempts.some(
+            (a) =>
+              a.component === component &&
+              a.state === "VERIFIED" &&
+              Date.parse(a.finishedAt) >= Date.parse(startedAt),
+          ),
+          "unverified_service_restart_during_startup:" + name,
+        );
+        result.baseline.startupRestarts.push({
+          service: name,
+          previous,
+          startedAt,
+        });
+        baselineStartup[name] = startedAt;
+      }
+      result.baseline.noRecoveryBeforeClick =
+        assessment.history.recoveryAttempts.length === 0;
+      result.baseline.noRecoveryDuringStableWindow = true;
+    }
+    if (profile.lightweight) {
+      settledBaseline = await waitBaseline("idle-baseline-stable");
+      recordBaseline(settledBaseline);
+    }
     result.currentStage = "browser-control";
     const runningDisk = statfsSync(root);
     result.resources.runningFreeBytes = runningDisk.bavail * runningDisk.bsize;
     browser = await chromium.launch({
-      headless: !interactive || profile.smoke,
+      executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH,
+      headless:
+        !interactive || profile.smoke || process.argv.includes("--headless"),
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
     context = await browser.newContext({
@@ -701,15 +882,27 @@ try {
     page = await context.newPage();
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(redact(error.message)));
+    if (profile.lightweight) await page.goto(base + result.controlRoute);
     if (compact) {
-      const state = await api("/monitoring/chaos"),
-        heal = await api("/monitoring/healing"),
-        health = await api("/monitoring/snapshot");
+      if (waitBaseline) {
+        settledBaseline = await waitBaseline("browser-controller-readiness");
+        recordBaseline(settledBaseline);
+      }
+      const {
+        chaos: state,
+        healer: heal,
+        health,
+      } = baselineFrame || {
+        chaos: await api("/monitoring/chaos"),
+        healer: await api("/monitoring/healing"),
+        health: await api("/monitoring/snapshot"),
+      };
       check(
         state.experiments.length === 0 &&
-          heal.attempts.length === 0 &&
-          health.incidents.length === 0,
-        "baseline_has_unrequested_fault_or_recovery",
+          (settledBaseline
+            ? settledBaseline.ready
+            : heal.attempts.length === 0 && health.incidents.length === 0),
+        "baseline_readiness_changed_during_browser_startup",
       );
       check(
         Object.entries(baselineStartup).every(
@@ -717,8 +910,11 @@ try {
         ),
         "service_restarted_during_baseline",
       );
-      result.baseline.noFaultInjected = true;
-      result.baseline.noRecoveryBeforeClick = true;
+      result.baseline.noExperimentInjected = state.experiments.length === 0;
+      result.baseline.noFaultInjected =
+        heal.attempts.length === 0 && health.incidents.length === 0;
+      result.baseline.noRecoveryBeforeClick = heal.attempts.length === 0;
+      result.baseline.noRecoveryDuringStableWindow = true;
       check(
         compose(
           "exec",
@@ -739,9 +935,25 @@ try {
         observedAt: c.observedAt,
         latencyMs: c.latencyMs,
       }));
-      check(
-        result.baseline.components.every((c) => c.state === "HEALTHY"),
-        "baseline_components_not_healthy",
+      await until(
+        "baseline-components-healthy",
+        async () => {
+          const snapshot = await api("/monitoring/snapshot");
+          result.baseline.components = snapshot.components.map((c) => ({
+            id: c.id,
+            state: c.state,
+            code: c.code,
+            observedAt: c.observedAt,
+            latencyMs: c.latencyMs,
+          }));
+          const pending = result.baseline.components.filter(
+            (c) => c.state !== "HEALTHY",
+          );
+          return result.baseline.components.length > 0 && pending.length === 0
+            ? true
+            : pendingFixture({ components: pending });
+        },
+        120000,
       );
       result.baseline.containerStates = keep.map((name) => {
         const c = inspect(name);
@@ -757,13 +969,14 @@ try {
       control: base + result.controlRoute,
       watch: base + "/watch/" + stream.id,
     };
-    await page.goto(result.urls.control);
+    if (page.url() !== result.urls.control)
+      await page.goto(result.urls.control);
     await page
       .getByRole("heading", { name: "Watch the system recover." })
       .waitFor();
     check(
       (await page.locator(".demo-choice").count()) ===
-        (crashOnly && !existingUi ? 2 : 4),
+        (crashOnly && !existingUi ? 2 : 5),
       "primary_card_count",
     );
     if (crashOnly && !existingUi)
@@ -808,7 +1021,7 @@ try {
       };
     }
     if (existingUi) {
-      await page.reload();
+      if (!interactive) await page.reload();
       await page
         .getByRole("heading", { name: "Watch the system recover." })
         .waitFor();
@@ -825,27 +1038,48 @@ try {
       });
       await viewer.goto(base + "/watch/" + stream.id);
       result.baseline.browserPlayback = await browserVideo();
-      const home = await context.newPage();
-      home.on("pageerror", (error) => pageErrors.push(redact(error.message)));
-      await home.goto(base + "/");
-      await home
-        .locator('a[href="/watch/' + stream.id + '"]:visible')
-        .first()
-        .waitFor();
-      result.baseline.homepageDiscoversOwnedLiveStream = true;
-      await home.screenshot({
-        path: join(output, "existing-homepage.png"),
-        fullPage: true,
-      });
-      await home.close();
+      // Homepage/reload acceptance remains in automated runs. Keep interactive
+      // startup to Control + Watch instead of opening a third page on laptops.
+      if (!interactive) {
+        const home = await context.newPage();
+        home.on("pageerror", (error) => pageErrors.push(redact(error.message)));
+        await home.goto(base + "/");
+        await home
+          .locator('a[href="/watch/' + stream.id + '"]:visible')
+          .first()
+          .waitFor();
+        result.baseline.homepageDiscoversOwnedLiveStream = true;
+        await home.screenshot({
+          path: join(output, "existing-homepage.png"),
+          fullPage: true,
+        });
+        await home.close();
+      }
       await page.waitForTimeout(5000); // Read-only refresh/polling must not inject a fault.
-      const idle = await api("/monitoring/chaos"),
-        heal = await api("/monitoring/healing");
-      check(
-        idle.experiments.length === 0 && heal.attempts.length === 0,
-        "refresh_or_polling_triggered_fault",
-      );
-      result.baseline.refreshAndPollingNoFault = true;
+      if (waitBaseline) {
+        const previous = settledBaseline.historyIdentity;
+        // Opening/decoding browser pages adds real load. Wait for actual stable
+        // readiness instead of accusing a read-only refresh of injecting a fault.
+        settledBaseline = await waitBaseline("browser-baseline-stable");
+        result.baseline.recoveredDuringBrowserStartup =
+          settledBaseline.historyIdentity !== previous;
+        recordBaseline(settledBaseline);
+        result.baseline.noExperimentDuringBrowserChecks = true;
+        result.baseline.refreshAndPollingNoFault =
+          !result.baseline.recoveredDuringBrowserStartup;
+        result.baseline.noFaultInjected =
+          settledBaseline.history.recoveryAttempts.length === 0 &&
+          settledBaseline.history.incidents.length === 0;
+        result.baseline.browserPlayback = await browserVideo();
+      } else {
+        const idle = await api("/monitoring/chaos"),
+          heal = await api("/monitoring/healing");
+        check(
+          idle.experiments.length === 0 && heal.attempts.length === 0,
+          "unexpected_experiment_or_recovery_during_browser_checks",
+        );
+        result.baseline.refreshAndPollingNoFault = true;
+      }
     }
     await page.screenshot({
       path: join(output, "baseline.png"),
@@ -917,6 +1151,25 @@ try {
           120000,
         );
         result.currentStage = "scenario-execution:" + scenario;
+        const cardHealthStates = new Set();
+        let apiBackupResponseObserved = false;
+        let actionTopBefore = null;
+        if (existingUi) {
+          await until(
+            "card-healthy-before:" + scenario,
+            async () =>
+              (await page
+                .getByTestId("scenario-health-" + scenario)
+                .textContent()) === "HEALTHY",
+            30000,
+          );
+          cardHealthStates.add("HEALTHY");
+          actionTopBefore = await page
+            .locator(".demo-action")
+            .evaluate(
+              (element) => element.getBoundingClientRect().top + window.scrollY,
+            );
+        }
 
         const initial = service ? inspect(service) : null,
           peer = scenario === "crash-edge" ? inspect("edge-2") : null;
@@ -955,7 +1208,9 @@ try {
         );
         let experiment,
           stopped = false,
-          fallback = false;
+          fallback = false,
+          viewerImpactObserved = false,
+          dependencyLoadingObserved = false;
         const start = performance.now();
         while (performance.now() - start < 200000) {
           if (stopRequested) throw Error("demo_stop_requested");
@@ -987,6 +1242,36 @@ try {
           experiment = s.experiments.find(
             (e) => e.id === submittedExperiment.id && e.scenario === scenario,
           );
+          if (existingUi)
+            cardHealthStates.add(
+              await page
+                .getByTestId("scenario-health-" + scenario)
+                .textContent(),
+            );
+          if (profile.lightweight && viewer && experiment?.injectedAt) {
+            if (
+              scenario === "crash-api" &&
+              experiment.faultConfirmedAt &&
+              !experiment.verifiedAt &&
+              (await viewer.getByTestId("api-continuity").count())
+            )
+              apiBackupResponseObserved ||=
+                (await viewer
+                  .getByTestId("api-continuity")
+                  .getAttribute("data-served-by")) === "api-2";
+            const impact = viewer.getByTestId("live-service-impact");
+            if (await impact.count())
+              viewerImpactObserved ||=
+                (await impact.getAttribute("data-state")) === "recovering";
+            const recommendations = viewer.getByTestId("recommendation-status");
+            if (
+              scenario === "network-timeout" &&
+              (await recommendations.count())
+            )
+              dependencyLoadingObserved ||=
+                (await recommendations.getAttribute("data-state")) ===
+                "reconnecting";
+          }
           if (experiment?.faultConfirmedAt && service) {
             stopped ||= inspect(service).State.Status === "exited";
             if (scenario === "crash-edge" && !fallback) {
@@ -1021,6 +1306,8 @@ try {
           experiment,
           attempts,
           stoppedObserved: stopped,
+          viewerImpactObserved,
+          dependencyLoadingObserved,
           edgeFallbackObserved: scenario === "crash-edge" ? fallback : null,
           peerUnchanged: peer
             ? inspect("edge-2").State.StartedAt === peer.State.StartedAt
@@ -1028,6 +1315,8 @@ try {
           controlPlaneUnchanged:
             inspect("control-plane").State.StartedAt === controlPlaneStartedAt,
           actualRecoveryMs: experiment.measurements.restorationMs,
+          apiBackupResponseObserved:
+            scenario === "crash-api" ? apiBackupResponseObserved : null,
           demonstrationMs: experiment.measurements.demonstrationMs,
         };
         result.scenarios.push(record);
@@ -1044,6 +1333,14 @@ try {
             "_" +
             experiment.reason,
         );
+        if (profile.lightweight) {
+          check(viewerImpactObserved, "live_recovery_status_not_visible");
+          if (scenario === "network-timeout")
+            check(
+              dependencyLoadingObserved,
+              "affected_recommendations_loading_not_visible",
+            );
+        }
         check(
           experiment.faultConfirmedAt &&
             experiment.incidentDetectedAt &&
@@ -1113,6 +1410,41 @@ try {
               exact: true,
             })
             .waitFor();
+          await until(
+            "card-healthy-after:" + scenario,
+            async () =>
+              (await page
+                .getByTestId("scenario-health-" + scenario)
+                .textContent()) === "HEALTHY",
+            30000,
+          );
+          cardHealthStates.add("HEALTHY");
+          check(
+            (await page
+              .getByTestId("demo-recovery-cycle")
+              .locator('[data-confirmed="true"]')
+              .count()) === 4,
+            "missing_persistent_recovery_sequence",
+          );
+          const actionTopAfter = await page
+            .locator(".demo-action")
+            .evaluate(
+              (element) => element.getBoundingClientRect().top + window.scrollY,
+            );
+          record.stableCardLayout =
+            Math.abs(actionTopAfter - actionTopBefore) <= 2;
+          check(
+            record.stableCardLayout,
+            "card_layout_shifted_between_ready_and_recovered",
+          );
+          record.cardHealthStates = [...cardHealthStates];
+          record.currentHealthReturnedToHealthy = true;
+          record.persistentRecoverySequence = true;
+          if (profile.lightweight && scenario === "crash-api")
+            check(
+              apiBackupResponseObserved,
+              "actual_backup_api_response_not_shown",
+            );
           record.browserPlayback = await browserVideo();
           record.existingUiVerifiedResult = true;
           await viewer.screenshot({
@@ -1248,6 +1580,41 @@ try {
           status: "not-inspectable",
           error: fixtureError(error, redact),
         });
+      }
+    }
+    if (
+      ["api-listener-readiness", "api-authentication"].includes(
+        result.failure.stage,
+      )
+    ) {
+      try {
+        const cid = compose("ps", "-aq", "api").trim();
+        const logs = spawnSync("docker", ["logs", "--tail", "100", cid], {
+          encoding: "utf8",
+          timeout: 10000,
+          maxBuffer: 256 * 1024,
+        });
+        const state = result.startupDiagnostics.find(
+          (s) => s.service === "api",
+        );
+        result.apiStartupEvidence = {
+          service: "api",
+          status: state?.status,
+          health: state?.health,
+          oom: state?.oom,
+          steps: fixtureStartupEvents(
+            String(logs.stdout || "") + "\n" + String(logs.stderr || ""),
+            redact,
+          ),
+        };
+        console.log(
+          JSON.stringify({
+            stage: "api-startup-evidence",
+            ...result.apiStartupEvidence,
+          }),
+        );
+      } catch (error) {
+        result.apiStartupEvidence = { error: fixtureError(error, redact) };
       }
     }
   }

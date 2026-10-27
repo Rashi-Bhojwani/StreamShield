@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   parseChaosSnapshot,
   type ChaosSnapshot,
@@ -19,6 +20,7 @@ export function Confirmation({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
+  const cache = useQueryClient();
   const ref = useRef<HTMLDialogElement>(null),
     identity = useRef(crypto.randomUUID()),
     inFlight = useRef(false),
@@ -68,6 +70,22 @@ export function Confirmation({
         }
       }
       if (result) {
+        const created = result;
+        await cache.cancelQueries({ queryKey: ["monitoring", "chaos"] });
+        cache.setQueryData<ChaosSnapshot>(
+          ["monitoring", "chaos"],
+          (previous) =>
+            previous
+              ? {
+                  ...previous,
+                  activeId: created.id,
+                  experiments: [
+                    created,
+                    ...previous.experiments.filter((e) => e.id !== created.id),
+                  ].slice(0, 100),
+                }
+              : previous,
+        );
         onCreated(result.id);
         onClose();
       }
@@ -114,9 +132,10 @@ export function Confirmation({
       )}
       {scenario.realWorldCause && (
         <p className="chaos-cause">
-          <strong>Real-world cause:</strong> {scenario.realWorldCause} The demo
-          injects the same end state on purpose; the Healer is never told the
-          cause.
+          <strong>Real-world cause:</strong> {scenario.realWorldCause}{" "}
+          {scenario.kind === "manual"
+            ? "This demo simulates the unavailable prerequisite; no real private key is destroyed."
+            : "The demo injects the same end state on purpose; the Healer is never told the cause."}
         </p>
       )}
       <dl className="chaos-confirm-facts">
@@ -127,17 +146,21 @@ export function Confirmation({
         <div>
           <dt>Safety deadline</dt>
           <dd>
-            {Math.round(snapshot.timeoutMs / 1000)} seconds; an unresolved
-            experiment times out.
+            {scenario.kind === "manual"
+              ? "No timed automatic repair. The gate stays blocked until an authorized operator resets this simulation or stops the disposable demo."
+              : `${Math.round(snapshot.timeoutMs / 1000)} seconds; an unresolved experiment times out.`}
           </dd>
         </div>
         <div>
           <dt>Temporary network fault</dt>
           <dd>
-            {scenario.id === "network-timeout" || scenario.id === "external-api"
-              ? Math.round(snapshot.faultDurationMs / 1000) +
-                " seconds; owned fault removal is cleanup."
-              : "A crash cannot be undone by cancellation. The independent Healer must repair it."}
+            {scenario.kind === "manual"
+              ? "Manual restoration is required. A restart, cancellation or timer cannot recreate external signing authority."
+              : scenario.id === "network-timeout" ||
+                  scenario.id === "external-api"
+                ? Math.round(snapshot.faultDurationMs / 1000) +
+                  " seconds; owned fault removal is cleanup."
+                : "A crash cannot be undone by cancellation. The independent Healer must repair it."}
           </dd>
         </div>
       </dl>

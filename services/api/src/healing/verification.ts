@@ -247,28 +247,47 @@ export class Verifier {
     };
   }
   async crashBaseline() {
-    for (const component of ["api-1", "api-2"]) {
-      const ready = JSON.parse(await this.text(this.url(component)));
-      if (ready.status !== "ready") throw new Error("api_readiness_unverified");
-      const catalog = JSON.parse(
-        await this.text(this.url(component, "/api/v1/streams")),
-      );
-      if (!Array.isArray(catalog.streams))
-        throw new Error("api_catalog_unverified");
-    }
-    const catalog = JSON.parse(
-      await this.text(this.url("api-gateway", "/api/v1/streams")),
-    );
-    if (!Array.isArray(catalog.streams))
-      throw new Error("gateway_catalog_unverified");
-    const paths = await this.paths();
-    if (!paths.length) throw new Error("live_source_required");
-    const result = await this.hls("video-gateway", paths);
+    // Keep independent API and media results separate; one failed check must
+    // not turn a successful check of the other subsystem into a failure.
+    const [api, video] = await Promise.allSettled([
+      (async () => {
+        await Promise.all(
+          ["api-1", "api-2", "api-gateway"].map(async (component) => {
+            await Promise.all([
+              ...(component === "api-gateway"
+                ? []
+                : [
+                    this.text(this.url(component)).then((body) => {
+                      if (JSON.parse(body).status !== "ready")
+                        throw Error("api_readiness_unverified");
+                    }),
+                  ]),
+              this.text(this.url(component, "/api/v1/streams")).then((body) => {
+                if (!Array.isArray(JSON.parse(body).streams))
+                  throw Error("api_catalog_unverified");
+              }),
+            ]);
+          }),
+        );
+        return true;
+      })(),
+      (async () => {
+        const paths = await this.paths();
+        if (!paths.length) throw Error("live_source_required");
+        const result = await this.hls("video-gateway", paths);
+        return {
+          paths: paths.length,
+          progressing: result.progressing,
+          ok: result.ok && result.progressing > 0,
+        };
+      })(),
+    ]);
     return {
-      api: true,
-      gateway: result.ok && result.progressing > 0,
-      sourceCount: paths.length,
-      progressingPaths: result.progressing,
+      api: api.status === "fulfilled",
+      gateway: video.status === "fulfilled" && video.value.ok,
+      sourceCount: video.status === "fulfilled" ? video.value.paths : 0,
+      progressingPaths:
+        video.status === "fulfilled" ? video.value.progressing : 0,
     };
   }
   async unavailable(component: string) {

@@ -82,6 +82,17 @@ export class ChaosJournal {
     // A cancellation HTTP request can arrive while the background loop awaits I/O.
     // Preserve that durable intent when the older in-flight snapshot is saved.
     const current = this.get(e.id);
+    if (current?.evidence.operatorResetRequestedAt) {
+      e.evidence.operatorResetRequestedAt =
+        current.evidence.operatorResetRequestedAt;
+      e.evidence.operatorResetRequestedBy =
+        current.evidence.operatorResetRequestedBy ?? null;
+      for (const event of current.events.filter(
+        (x) => x.kind === "OPERATOR_RESET_REQUESTED",
+      ))
+        if (!e.events.some((x) => x.kind === event.kind && x.at === event.at))
+          e.events.push(event);
+    }
     if (current?.cancelRequestedBy) {
       e.cancelRequestedBy = current.cancelRequestedBy;
       for (const event of current.events.filter(

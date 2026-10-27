@@ -496,7 +496,8 @@ export class Healer {
           this.transition(a, "ESCALATED", "audit_database_unavailable");
         return false;
       }
-      if (a.action !== "safe_read_retry") await this.containerEvidence(a);
+      const containerInspected =
+        a.action !== "safe_read_retry" && (await this.containerEvidence(a));
       if (
         a.action === "start_spare_capacity" &&
         a.evidence.containerState === "running"
@@ -510,6 +511,25 @@ export class Healer {
         return true;
       }
       if (a.action === "restart_unresponsive_service") {
+        if (containerInspected && a.evidence.containerState === "exited") {
+          // A Docker-confirmed exit supersedes an earlier timeout diagnosis.
+          // Re-evaluate the start policy next cycle before issuing any action.
+          const start = playbooks.find(
+            (p) =>
+              p.action === "start_stopped_service" &&
+              p.services.includes(a.component),
+          )!;
+          a.playbook = start.id;
+          a.action = start.action;
+          a.diagnosis = start.diagnosis + " (revised: Docker confirms exited)";
+          a.evidence.diagnosisRevised = true;
+          this.transition(
+            a,
+            "SCHEDULED",
+            "diagnosis_revised_to_start_after_container_exit",
+          );
+          return true;
+        }
         // The Healer's own direct probe must also time out before any restart.
         const outcome = await this.corroborate(a);
         a.evidence.corroboration = outcome;
@@ -771,9 +791,11 @@ export class Healer {
       a.evidence.containerExitCode =
         typeof r.body.exitCode === "number" ? r.body.exitCode : null;
       a.evidence.containerStartedAtBefore = r.body.startedAt || null;
+      return true;
     } catch {
       /* Evidence only; the adapter still enforces its own preconditions. */
     }
+    return false;
   }
   private async peerProbe(component: string) {
     const peer = component === "api-1" ? "api-2" : "api-1";

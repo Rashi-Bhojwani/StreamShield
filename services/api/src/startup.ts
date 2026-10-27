@@ -22,9 +22,19 @@ export class StartupFailure extends Error {
 }
 
 export async function startupStep<T>(stage: StartupStage, run: () => T) {
+  const trace = (state: "STARTING" | "COMPLETE" | "FAILED") => {
+    if (process.env.FIXTURE_STARTUP_TRACE === "true")
+      process.stderr.write(
+        JSON.stringify({ event: "fixture_startup_step", stage, state }) + "\n",
+      );
+  };
+  trace("STARTING");
   try {
-    return await run();
+    const result = await run();
+    trace("COMPLETE");
+    return result;
   } catch (error) {
+    trace("FAILED");
     if (error instanceof StartupFailure) throw error;
     throw new StartupFailure(stage, error);
   }

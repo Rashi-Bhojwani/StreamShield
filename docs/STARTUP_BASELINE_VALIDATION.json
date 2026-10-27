@@ -1,0 +1,96 @@
+{
+  "test": "Actual isolated API crash during startup, independently healed before a fresh 30-second idle baseline",
+  "platform": "linux",
+  "startedAt": "2026-10-26T21:36:57.051Z",
+  "project": "ss-light-1e6fedbb",
+  "fault": {
+    "component": "api-1",
+    "mechanism": "External acceptance check sends SIGKILL only to its newly created fixture API container",
+    "injectedAt": "2026-10-26T21:37:54.733Z",
+    "previousStartedAt": "2026-10-26T21:37:19.463420788Z"
+  },
+  "exitCode": 0,
+  "runId": "1e6fedbb",
+  "fixtureStatus": "DEMO_STOPPED",
+  "error": null,
+  "startupHistory": {
+    "recoveryAttempts": [
+      {
+        "id": "25e4511d-022a-4cb5-8405-5b26edd1712b",
+        "component": "api-1",
+        "state": "VERIFIED",
+        "reason": "independent_behavior_verified",
+        "finishedAt": "2026-10-26T21:38:05.932Z",
+        "databasePersisted": true
+      }
+    ],
+    "incidents": [
+      {
+        "id": "b062fcc7-d432-4c1a-a731-7b41806bd78e",
+        "component": "api-1",
+        "state": "RESOLVED",
+        "verified_at": "2026-10-26T21:38:07.927Z",
+        "resolved_at": "2026-10-26T21:38:07.927Z"
+      }
+    ]
+  },
+  "startupRestarts": [
+    {
+      "service": "api",
+      "previous": "2026-10-26T21:37:19.463420788Z",
+      "startedAt": "2026-10-26T21:38:00.149286997Z"
+    }
+  ],
+  "stableIdleMs": 30000,
+  "noRecoveryBeforeClick": false,
+  "noRecoveryDuringStableWindow": true,
+  "browserPlayback": {
+    "observedAt": "2026-10-26T21:39:04.658Z",
+    "before": {
+      "currentTime": 0,
+      "width": 0,
+      "height": 0,
+      "frames": 0,
+      "paused": false
+    },
+    "after": {
+      "currentTime": 4.077209,
+      "width": 640,
+      "height": 360,
+      "frames": 5,
+      "paused": false
+    },
+    "newMediaResponses": 8
+  },
+  "cleanedContainers": 13,
+  "userEnvUnchanged": true,
+  "startupWait": {
+    "stage": "idle-baseline-stable",
+    "status": "PASS",
+    "startedAt": "2026-10-26T21:37:54.709Z",
+    "timeoutMs": 120000,
+    "attempts": 101,
+    "lastObservation": {
+      "stableForMs": 29824.028921000005,
+      "requiredStableMs": 30000
+    },
+    "lastObservationAt": "2026-10-26T21:39:01.227Z",
+    "elapsedMs": 67125.741598,
+    "finishedAt": "2026-10-26T21:39:01.835Z"
+  },
+  "status": "PASS",
+  "finishedAt": "2026-10-26T21:39:17.024Z",
+  "change": "Startup admission distinguishes verified/resolved history from unresolved work and resets the quiet window on new activity; historical evidence and action budgets are preserved.",
+  "checks": {
+    "unitTestsPassed": 498,
+    "testFilesPassed": 43,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "regressionTests": "Resolved/verified startup history, active and escalated attempts, missing verification/persistence, stale/unavailable history, open incidents and a fresh quiet window after intervening activity."
+  },
+  "limitations": [
+    "Linux Docker/Chromium with an actual generated live source; not a physical Windows Docker Desktop/device/firewall verification.",
+    "The original Windows report provided historical counts without repair/incident states; the new diagnostics retain unresolved record details instead of assuming those records were closed."
+  ]
+}

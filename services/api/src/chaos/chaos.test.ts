@@ -164,7 +164,7 @@ describe("chaos authority and admission", () => {
       expect(() => chaosConfig({ ...env, ...overrides })).toThrow();
   });
   it("shows unsafe/unowned scenarios as disabled with explicit reasons", () => {
-    expect(scenarios.filter((s) => s.supported)).toHaveLength(11);
+    expect(scenarios.filter((s) => s.supported)).toHaveLength(12);
     expect(
       scenarios
         .filter((s) => !s.supported)
@@ -470,6 +470,33 @@ describe("durable chaos lifecycle", () => {
       );
     },
   );
+  it("captures actual edge failover with the accepted fault receipt before a fast repair can hide it", async () => {
+    const { engine, e, j } = await submitted();
+    e.scenario = "crash-edge";
+    e.target = "edge-1";
+    e.state = "INJECTING";
+    e.evidence.edgeBefore = "edge-1";
+    const observedAt = new Date().toISOString();
+    engine.verifier.unavailable = vi
+      .fn()
+      .mockResolvedValue({ unavailable: true });
+    engine.verifier.edgeRoute = vi
+      .fn()
+      .mockResolvedValue({ edge: "edge-2", observedAt });
+    await engine["receipt"](e, {
+      state: "CONFIRMED",
+      injectedAt: observedAt,
+      confirmedAt: observedAt,
+      expiresAt: Date.now() + 180000,
+      cleanup: "NOT_REQUIRED",
+      evidence: { killAccepted: true, stoppedObserved: true },
+    });
+    expect(j.get(e.id)).toMatchObject({
+      state: "FAULT_CONFIRMED",
+      evidence: { edgeAfter: "edge-2", edgeFailoverObservedAt: observedAt },
+    });
+    expect(e.recoveryIds).toHaveLength(0);
+  });
 });
 
 const attempt = (
@@ -1000,4 +1027,159 @@ it("does not treat terminal bookkeeping or a foreign stale baseline marker as ve
   j.save(e);
   j.synced(e);
   expect(engine.reason("crash-video-gateway")).toContain("unverified");
+});
+describe("operator-only media authority failure", () => {
+  it("retains the missing-authority lock across a controller journal reopen", async () => {
+    const { engine, store } = fixture();
+    const directory = mkdtempSync(join(tmpdir(), "ss-media-authority-"));
+    dirs.push(directory);
+    const path = join(directory, "experiments.sqlite");
+    engine.journal = journal(path);
+    engine.c.CHAOS_MEDIA_GATE_ENABLED = "true";
+    const e = await engine.submit(
+      randomUUID(),
+      randomUUID(),
+      "media-authority-loss",
+      "media-authority",
+    );
+    e.injectedAt = new Date().toISOString();
+    e.evidence.externalAuthorityUnavailable = true;
+    engine.journal.save(e);
+    const reopened = new ChaosEngine(
+      engine.c,
+      journal(path),
+      store as unknown as ChaosStore,
+      engine.verifier,
+    );
+    expect(reopened.mediaAccessBlocked()).toBe(true);
+  });
+  it("is unavailable unless the real disposable delivery gate is installed", () => {
+    expect(fixture().engine.reason("media-authority-loss")).toContain(
+      "media authorization gate",
+    );
+  });
+  it("blocks actual delivery, waits beyond a deadline without claiming healing, and verifies explicit human restoration", async () => {
+    vi.useFakeTimers();
+    try {
+      const { engine, j, store } = fixture();
+      engine.c.CHAOS_MEDIA_GATE_ENABLED = "true";
+      const control = vi.spyOn(engine, "control");
+      engine.verifier.paths = vi.fn().mockResolvedValue(["live"]);
+      engine.verifier.url = vi
+        .fn()
+        .mockReturnValue("http://gateway.test/primary/live/index.m3u8");
+      engine.verifier.hls = vi.fn().mockResolvedValue({ ok: false });
+      const fetch = vi.fn().mockResolvedValue(
+        new Response("", {
+          status: 503,
+          headers: { "X-Media-Authority": "unavailable" },
+        }),
+      );
+      vi.stubGlobal("fetch", fetch);
+      const e = await engine.submit(
+        randomUUID(),
+        randomUUID(),
+        "media-authority-loss",
+        "media-authority",
+      );
+      const advance = () => engine["advance"](j.get(e.id)!);
+      await advance();
+      await advance();
+      expect(engine.mediaAccessBlocked()).toBe(true);
+      expect(control).not.toHaveBeenCalled();
+      await advance();
+      expect(j.get(e.id)).toMatchObject({
+        state: "AWAITING_OPERATOR",
+        evidence: { deliveryDenied: true, automaticRecoveryPossible: false },
+      });
+      const waiting = j.get(e.id)!;
+      waiting.deadline = Date.now() - 1000;
+      j.save(waiting);
+      await advance();
+      expect(j.get(e.id)?.state).toBe("AWAITING_OPERATOR");
+      expect(engine.mediaAccessBlocked()).toBe(true);
+      expect(() => engine.cancel(e.id, e.actor)).toThrow(
+        "operator_restore_required",
+      );
+      expect(() => engine.requestOperatorReset(e.id, e.actor, "wrong")).toThrow(
+        "confirmation_required",
+      );
+      engine.requestOperatorReset(e.id, e.actor, "media-authority");
+      store.sync.mockRejectedValueOnce(Error("audit down"));
+      await expect(advance()).rejects.toThrow("audit down");
+      expect(engine.mediaAccessBlocked()).toBe(true);
+      await advance();
+      expect(engine.mediaAccessBlocked()).toBe(false);
+      await advance();
+      expect(j.get(e.id)?.verifiedAt).toBeNull();
+      vi.mocked(engine.verifier.hls).mockResolvedValue({
+        ok: true,
+        paths: 1,
+      } as never);
+      await advance();
+      await vi.advanceTimersByTimeAsync(2500);
+      await advance();
+      expect(j.get(e.id)).toMatchObject({
+        state: "COMPLETED",
+        actionStartedAt: null,
+        recoveryIds: [],
+        evidence: {
+          automaticallyHealed: false,
+          independentBehaviorVerified: true,
+        },
+      });
+      expect(
+        j.get(e.id)?.events.some((e) => e.kind === "OPERATOR_ACCESS_RESTORED"),
+      ).toBe(true);
+      expect(control).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+  it("does not confirm an unrelated network error as a media authorization fault", async () => {
+    const { engine, j } = fixture();
+    engine.c.CHAOS_MEDIA_GATE_ENABLED = "true";
+    engine.verifier.paths = vi.fn().mockResolvedValue(["live"]);
+    engine.verifier.url = vi.fn().mockReturnValue("http://gateway.test/");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("", { status: 503 })),
+    );
+    try {
+      const e = await engine.submit(
+        randomUUID(),
+        randomUUID(),
+        "media-authority-loss",
+        "media-authority",
+      );
+      await engine["advance"](j.get(e.id)!);
+      await engine["advance"](j.get(e.id)!);
+      await engine["advance"](j.get(e.id)!);
+      expect(j.get(e.id)?.state).toBe("INJECTING");
+      expect(j.get(e.id)?.faultConfirmedAt).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  it("preserves a human reset that arrives while an earlier observation is in flight", async () => {
+    const { engine, j } = fixture();
+    engine.c.CHAOS_MEDIA_GATE_ENABLED = "true";
+    const e = await engine.submit(
+      randomUUID(),
+      randomUUID(),
+      "media-authority-loss",
+      "media-authority",
+    );
+    e.injectedAt = new Date().toISOString();
+    e.evidence.externalAuthorityUnavailable = true;
+    j.save(e);
+    const stale = j.get(e.id)!;
+    engine.requestOperatorReset(e.id, e.actor, "media-authority");
+    j.save(stale);
+    expect(j.get(e.id)?.evidence.operatorResetRequestedBy).toBe(e.actor);
+    expect(
+      j.get(e.id)?.events.filter((e) => e.kind === "OPERATOR_RESET_REQUESTED"),
+    ).toHaveLength(1);
+  });
 });

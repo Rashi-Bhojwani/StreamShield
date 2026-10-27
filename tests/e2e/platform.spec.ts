@@ -137,7 +137,10 @@ test("real accounts, Studio/channel/stream, session restoration, chat and respon
       password,
     );
     ids.push(viewer.user.id);
-    await page.goto(watchHref!);
+    await page.goto("/studio");
+    await expect(
+      page.getByRole("complementary", { name: "Broadcast live comments" }),
+    ).toBeVisible();
     const viewerPage = await viewerContext.newPage();
     await viewerPage.goto(watchHref!);
     await expect(page.getByText("Connected", { exact: true })).toBeVisible();
@@ -156,6 +159,13 @@ test("real accounts, Studio/channel/stream, session restoration, chat and respon
     await expect(
       page.getByRole("log", { name: "Chat messages" }),
     ).toContainText("Hello from another viewer.");
+    await expect(page.getByLabel("Your message")).toHaveValue("");
+    await page.getByLabel("Your message").fill("Replying live from Studio.");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(
+      viewerPage.getByRole("log", { name: "Chat messages" }),
+    ).toContainText("Replying live from Studio.");
+    await page.goto(watchHref!);
     await viewerPage.reload();
     await expect(
       viewerPage.getByRole("log", { name: "Chat messages" }),

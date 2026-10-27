@@ -27,7 +27,7 @@ export function useChaos() {
         throw error;
       }
     },
-    refetchInterval: 3000,
+    refetchInterval: (query) => (query.state.data?.activeId ? 1000 : 3000),
     retry: false,
   });
   const reason = chaosReadiness(

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { io, type Socket } from "socket.io-client";
 import {
@@ -16,10 +16,12 @@ export function Chat({
   playerContainer,
   ownerUsername,
   onStatus,
+  mode = "viewer",
 }: {
   streamId: string;
   playerContainer: RefObject<HTMLElement | null>;
   ownerUsername?: string;
+  mode?: "viewer" | "broadcaster";
   /** Observes real connection-state changes (presentation evidence). */
   onStatus?: (status: string) => void;
 }) {
@@ -32,6 +34,7 @@ export function Chat({
     [hasOlder, setHasOlder] = useState(false),
     [delivered, setDelivered] = useState(false);
   const refreshAuth = auth.refresh;
+  const composerId = useId();
   const socket = useRef<Socket | null>(null),
     list = useRef<HTMLDivElement>(null),
     follow = useRef(true);
@@ -158,6 +161,7 @@ export function Chat({
       const video = playerContainer.current?.querySelector("video");
       const time = video?.currentTime || 0;
       const playing =
+        mode === "viewer" &&
         !!video &&
         !video.paused &&
         !video.ended &&
@@ -221,6 +225,7 @@ export function Chat({
     auth.heartbeatMs,
     playerContainer,
     refreshAuth,
+    mode,
   ]);
   const statusSubscriber = useRef(onStatus);
   useEffect(() => {
@@ -265,11 +270,19 @@ export function Chat({
       );
   };
   return (
-    <aside className="chat-panel real-chat" aria-label="Live chat">
+    <aside
+      className={
+        "chat-panel real-chat" +
+        (mode === "broadcaster" ? " broadcaster-chat" : "")
+      }
+      aria-label={
+        mode === "broadcaster" ? "Broadcast live comments" : "Live chat"
+      }
+    >
       <div className="chat-heading">
         <h2>
           <Icon name="chat" />
-          Live chat
+          {mode === "broadcaster" ? "Stream chat" : "Live chat"}
         </h2>
         <span
           className={
@@ -298,6 +311,11 @@ export function Chat({
           </span>
         )}
       </div>
+      {mode === "broadcaster" && (
+        <p className="broadcaster-chat-note">
+          Your audience, right here. Reply without leaving your broadcast.
+        </p>
+      )}
       <p className="viewer-estimate">
         {presence.isError || presence.isPending
           ? "Viewer estimate unavailable"
@@ -502,11 +520,11 @@ export function Chat({
       >
         {auth.user || auth.guest ? (
           <>
-            <label className="sr-only" htmlFor="chat-message">
+            <label className="sr-only" htmlFor={composerId}>
               Your message
             </label>
             <textarea
-              id="chat-message"
+              id={composerId}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               maxLength={1000}

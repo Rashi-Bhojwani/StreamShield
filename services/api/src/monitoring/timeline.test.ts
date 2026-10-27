@@ -26,6 +26,49 @@ const experiment = {
   verifiedAt: at(25),
   finishedAt: at(25),
 } as ChaosExperiment;
+it("represents confirmed video denial even when the gateway process is healthy, and labels human restoration", () => {
+  const e = {
+    ...experiment,
+    scenario: "media-authority-loss",
+    target: "media-authority",
+    actionStartedAt: null,
+    faultConfirmedAt: at(10),
+    evidence: { operatorRestoredAt: at(30) },
+    events: [
+      {
+        kind: "HUMAN_ACTION_REQUIRED",
+        at: at(11),
+        detail: "missing authority",
+      },
+      { kind: "OPERATOR_ACCESS_RESTORED", at: at(30), detail: "human" },
+    ],
+  } as ChaosExperiment;
+  const timeline = buildTimeline({
+    from: at(0),
+    to: at(60),
+    changes: [
+      {
+        component: "video-gateway",
+        state: "HEALTHY",
+        code: "probe_ok",
+        at: at(0),
+      },
+    ],
+    attempts: [],
+    experiments: [e],
+  });
+  expect(timeline.overall).toMatchObject([
+    { tone: "healthy", durationMs: 10000 },
+    { tone: "failed", durationMs: 20000 },
+    { tone: "healthy", durationMs: 30000 },
+  ]);
+  expect(
+    timeline.events.some((e) => e.label.includes("not automatic healing")),
+  ).toBe(true);
+  expect(timeline.events.some((e) => e.label.startsWith("Healer acted"))).toBe(
+    false,
+  );
+});
 describe("health timeline from persisted evidence", () => {
   const timeline = buildTimeline({
     from: at(0),

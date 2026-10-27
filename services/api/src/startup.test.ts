@@ -2,13 +2,39 @@ import { createServer } from "node:http";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { parseEnv } from "node:util";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import {
   listenReady,
   startupStep,
   startupDiagnostic,
   StartupFailure,
 } from "./startup.js";
+
+it("traces only the fixture startup stage and outcome, including failures without exposing their inputs", async () => {
+  vi.stubEnv("FIXTURE_STARTUP_TRACE", "true");
+  const output = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+  try {
+    expect(await startupStep("resources", () => "private returned value")).toBe(
+      "private returned value",
+    );
+    await expect(
+      startupStep("postgres", () => {
+        throw Error("private driver value");
+      }),
+    ).rejects.toBeInstanceOf(StartupFailure);
+    const lines = output.mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(lines.map(({ stage, state }) => [stage, state])).toEqual([
+      ["resources", "STARTING"],
+      ["resources", "COMPLETE"],
+      ["postgres", "STARTING"],
+      ["postgres", "FAILED"],
+    ]);
+    expect(JSON.stringify(lines)).not.toContain("private");
+  } finally {
+    output.mockRestore();
+    vi.unstubAllEnvs();
+  }
+});
 
 it("retains the failing dependency and original driver exception", async () => {
   const cause = Object.assign(

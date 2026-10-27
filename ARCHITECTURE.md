@@ -1,5 +1,10 @@
 # StreamShield architecture
 
+For the current branch's consolidated explanation, read the
+[complete technical guide](docs/TECHNICAL_GUIDE.md). The sections below retain
+phase-by-phase architecture history; early statements about unimplemented
+features describe those earlier phases.
+
 ## Implemented: foundation and real live video
 
 An npm workspace contains React/Vite (`apps/web`), Express (`services/api`) and small Zod contracts (`packages/shared`). The foundation remains intact: strict configuration, request IDs, structured logging, bounded JSON input, CORS, liveness/readiness and graceful API draining. React Router adds a watch route; TanStack Query polls actual observations. There are no user accounts, database or administrative application routes yet.

@@ -18,6 +18,7 @@ import { standby } from "../monitoring/policy.js";
 import {
   authorityFor,
   generated,
+  manual,
   chaosConfig,
   scenarioFor,
   scenarios,
@@ -90,6 +91,39 @@ export class ChaosEngine {
     const data = await r.json();
     if (!r.ok) throw Error(data.code || "fault_control_unavailable");
     return data;
+  }
+  /** A disposable simulation, not a real signing service. No credentials are
+   * generated, removed or returned. The durable lock blocks actual HLS reads. */
+  mediaAccessBlocked() {
+    return (
+      this.c.CHAOS_MEDIA_GATE_ENABLED === "true" &&
+      this.journal
+        .all()
+        .some(
+          (e) =>
+            manual(e.scenario) &&
+            e.evidence.externalAuthorityUnavailable === true,
+        )
+    );
+  }
+  requestOperatorReset(id: string, actor: string, confirmation: string) {
+    const e = this.journal.get(id);
+    if (!e || !manual(e.scenario)) throw Error("experiment_not_found");
+    if (!this.c.enabled || this.c.CHAOS_MEDIA_GATE_ENABLED !== "true")
+      throw Error("chaos_disabled");
+    if (confirmation !== "media-authority")
+      throw Error("confirmation_required");
+    if (!e.injectedAt) throw Error("fault_not_confirmed");
+    if (!e.evidence.operatorResetRequestedAt) {
+      e.evidence.operatorResetRequestedAt = new Date().toISOString();
+      e.evidence.operatorResetRequestedBy = actor;
+      this.event(
+        e,
+        "OPERATOR_RESET_REQUESTED",
+        "Administrator requested restoration of the simulated external media authority. This is human intervention, not automatic healing.",
+      );
+    }
+    return e;
   }
   availabilityReason(): string | null {
     if (!this.frame)
@@ -167,6 +201,7 @@ export class ChaosEngine {
         "crash-edge",
         "crash-video-gateway",
         "crash-primary",
+        "media-authority-loss",
       ].includes(id)
     )
       required.push(
@@ -204,6 +239,7 @@ export class ChaosEngine {
         "crash-edge",
         "crash-video-gateway",
         "crash-primary",
+        "media-authority-loss",
       ].includes(id) &&
       (!this.frame?.mediaAvailable ||
         !this.frame.media.some(
@@ -270,7 +306,11 @@ export class ChaosEngine {
         reason:
           result.api && result.gateway
             ? null
-            : "Waiting for actual valid gateway segments to advance. Keep the live source running.",
+            : !result.api && !result.gateway
+              ? "API catalog and video delivery checks are not verified. Check the API and live source."
+              : !result.api
+                ? "API catalog reads are not verified. Video delivery checks are separate."
+                : "Waiting for actual valid gateway segments to advance. Keep the live source running.",
       };
     } catch {
       reason =
@@ -284,6 +324,8 @@ export class ChaosEngine {
     if (!this.c.enabled) return "Explicit local chaos enablement is required.";
     if (!this.c.allowed.includes(id))
       return "Scenario disabled by deployment policy.";
+    if (manual(id) && this.c.CHAOS_MEDIA_GATE_ENABLED !== "true")
+      return "This scenario requires the disposable demo media authorization gate. Start the updated demo:light deployment.";
     if (!this.current()) return this.availabilityReason();
     if (!this.store.available)
       return "Experiment audit storage is unavailable.";
@@ -354,6 +396,7 @@ export class ChaosEngine {
     const disabled = (process.env.HEALER_DISABLED_PLAYBOOKS || "").split(",");
     if (
       !temporary(id) &&
+      !manual(id) &&
       s.targets.some(
         (t) =>
           !allowed.includes(authorityFor(t)) ||
@@ -361,7 +404,7 @@ export class ChaosEngine {
       )
     )
       return "The required independent Healer playbook is disabled.";
-    if (!temporary(id)) {
+    if (!temporary(id) && !manual(id)) {
       // Never inject a fault the Healer is not currently permitted to repair.
       if (!this.healer!.budgets)
         return "Healer repair budget is not reported yet.";
@@ -413,6 +456,9 @@ export class ChaosEngine {
         ? new Date(this.lastCompleted).toISOString()
         : null,
       activeId: experiments.find((e) => !terminal(e.state))?.id || null,
+      componentHealth: this.frame?.components.map(
+        ({ id, state, observedAt, code }) => ({ id, state, observedAt, code }),
+      ),
       faultDurationMs: this.c.CHAOS_FAULT_DURATION_MS,
       timeoutMs: this.c.CHAOS_TIMEOUT_MS,
       scenarios: scenarios.map((s) => ({
@@ -540,6 +586,8 @@ export class ChaosEngine {
   cancel(id: string, actor: string) {
     const e = this.journal.get(id);
     if (!e) throw Error("experiment_not_found");
+    if (manual(e.scenario) && e.injectedAt && !terminal(e.state))
+      throw Error("operator_restore_required");
     if (!terminal(e.state)) {
       e.cancelRequestedBy = actor;
       this.event(
@@ -561,6 +609,16 @@ export class ChaosEngine {
         0,
         Date.now() - Date.parse(e.injectedAt),
       );
+    if (manual(e.scenario)) {
+      e.cleanup =
+        e.evidence.externalAuthorityUnavailable === true
+          ? "PENDING"
+          : e.injectedAt
+            ? "COMPLETED"
+            : "NOT_REQUIRED";
+      this.transition(e, state, reason);
+      return;
+    }
     if (generated(e.scenario)) {
       const load = this.surges.get(e.id);
       if (load) {
@@ -657,7 +715,10 @@ export class ChaosEngine {
             "Fresh evidence unavailable; no unconfirmed fault or repair will be replayed",
           );
         }
-      else if (["PENDING", "FAILED"].includes(e.cleanup)) {
+      else if (
+        !manual(e.scenario) &&
+        ["PENDING", "FAILED"].includes(e.cleanup)
+      ) {
         try {
           const f = await this.control("/v1/faults/" + e.id);
           if (f.cleanup === "COMPLETED" || f.cleanup === "NOT_REQUIRED") {
@@ -795,7 +856,7 @@ export class ChaosEngine {
       );
       return;
     }
-    if (Date.now() > e.deadline) {
+    if (Date.now() > e.deadline && !manual(e.scenario)) {
       await this.finish(
         e,
         "TIMED_OUT",
@@ -875,6 +936,15 @@ export class ChaosEngine {
       await this.store.sync(e);
       this.journal.synced(e);
       if (this.journal.get(e.id)?.cancelRequestedBy) return;
+      if (manual(e.scenario)) {
+        e.injectedAt = new Date().toISOString();
+        e.evidence.externalAuthorityUnavailable = true;
+        e.evidence.simulatedExternalAuthority = true;
+        e.cleanup = "PENDING";
+        this.journal.save(e);
+        // The gate now denies real requests; confirmation requires a real 503.
+        return;
+      }
       if (generated(e.scenario)) {
         await this.startLoad(e);
         return;
@@ -892,6 +962,10 @@ export class ChaosEngine {
           "Injection response unconfirmed; reconcile the same UUID without repeating the POST",
         );
       }
+      return;
+    }
+    if (manual(e.scenario) && e.injectedAt) {
+      await this.advanceManual(e);
       return;
     }
     if (e.state === "INJECTING" && generated(e.scenario)) {
@@ -916,24 +990,7 @@ export class ChaosEngine {
       e.faultConfirmedAt &&
       !e.evidence.edgeFailoverObservedAt
     ) {
-      try {
-        const failed = await this.verifier.unavailable("edge-1");
-        if (failed.unavailable) {
-          const route = await this.verifier.edgeRoute("edge-2");
-          if (route && e.evidence.edgeBefore === "edge-1") {
-            e.evidence.edgeAfter = route.edge;
-            e.evidence.edgeFailoverObservedAt = route.observedAt;
-            this.event(
-              e,
-              "EDGE_FAILOVER_VERIFIED",
-              "Live manifest served by edge-2 while edge-1 was unavailable",
-              route.observedAt,
-            );
-          }
-        }
-      } catch {
-        // A failed request is never proof of successful failover.
-      }
+      await this.observeEdgeFailover(e);
     }
     if (e.state === "FAULT_CONFIRMED") {
       this.transition(
@@ -1237,6 +1294,126 @@ export class ChaosEngine {
       e,
       "COMPLETED",
       "Restoration independently verified and observation window completed",
+    );
+  }
+  private async observeEdgeFailover(e: ChaosExperiment) {
+    if (e.evidence.edgeFailoverObservedAt || e.evidence.edgeBefore !== "edge-1")
+      return;
+    try {
+      const failed = await this.verifier.unavailable("edge-1");
+      if (!failed.unavailable) return;
+      const route = await this.verifier.edgeRoute("edge-2");
+      if (!route) return;
+      e.evidence.edgeAfter = route.edge;
+      e.evidence.edgeFailoverObservedAt = route.observedAt;
+      this.event(
+        e,
+        "EDGE_FAILOVER_VERIFIED",
+        "Live manifest served by edge-2 while edge-1 was independently unavailable",
+        route.observedAt,
+      );
+    } catch {
+      // A failed or unauthorized request is never proof of successful failover.
+    }
+  }
+  private async advanceManual(e: ChaosExperiment) {
+    if (!e.evidence.operatorResetRequestedAt) {
+      if (e.state !== "AWAITING_OPERATOR") {
+        const paths = await this.verifier.paths();
+        if (!paths.length) return;
+        const denied = await Promise.all(
+          ["primary", "standby"].map(async (source) => {
+            const r = await fetch(
+              this.verifier.url(
+                "video-gateway",
+                "/" + source + "/" + paths[0] + "/index.m3u8",
+              ),
+              {
+                redirect: "error",
+                signal: AbortSignal.timeout(this.c.CHAOS_PROBE_TIMEOUT_MS),
+              },
+            );
+            const blocked =
+              r.status === 503 &&
+              r.headers.get("x-media-authority") === "unavailable";
+            await r.body?.cancel();
+            return blocked;
+          }),
+        );
+        const blocked = denied.every(Boolean);
+        if (!blocked) return;
+        e.faultConfirmedAt = new Date().toISOString();
+        e.incidentDetectedAt = e.faultConfirmedAt;
+        e.measurements.detectionMs =
+          Date.parse(e.faultConfirmedAt) - Date.parse(e.injectedAt!);
+        e.evidence.deliveryDenied = true;
+        e.evidence.bothVideoRoutesDenied = true;
+        e.evidence.automaticRecoveryPossible = false;
+        e.mechanism =
+          "External authority unavailable; no automatic key recreation or permission bypass";
+        this.event(
+          e,
+          "HUMAN_ACTION_REQUIRED",
+          "Actual video delivery is denied. Recovery needs an original private-key backup or privileged external signing-service access; the demo holds neither. Use the explicit operator reset to restore this simulation.",
+        );
+        this.transition(
+          e,
+          "AWAITING_OPERATOR",
+          "Human action required: restore external media authorization. Container restarts cannot recreate missing signing authority.",
+        );
+      }
+      return;
+    }
+    if (e.evidence.externalAuthorityUnavailable === true) {
+      // Persist operator intent before restoring the simulated prerequisite.
+      await this.store.sync(e);
+      this.journal.synced(e);
+      e.evidence.externalAuthorityUnavailable = false;
+      e.evidence.operatorRestoredAt = new Date().toISOString();
+      this.event(
+        e,
+        "OPERATOR_ACCESS_RESTORED",
+        "An administrator restored the simulated prerequisite. Automatic healing did not perform this action; video verification is still pending.",
+      );
+      this.transition(
+        e,
+        "VERIFYING",
+        "Human restoration recorded; checking real advancing video before reopening other experiments.",
+      );
+      return;
+    }
+    if (!this.current() || this.baselineReason(e.scenario)) {
+      this.stable.delete(e.id);
+      return;
+    }
+    const paths = await this.verifier.paths();
+    if (
+      !paths.length ||
+      !(
+        await Promise.all(
+          ["primary", "standby"].map((source) =>
+            this.verifier.hls("video-gateway", paths, source),
+          ),
+        )
+      ).every((result) => result.ok)
+    ) {
+      this.stable.delete(e.id);
+      return;
+    }
+    const since = this.stable.get(e.id) ?? Date.now();
+    this.stable.set(e.id, since);
+    if (Date.now() - since < 2000) return;
+    e.verifiedAt = new Date().toISOString();
+    e.measurements.restorationMs =
+      Date.parse(e.verifiedAt) - Date.parse(e.injectedAt!);
+    e.evidence.independentBehaviorVerified = true;
+    e.evidence.automaticallyHealed = false;
+    e.mechanism =
+      "Human restored simulated external authority; independent advancing-video verification";
+    await this.finish(
+      e,
+      "COMPLETED",
+      "Human restoration verified. Automatic healing was not possible and is not claimed.",
     );
   }
   private async startLoad(e: ChaosExperiment) {
@@ -1547,6 +1724,9 @@ export class ChaosEngine {
       e.evidence.livePathsAtInjection = this.frame.media.filter(
         (p) => p.publisher,
       ).length;
+    // Observe the real backup response immediately after the stopped receipt.
+    // Waiting for another full observer/Healer tick can miss a fast repair.
+    if (e.scenario === "crash-edge") await this.observeEdgeFailover(e);
     this.transition(
       e,
       "FAULT_CONFIRMED",

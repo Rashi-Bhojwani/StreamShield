@@ -5,6 +5,11 @@ import { createMediaService } from "../media.js";
 import type { Resources } from "./resources.js";
 import type { PlatformConfig } from "./config.js";
 import { PlatformError } from "./security.js";
+import {
+  MediaControlError,
+  mediaControlHeaders,
+  publisherConnections,
+} from "./media-control.js";
 const rowSchema = z
   .object({
     id: z.string(),
@@ -211,36 +216,12 @@ export async function kickPublisher(
   path: string,
   includeWebrtc = false,
 ) {
-  const headers = {
-    Authorization:
-      "Basic " +
-      Buffer.from(c.MEDIA_API_USER + ":" + c.MEDIA_API_PASSWORD).toString(
-        "base64",
-      ),
-  };
-  const signal = AbortSignal.timeout(c.MEDIA_PROBE_TIMEOUT_MS);
+  const headers = mediaControlHeaders(c);
+  const signal = AbortSignal.timeout(c.MEDIA_CONTROL_TIMEOUT_MS);
   try {
-    for (const protocol of [
-      "rtmpconns",
-      ...(includeWebrtc ? ["webrtcsessions"] : []),
-    ]) {
-      const response = await fetch(
-        c.MEDIA_API_BASE_URL + "/v3/" + protocol + "/list",
-        {
-          headers,
-          signal,
-          redirect: "error",
-        },
-      );
-      if (!response.ok) throw new Error("Control unavailable");
-      const list = z
-        .object({
-          items: z.array(
-            z.object({ id: z.uuid(), path: z.string(), state: z.string() }),
-          ),
-        })
-        .parse(await response.json());
-      for (const conn of list.items.filter(
+    const connections = await publisherConnections(c, includeWebrtc, signal);
+    for (const { protocol, items } of connections) {
+      for (const conn of items.filter(
         (conn) => conn.path === path && conn.state === "publish",
       )) {
         const result = await fetch(
@@ -250,11 +231,19 @@ export async function kickPublisher(
         if (!result.ok && result.status !== 404) throw new Error("Kick failed");
       }
     }
-  } catch {
+  } catch (error) {
+    const reason =
+      error instanceof MediaControlError
+        ? error.code
+        : signal.aborted
+          ? "media_control_timeout"
+          : "media_control_kick_unconfirmed";
     throw new PlatformError(
       503,
       "PUBLISHER_STOP_UNCONFIRMED",
-      "The key was revoked, but publisher disconnection could not be confirmed. Stop OBS and retry.",
+      "Publishing access is revoked, but publisher disconnection is unconfirmed (" +
+        reason +
+        "). Check media control before retrying.",
     );
   }
 }

@@ -98,6 +98,31 @@ export function stages(
       ["verified", "DEPENDENCY VERIFIED", e.verifiedAt, "recovered"],
     );
   }
+  if (e.scenario === "media-authority-loss") {
+    rows.splice(
+      3,
+      6,
+      [
+        "human",
+        "HUMAN ACTION REQUIRED",
+        eventAt(e, "HUMAN_ACTION_REQUIRED"),
+        "escalated",
+      ],
+      [
+        "operator",
+        "OPERATOR RESTORED ACCESS",
+        eventAt(e, "OPERATOR_ACCESS_RESTORED"),
+        "degraded",
+      ],
+      ["verified", "VIDEO RESTORATION VERIFIED", e.verifiedAt, "recovered"],
+      [
+        "restored",
+        "RESTORED BY OPERATOR",
+        e.state === "COMPLETED" ? e.finishedAt : null,
+        "recovered",
+      ],
+    );
+  }
   const injected = t(e.injectedAt);
   const out: Stage[] = rows.map(([id, label, at, tone]) => ({
     id,

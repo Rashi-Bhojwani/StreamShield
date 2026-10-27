@@ -16,28 +16,81 @@ export const demoNames = {
     "Network Disruption",
     "A temporary delay causes real timeouts; safe probes verify reconnection.",
   ],
+  "media-authority-loss": [
+    "Media Authorization Loss",
+    "Both video routes are blocked. Missing external signing authority requires human intervention.",
+  ],
 } as const;
 const completed = (e: ChaosExperiment) =>
   ["COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state);
 export const demoTerminal = completed;
+export function faultMayHaveBeenInjected(e: ChaosExperiment | undefined) {
+  return (
+    !!e &&
+    (!!e.injectedAt ||
+      !!e.faultConfirmedAt ||
+      (e.events.some((event) => event.kind === "INJECTING") &&
+        !e.events.some((event) => event.kind === "NO_ACCEPTED_FAULT")))
+  );
+}
+export function definitelyNoFaultInjected(e: ChaosExperiment | undefined) {
+  return !!e && completed(e) && !faultMayHaveBeenInjected(e);
+}
+export function baselineReverified(e: ChaosExperiment | undefined) {
+  return (
+    !!e?.evidence.terminalBaselineReverifiedAt &&
+    e.events.some((event) => event.kind === "BASELINE_REVERIFIED")
+  );
+}
+export function recoveryVerified(e: ChaosExperiment | undefined) {
+  return !!e?.verifiedAt && e.evidence.independentBehaviorVerified === true;
+}
 export function scenarioPresentationState(
   e: ChaosExperiment | undefined,
   healthy: boolean,
   fresh: boolean,
 ) {
-  if (!fresh) return "DEGRADED";
-  if (e && !completed(e))
-    return e.actionStartedAt || e.state === "VERIFYING" || !e.faultConfirmedAt
+  if (!fresh) return "UNKNOWN";
+  if (e?.state === "AWAITING_OPERATOR") return "HUMAN ACTION REQUIRED";
+  if (e && !completed(e)) {
+    if (healthy && recoveryVerified(e)) return "HEALTHY";
+    if (!e.faultConfirmedAt) return "PREPARING";
+    return e.actionStartedAt || e.state === "VERIFYING"
       ? "RECOVERING"
       : "FAILED";
-  if (e && ["FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state))
-    return "DEGRADED";
-  if (!healthy) return "DEGRADED";
-  if (e?.state === "COMPLETED")
-    return e.verifiedAt && e.evidence.independentBehaviorVerified === true
-      ? "HEALED"
+  }
+  if (!healthy)
+    return e &&
+      faultMayHaveBeenInjected(e) &&
+      !baselineReverified(e) &&
+      ["FAILED", "TIMED_OUT", "CANCELLED"].includes(e.state)
+      ? "RECOVERY FAILED"
       : "DEGRADED";
+  // A denied/cancelled request that injected nothing is history, not an outage.
+  if (
+    e &&
+    faultMayHaveBeenInjected(e) &&
+    !baselineReverified(e) &&
+    !(e.state === "COMPLETED" && recoveryVerified(e))
+  )
+    return "RECOVERY UNVERIFIED";
   return "HEALTHY";
+}
+export function systemPresentationState(
+  states: string[],
+  healthy: boolean,
+  fresh: boolean,
+) {
+  if (!fresh) return "Unknown";
+  if (states.includes("HUMAN ACTION REQUIRED")) return "Human action required";
+  if (states.includes("RECOVERY FAILED")) return "Recovery failed";
+  if (states.includes("FAILED")) return "Failure detected";
+  if (states.includes("RECOVERING")) return "Recovering";
+  if (states.includes("PREPARING")) return "Preparing failure";
+  if (states.includes("RECOVERY UNVERIFIED")) return "Recovery unverified";
+  if (states.includes("UNKNOWN")) return "Unknown";
+  if (states.includes("DEGRADED")) return "Degraded";
+  return healthy ? "Healthy" : "Degraded";
 }
 export function demoProgress(
   e: ChaosExperiment | undefined,
@@ -53,6 +106,7 @@ export function demoProgress(
   const event = (kind: string) =>
     e?.events.find((x) => x.kind === kind)?.at ?? null;
   const network = e?.scenario === "network-timeout";
+  const manual = e?.scenario === "media-authority-loss";
   const valid = (at: string | null | undefined) =>
     at && Number.isFinite(Date.parse(at)) && Date.parse(at) <= now ? at : null;
   const verified = valid(e?.verifiedAt);
@@ -72,18 +126,29 @@ export function demoProgress(
     { label: "Failure injected", at: valid(e?.faultConfirmedAt) },
     { label: "Failure detected", at: valid(e?.incidentDetectedAt) },
     {
-      label: "Recovery started",
+      label: manual ? "Human action required" : "Recovery started",
       at: valid(
-        network
-          ? event("CIRCUIT_OPEN") || e?.actionStartedAt
-          : e?.actionStartedAt,
+        manual
+          ? event("HUMAN_ACTION_REQUIRED")
+          : network
+            ? event("CIRCUIT_OPEN") || e?.actionStartedAt
+            : e?.actionStartedAt,
       ),
     },
     {
-      label: "Recovery in progress",
-      at: valid(network ? event("CLEANUP_COMPLETED") : event("VERIFYING")),
+      label: manual ? "Operator restored access" : "Recovery in progress",
+      at: valid(
+        manual
+          ? event("OPERATOR_ACCESS_RESTORED")
+          : network
+            ? event("CLEANUP_COMPLETED")
+            : event("VERIFYING"),
+      ),
     },
-    { label: "Recovery verified", at: verified },
+    {
+      label: manual ? "Human restoration verified" : "Recovery verified",
+      at: verified,
+    },
     {
       label: "Demo complete",
       at: e?.state === "COMPLETED" && verified ? valid(e.finishedAt) : null,
@@ -99,6 +164,8 @@ export function demoProgress(
   };
 }
 export function blockedNextStep(reason: string) {
+  if (/human action|external media authorization/i.test(reason))
+    return "Use Restore demo media authorization below, or stop this disposable demo. Automatic recovery cannot supply the missing external authority.";
   if (/auth|sign in/i.test(reason))
     return "Sign in again with an administrator account.";
   if (/live|media|standby|source/i.test(reason))
