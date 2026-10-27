@@ -11,7 +11,9 @@ import {
   idleBaselineAssessment,
   idleBaselineGate,
   apiListenerProbeCode,
+  fixtureBaselineWaiter,
 } from "./fixture-runtime.mjs";
+import { fixtureWaiter } from "./fixture-diagnostics.mjs";
 
 const snapshot = () => ({
   chaos: {
@@ -112,6 +114,97 @@ const recoveredSnapshot = () => {
   });
   return s;
 };
+
+function baselineHarness() {
+  let time = 0;
+  let current = snapshot();
+  let afterRead = () => {};
+  const report = {};
+  const wait = fixtureBaselineWaiter({
+    until: fixtureWaiter(report, {
+      now: () => time,
+      sleep: async (ms) => {
+        time += ms;
+      },
+    }),
+    read: async () => {
+      const value = structuredClone(current);
+      afterRead();
+      return value;
+    },
+    gate: idleBaselineGate({ now: () => time }),
+  });
+  return {
+    wait,
+    report,
+    set: (value) => {
+      current = value;
+    },
+    afterRead: (fn) => {
+      afterRead = fn;
+    },
+    now: () => time,
+  };
+}
+
+it("keeps browser startup pending through a transient admission change, rather than reporting fault injection", async () => {
+  const h = baselineHarness();
+  await h.wait("idle-baseline-stable");
+  const unavailable = snapshot();
+  unavailable.chaos.scenarios[0].available = false;
+  unavailable.chaos.scenarios[0].reason = "Functional baseline probe pending";
+  h.set(unavailable);
+  h.afterRead(() => h.set(snapshot()));
+  const start = h.now();
+  expect((await h.wait("browser-baseline-stable")).ready).toBe(true);
+  expect(h.now() - start).toBeGreaterThanOrEqual(30000);
+  expect(h.report.waits.at(-1).status).toBe("PASS");
+});
+
+it("waits for a fresh quiet window after verified browser-startup recovery and retains its records", async () => {
+  const h = baselineHarness();
+  await h.wait("idle-baseline-stable");
+  const recovered = recoveredSnapshot();
+  h.set(recovered);
+  const start = h.now();
+  const final = await h.wait("browser-baseline-stable");
+  expect(h.now() - start).toBe(30000);
+  expect(final.history.recoveryAttempts).toEqual(recovered.healer.attempts);
+  expect(final.history.incidents).toEqual(recovered.health.incidents);
+});
+
+it.each(["experiment", "escalation", "stale"])(
+  "never admits actual unresolved browser-startup evidence: %s",
+  async (mode) => {
+    const h = baselineHarness();
+    await h.wait("idle-baseline-stable");
+    const bad = recoveredSnapshot();
+    if (mode === "experiment")
+      bad.chaos.experiments.push({ id: "actual-experiment" });
+    if (mode === "escalation") bad.healer.attempts[0].state = "ESCALATED";
+    if (mode === "stale") bad.health.stale = true;
+    h.set(bad);
+    await expect(h.wait("browser-baseline-stable")).rejects.toThrow(
+      "fixture_wait_timeout:browser-baseline-stable",
+    );
+    expect(h.report.waits.at(-1).lastObservation).toHaveProperty("history");
+  },
+);
+
+it("resets the browser stability window after a read error and preserves the diagnostic", async () => {
+  const h = baselineHarness();
+  await h.wait("idle-baseline-stable");
+  h.afterRead(() => {
+    h.afterRead(() => {});
+    throw Error("temporary snapshot read failed");
+  });
+  const start = h.now();
+  expect((await h.wait("browser-baseline-stable")).ready).toBe(true);
+  expect(h.now() - start).toBeGreaterThanOrEqual(30000);
+  expect(h.report.waits.at(-1).lastError.message).toBe(
+    "temporary snapshot read failed",
+  );
+});
 
 it("admits the reported healthy baseline after verified startup recovery without deleting history", () => {
   let time = 0;

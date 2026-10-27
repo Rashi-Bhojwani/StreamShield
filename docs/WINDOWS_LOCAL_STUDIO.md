@@ -85,6 +85,19 @@ Wait for **READY**, then use the automatically opened, signed-in Chromium window
 Open http://127.0.0.1:5174/control/chaos in that window. Other browser profiles do
 not inherit its administrator session. Keep the terminal and browser open.
 
+The browser can appear while `browser-controller-readiness` or
+`browser-baseline-stable` is still WAITING. Leave it open and wait for the terminal's
+READY before injecting a failure. Starting real video/browser tabs adds load;
+temporary readiness changes now wait for genuine stability instead of immediately
+closing the browser with `refresh_or_polling_triggered_fault`. A new completed
+repair resets the 30-second quiet window and stays in history. Real experiments,
+escalated/unverified repairs and stale observations still block READY. Sustained
+failure remains a bounded failure with the actual pending evidence saved.
+
+Interactive startup opens only Control and Watch and avoids an extra homepage tab
+and forced reload. The automated four-scenario runner retains homepage and reload
+acceptance coverage. After the stability check, decoded playback is checked again.
+
 The lightweight runner starts API-1 immediately after database/cache setup and
 migrations. It waits at `api-listener-readiness` for a real readiness response
 directly inside that container before starting the media/gateway/web stack.
@@ -256,6 +269,7 @@ and [system logs](screenshots/reliable-studio/system-logs.png).
 - [Consistent health and recovery validation](RECOVERY_HEALTH_VALIDATION.json)
 - [Readiness after verified startup recovery](STARTUP_BASELINE_VALIDATION.json)
 - [API-first startup, safe boot diagnostics and real API recovery](API_STARTUP_VALIDATION.json)
+- [Browser startup stability and recovery without premature closure](BROWSER_READINESS_VALIDATION.json)
 - [Recovered dashboard with retained recovery timestamps](screenshots/reliable-studio/recovered-dashboard.png)
 
 The screenshots use a generated camera test pattern and disposable test accounts.

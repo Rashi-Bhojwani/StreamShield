@@ -1135,7 +1135,13 @@ and every incident must be RESOLVED with verification/closure timestamps. Change
 in that history restart the quiet window, including work completed between two
 polls. Stale observations, unavailable incident history, escalated attempts or
 unverified closure never establish readiness. A verified startup container restart
-is recorded; another restart during the subsequent browser baseline is rejected.
+is recorded. Browser startup reuses that stability gate: temporary probe/admission
+changes wait for a new healthy window, and new verified recovery remains in history.
+Each tracked container restart still needs corresponding verified repair evidence.
+Read-only refresh/polling is not labelled as fault injection merely because a
+scenario is temporarily unavailable. Actual accepted experiments and unverified
+work block admission. Interactive startup uses Control and Watch tabs; the separate
+automated acceptance run also checks homepage discovery and reload behavior.
 
 A printed `WAITING` stage is an active bounded readiness check, not a completed
 deployment. A final FAIL report identifies the last stage and saves sanitized
@@ -1256,6 +1262,7 @@ Additional current evidence:
 - [Authenticated media-control startup](MEDIA_CONTROL_READINESS_VALIDATION.json)
 - [Healthy readiness after actual startup API recovery](STARTUP_BASELINE_VALIDATION.json)
 - [API-first startup and safe diagnostic verification](API_STARTUP_VALIDATION.json)
+- [Browser startup stability, retained recovery and decoded playback](BROWSER_READINESS_VALIDATION.json)
 - [Recovered dashboard screenshot](screenshots/reliable-studio/recovered-dashboard.png)
 
 The startup-readiness regression check deliberately killed only API-1 in its own

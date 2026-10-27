@@ -260,3 +260,30 @@ export function idleBaselineGate({
     },
   };
 }
+
+/** Reuse the same stability gate before and after browser startup. A denied
+ * scenario/read-only health sample is pending evidence, not proof of injection. */
+export function fixtureBaselineWaiter({
+  until,
+  read,
+  scenarioIds,
+  gate = idleBaselineGate({ scenarioIds }),
+}) {
+  return (stage) =>
+    until(
+      stage,
+      async () => {
+        try {
+          const frame = await read();
+          const verdict = gate.observe(frame);
+          return verdict === true
+            ? idleBaselineAssessment(frame, scenarioIds)
+            : verdict;
+        } catch (error) {
+          gate.reset();
+          throw error;
+        }
+      },
+      120000,
+    );
+}

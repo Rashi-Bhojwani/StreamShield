@@ -1,0 +1,141 @@
+{
+  "change": "Replace one-sample browser/read-only readiness assertions with the existing bounded healthy stability gate. Preserve real recovery history, keep unverified work blocked, and recheck decoded playback. Interactive startup uses only Control and Watch; automated acceptance retains homepage/reload checks.",
+  "reportedSymptom": "Runner reached decoded video, then failed with refresh_or_polling_triggered_fault and closed its browser during cleanup. That old condition also rejected non-injection readiness changes.",
+  "checks": {
+    "unitTestsPassed": 509,
+    "testFilesPassed": 43,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "regressions": [
+      "Temporary scenario admission change waits for fresh stability.",
+      "A transient read error resets the window and retains diagnostic evidence.",
+      "Verified recovery completed during browser startup waits for a fresh window and preserves history.",
+      "Actual experiments, escalations and stale data never establish READY."
+    ]
+  },
+  "cleanBrowserStartup": {
+    "runId": "6c9b3595",
+    "status": "PASS",
+    "fixtureStatus": "DEMO_STOPPED",
+    "waits": [
+      {
+        "stage": "idle-baseline-stable",
+        "status": "PASS",
+        "elapsedMs": 30171.505342999997
+      },
+      {
+        "stage": "browser-controller-readiness",
+        "status": "PASS",
+        "elapsedMs": 232.84808799999882
+      },
+      {
+        "stage": "browser-baseline-stable",
+        "status": "PASS",
+        "elapsedMs": 110.76701999999932
+      }
+    ],
+    "browserPlayback": {
+      "observedAt": "2026-10-27T05:07:18.049Z",
+      "before": {
+        "currentTime": 10.441221,
+        "width": 640,
+        "height": 360,
+        "frames": 158,
+        "paused": false
+      },
+      "after": {
+        "currentTime": 11.127872,
+        "width": 640,
+        "height": 360,
+        "frames": 174,
+        "paused": false
+      },
+      "newMediaResponses": 2
+    },
+    "cleanedContainers": 13,
+    "userEnvUnchanged": true
+  },
+  "realRecoveryAfterBrowserOpened": {
+    "status": "PASS",
+    "runId": "4bc91f6c",
+    "fault": {
+      "component": "api-1",
+      "mechanism": "External acceptance check sends SIGKILL only to its newly created fixture API container",
+      "injectedAt": "2026-10-27T05:09:18.797Z",
+      "previousStartedAt": "2026-10-27T05:08:05.710458546Z"
+    },
+    "startupHistory": {
+      "recoveryAttempts": [
+        {
+          "id": "1fca084b-45f3-4bb7-a80d-c44d065afd7d",
+          "component": "api-1",
+          "state": "VERIFIED",
+          "reason": "independent_behavior_verified",
+          "finishedAt": "2026-10-27T05:09:33.417Z",
+          "databasePersisted": true
+        }
+      ],
+      "incidents": [
+        {
+          "id": "9de8d4d4-158d-43dd-9bec-40fae7ac5838",
+          "component": "api-1",
+          "state": "RESOLVED",
+          "verified_at": "2026-10-27T05:09:34.473Z",
+          "resolved_at": "2026-10-27T05:09:34.473Z"
+        }
+      ]
+    },
+    "startupRestarts": [
+      {
+        "service": "api",
+        "previous": "2026-10-27T05:08:05.710458546Z",
+        "startedAt": "2026-10-27T05:09:26.405764811Z"
+      }
+    ],
+    "stableIdleMs": 30000,
+    "noRecoveryBeforeClick": false,
+    "noRecoveryDuringStableWindow": true,
+    "browserWait": {
+      "stage": "browser-baseline-stable",
+      "status": "PASS",
+      "startedAt": "2026-10-27T05:09:24.462Z",
+      "timeoutMs": 120000,
+      "attempts": 104,
+      "lastObservation": {
+        "stableForMs": 29648.177006000013,
+        "requiredStableMs": 30000
+      },
+      "lastObservationAt": "2026-10-27T05:10:26.633Z",
+      "elapsedMs": 62761.28188399998,
+      "finishedAt": "2026-10-27T05:10:27.223Z"
+    },
+    "recoveredDuringBrowserStartup": true,
+    "noExperimentDuringBrowserChecks": true,
+    "browserPlayback": {
+      "observedAt": "2026-10-27T05:10:28.180Z",
+      "before": {
+        "currentTime": 73.121794,
+        "width": 640,
+        "height": 360,
+        "frames": 1662,
+        "paused": false
+      },
+      "after": {
+        "currentTime": 73.817811,
+        "width": 640,
+        "height": 360,
+        "frames": 1679,
+        "paused": false
+      },
+      "newMediaResponses": 2
+    },
+    "cleanedContainers": 13,
+    "userEnvUnchanged": true
+  },
+  "limitations": [
+    "Linux Docker/Chromium using a real generated media source; not a physical Windows Docker Desktop or 8 GB laptop verification.",
+    "The original Windows error alone did not identify whether admission or recovery history changed. The corrected path saves actual blockers and waits instead of labelling a denied read as fault injection.",
+    "Sustained unhealthy or unverified evidence still times out; health is never forced green."
+  ]
+}
