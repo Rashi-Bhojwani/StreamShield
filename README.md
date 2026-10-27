@@ -7,6 +7,9 @@ controlled failure experiments.
 
 ## Submission deliverables
 
+- **[System architecture — one-page PDF](docs/StreamShield_System_Architecture.pdf):**
+  media, application/data and reliability diagrams, protocols, trust boundaries,
+  all five failures and deployment limits on a single landscape sheet.
 - **[Resilience report — 5-page PDF](docs/StreamShield_Resilience_Report.pdf):**
   architecture diagram, detection/healing table, measured recovery times,
   before-and-after numbers, reproducible commands and known limits.
@@ -195,6 +198,12 @@ To regenerate the PDF and readable report from the committed evidence:
 ```powershell
 python -m pip install reportlab
 python scripts/build-resilience-report.py
+```
+
+The dedicated one-page architecture sheet uses the same PDF dependency:
+
+```powershell
+python scripts/build-architecture-pdf.py
 ```
 
 ## Known limits
