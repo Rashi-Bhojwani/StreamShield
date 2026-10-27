@@ -88,6 +88,7 @@
     "test:four-live": "node --import tsx scripts/four-scenario-live.mjs",
     "test:four-ui": "node --import tsx scripts/four-scenario-ui.mjs",
     "demo:light": "node scripts/light-demo.mjs --interactive",
+    "chaos": "node scripts/chaos.mjs",
     "test:light-four": "node scripts/light-demo.mjs",
     "test:studio": "node scripts/studio-e2e.mjs",
     "test:system": "node scripts/studio-e2e.mjs --system"

@@ -1,6 +1,7 @@
 # StreamShield: complete technical guide
 
-**Implementation reviewed:** `feature/reliable-live-studio`, application baseline
+**Maintained branch:** `main`, which includes `feature/reliable-live-studio`.
+**Implementation reviewed:** application baseline
 `c7b37ee` with the startup-readiness correction reviewed on 27 October 2026.
 This guide describes the code on that branch. It is
 intended for developers, project reviewers, operators and technical presentations.
@@ -1161,7 +1162,7 @@ wait for its cleanup, then update:
 
 ```powershell
 cd E:\final-streamshield\StreamShield-updated
-git pull --ff-only origin feature/reliable-live-studio
+git pull --ff-only origin main
 npm.cmd run build
 npm.cmd run demo:light
 ```

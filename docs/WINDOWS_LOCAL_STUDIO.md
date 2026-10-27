@@ -24,7 +24,7 @@ new folder. In PowerShell:
 
 ```powershell
 cd E:\
-git clone --branch feature/reliable-live-studio https://github.com/Rashi-Bhojwani/StreamShield.git StreamShield-updated
+git clone --branch main https://github.com/Rashi-Bhojwani/StreamShield.git StreamShield-updated
 cd E:\StreamShield-updated
 npm.cmd ci
 ```
@@ -150,7 +150,7 @@ persistent application running. In your new checkout (adjust the folder if neede
 
 ```powershell
 cd E:\final-streamshield\StreamShield-updated
-git pull --ff-only origin feature/reliable-live-studio
+git pull --ff-only origin main
 npm.cmd run build
 npm.cmd run demo:light
 ```

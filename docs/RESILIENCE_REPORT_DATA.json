@@ -1,0 +1,284 @@
+{
+  "title": "StreamShield Resilience Report",
+  "reportDate": "27 October 2026",
+  "reportTimezone": "Asia/Kolkata",
+  "repository": "https://github.com/Rashi-Bhojwani/StreamShield",
+  "branch": "main",
+  "applicationBaselineCommit": "48cf25b770dd09d20baf6d4f34f7117a4d0bdfff",
+  "applicationTreeEquivalentTo": "a783fdbba06396451540b3d7f9e8c3eb79d8258b",
+  "newEntryPoint": "scripts/chaos.mjs",
+  "entryPointSha256": "a1fe26f1ef9ce3fbaa4486d70c6ac88e3028cfc84fa406ec42b91ac86c5cb1b2",
+  "driverSha256": "b683cbbf41f17da371e3ab240cfc8e17340a3af83c657a95da0f8790210d453a",
+  "run": {
+    "id": "a484d151",
+    "status": "PASS",
+    "startedAt": "2026-10-27T06:30:14.630Z",
+    "finishedAt": "2026-10-27T06:34:02.108Z",
+    "startedAtIST": "2026-10-27T12:00:14.630000+05:30",
+    "verifiedScenarios": 4,
+    "cleanedContainers": 13,
+    "userEnvUnchanged": true,
+    "source": "Generated FFmpeg H.264/AAC sample; real decoded Chromium playback",
+    "command": "npm run chaos -- --verify",
+    "artifactPath": "test-results/light-four/runs/a484d151"
+  },
+  "environment": {
+    "platform": "Linux",
+    "docker": {
+      "cpus": 5,
+      "memoryBytes": 35743760384,
+      "serverVersion": "28.4.0",
+      "storageDriver": "vfs",
+      "os": "linux",
+      "architecture": "x86_64"
+    },
+    "browser": "Chromium at /usr/bin/chromium",
+    "probeBudgets": {
+      "OBS_INTERVAL_MS": 4000,
+      "OBS_TIMEOUT_MS": 3000,
+      "OBS_STALE_MS": 20000,
+      "HEALER_PROBE_TIMEOUT_MS": 3000,
+      "CHAOS_PROBE_TIMEOUT_MS": 3000
+    }
+  },
+  "checks": {
+    "unitTests": 513,
+    "testFiles": 44,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "build": "PASS via real fixture compilation and static web asset build"
+  },
+  "scenarios": [
+    {
+      "scenario": "crash-api",
+      "status": "PASS",
+      "injectedAt": "2026-10-27T06:31:59.632Z",
+      "verifiedAt": "2026-10-27T06:32:21.132Z",
+      "detectionMs": 7684,
+      "healingStartMs": 7862,
+      "actionMs": 105,
+      "recoveryMs": 21500,
+      "demonstrationMs": 21590,
+      "playbackInterruptionMs": null,
+      "stoppedObserved": true,
+      "receipt": "docker_start_accepted",
+      "independentBehaviorVerified": true,
+      "baselineObservedAt": "2026-10-27T06:31:54.954Z",
+      "livePathsAtInjection": 1,
+      "apiBackupResponseObserved": true,
+      "edgeBefore": null,
+      "edgeAfter": null,
+      "edgeFailoverObserved": null,
+      "peerUnchanged": null,
+      "networkBaselineMs": null,
+      "networkVerifiedMs": null,
+      "networkBaselineSamples": null,
+      "faultDurationMs": null,
+      "currentHealthReturnedToHealthy": true,
+      "persistentRecoverySequence": true,
+      "stableCardLayout": true,
+      "browserPlayback": {
+        "observedAt": "2026-10-27T06:32:22.674Z",
+        "before": {
+          "currentTime": 36.888639,
+          "width": 640,
+          "height": 360,
+          "frames": 792,
+          "paused": false
+        },
+        "after": {
+          "currentTime": 37.589872,
+          "width": 640,
+          "height": 360,
+          "frames": 809,
+          "paused": false
+        },
+        "newMediaResponses": 2
+      },
+      "earlierRecoveryMs": 16503,
+      "processStateBefore": "running",
+      "faultExitCode": 137
+    },
+    {
+      "scenario": "crash-video-gateway",
+      "status": "PASS",
+      "injectedAt": "2026-10-27T06:32:29.491Z",
+      "verifiedAt": "2026-10-27T06:32:44.815Z",
+      "detectionMs": 6497,
+      "healingStartMs": 7430,
+      "actionMs": 108,
+      "recoveryMs": 15324,
+      "demonstrationMs": 15329,
+      "playbackInterruptionMs": null,
+      "stoppedObserved": true,
+      "receipt": "docker_start_accepted",
+      "independentBehaviorVerified": true,
+      "baselineObservedAt": "2026-10-27T06:32:23.690Z",
+      "livePathsAtInjection": 1,
+      "apiBackupResponseObserved": null,
+      "edgeBefore": null,
+      "edgeAfter": null,
+      "edgeFailoverObserved": null,
+      "peerUnchanged": null,
+      "networkBaselineMs": null,
+      "networkVerifiedMs": null,
+      "networkBaselineSamples": null,
+      "faultDurationMs": null,
+      "currentHealthReturnedToHealthy": true,
+      "persistentRecoverySequence": true,
+      "stableCardLayout": true,
+      "browserPlayback": {
+        "observedAt": "2026-10-27T06:32:46.239Z",
+        "before": {
+          "currentTime": 11.45728,
+          "width": 640,
+          "height": 360,
+          "frames": 183,
+          "paused": false
+        },
+        "after": {
+          "currentTime": 12.156913,
+          "width": 640,
+          "height": 360,
+          "frames": 200,
+          "paused": false
+        },
+        "newMediaResponses": 2
+      },
+      "earlierRecoveryMs": 13259,
+      "processStateBefore": "running",
+      "faultExitCode": 137
+    },
+    {
+      "scenario": "crash-edge",
+      "status": "PASS",
+      "injectedAt": "2026-10-27T06:32:51.905Z",
+      "verifiedAt": "2026-10-27T06:33:06.137Z",
+      "detectionMs": 4700,
+      "healingStartMs": 5372,
+      "actionMs": 88,
+      "recoveryMs": 14232,
+      "demonstrationMs": 15274,
+      "playbackInterruptionMs": null,
+      "stoppedObserved": true,
+      "receipt": "docker_start_accepted",
+      "independentBehaviorVerified": true,
+      "baselineObservedAt": "2026-10-27T06:32:48.315Z",
+      "livePathsAtInjection": 1,
+      "apiBackupResponseObserved": null,
+      "edgeBefore": "edge-1",
+      "edgeAfter": "edge-2",
+      "edgeFailoverObserved": true,
+      "peerUnchanged": true,
+      "networkBaselineMs": null,
+      "networkVerifiedMs": null,
+      "networkBaselineSamples": null,
+      "faultDurationMs": null,
+      "currentHealthReturnedToHealthy": true,
+      "persistentRecoverySequence": true,
+      "stableCardLayout": true,
+      "browserPlayback": {
+        "observedAt": "2026-10-27T06:33:09.422Z",
+        "before": {
+          "currentTime": 34.108774,
+          "width": 640,
+          "height": 360,
+          "frames": 727,
+          "paused": false
+        },
+        "after": {
+          "currentTime": 35.351087,
+          "width": 640,
+          "height": 360,
+          "frames": 757,
+          "paused": false
+        },
+        "newMediaResponses": 2
+      },
+      "earlierRecoveryMs": 17383,
+      "processStateBefore": "running",
+      "faultExitCode": 137
+    },
+    {
+      "scenario": "network-timeout",
+      "status": "PASS",
+      "injectedAt": "2026-10-27T06:33:15.259Z",
+      "verifiedAt": "2026-10-27T06:33:42.506Z",
+      "detectionMs": 9055,
+      "healingStartMs": 12307,
+      "actionMs": 3,
+      "recoveryMs": 27247,
+      "demonstrationMs": 27249,
+      "playbackInterruptionMs": null,
+      "stoppedObserved": false,
+      "receipt": "safe_read",
+      "independentBehaviorVerified": true,
+      "baselineObservedAt": "2026-10-27T06:33:13.113Z",
+      "livePathsAtInjection": 1,
+      "apiBackupResponseObserved": null,
+      "edgeBefore": null,
+      "edgeAfter": null,
+      "edgeFailoverObserved": null,
+      "peerUnchanged": null,
+      "networkBaselineMs": 2,
+      "networkVerifiedMs": 1,
+      "networkBaselineSamples": 3,
+      "faultDurationMs": 20000,
+      "currentHealthReturnedToHealthy": true,
+      "persistentRecoverySequence": true,
+      "stableCardLayout": true,
+      "browserPlayback": {
+        "observedAt": "2026-10-27T06:33:44.382Z",
+        "before": {
+          "currentTime": 69.042601,
+          "width": 640,
+          "height": 360,
+          "frames": 1565,
+          "paused": false
+        },
+        "after": {
+          "currentTime": 70.310327,
+          "width": 640,
+          "height": 360,
+          "frames": 1596,
+          "paused": false
+        },
+        "newMediaResponses": 2
+      },
+      "earlierRecoveryMs": 26227
+    }
+  ],
+  "earlierRun": {
+    "id": "282d20da",
+    "source": "docs/RECOVERY_HEALTH_VALIDATION.json",
+    "startedAt": "2026-10-26T07:49:17.606Z",
+    "comparisonScope": "Two recorded local runs; host load and code differ. Descriptive comparison only, not a controlled causal performance benchmark."
+  },
+  "manualFailure": {
+    "source": "docs/SYSTEM_LOGS_VALIDATION.json",
+    "project": "ss-light-93367217",
+    "status": "PASS",
+    "bothVideoRoutesDenied": true,
+    "decodedPlaybackActuallyStopped": true,
+    "decodedPlaybackResumed": true,
+    "operatorRestoration": {
+      "state": "COMPLETED",
+      "automaticallyHealed": false,
+      "advancingVideoVerified": true
+    },
+    "recoveryMs": null,
+    "timingNote": "Duration was not recorded in the persisted manual-failure summary; do not substitute an estimate."
+  },
+  "measurementRules": {
+    "recovery": "Experiment independently verified service behavior timestamp minus injectedAt; includes detection, action and verification.",
+    "detection": "Confirmed incident detection relative to injectedAt.",
+    "action": "Action finished minus action started; not end-to-end restoration.",
+    "playback": "Post-restoration samples of actual decoded frames/media time; these samples do not measure total interruption duration.",
+    "missing": "null means unmeasured or unavailable; never zero."
+  },
+  "limitations": [
+    "One Linux Docker host with generated sample media; physical Windows devices, firewall/VPN and 8 GB laptop performance were not certified.",
+    "Three crash cases are Healer-driven starts. Network case is timed owned fault removal plus circuit reconnection. Manual case requires a human.",
+    "No production availability, statistical percentile, zero-interruption, 50,000-viewer, or multi-region guarantee."
+  ]
+}
